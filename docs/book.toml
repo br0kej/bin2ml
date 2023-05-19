@@ -1,0 +1,6 @@
+[book]
+authors = ["Br0kej"]
+language = "en"
+multilingual = false
+src = "src"
+title = "bin2ml Documentation"

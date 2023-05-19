@@ -1,0 +1,466 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Intro by Example - bin2ml Documentation</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="index.html">Introduction</a></li><li class="chapter-item expanded affix "><li class="part-title">Install bin2ml</li><li class="chapter-item expanded "><a href="installation.html"><strong aria-hidden="true">1.</strong> Installation</a></li><li class="chapter-item expanded affix "><li class="part-title">Getting Started</li><li class="chapter-item expanded "><a href="intro_by_example.html" class="active"><strong aria-hidden="true">2.</strong> Intro by Example</a></li><li class="chapter-item expanded affix "><li class="part-title">Reference</li><li class="chapter-item expanded "><a href="supported_node_features.html"><strong aria-hidden="true">3.</strong> Supported Node Features</a></li><li class="chapter-item expanded "><a href="experimental_features.html"><strong aria-hidden="true">4.</strong> Experimental Features</a></li><li class="chapter-item expanded affix "><li class="part-title">Data Samples</li><li class="chapter-item expanded "><a href="agfj_output.html"><strong aria-hidden="true">5.</strong> agfj JSON</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">bin2ml Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="intro-by-example"><a class="header" href="#intro-by-example">Intro by Example</a></h1>
+<p>This section introduces the core functionality of <code>bin2ml</code> in several short, self -ontained examples.</p>
+<p>At it's core, <code>bin2ml</code> provides a means of automatically extracting data from binaries using <code>radare2</code> before then processing this data into ML ready data formats.</p>
+<blockquote>
+<p>This section is currently under development and will expand with examples as <code>bin2ml</code>'s functionality increases.</p>
+</blockquote>
+<!-- TOC -->
+<h1 id="table-of-contents"><a class="header" href="#table-of-contents">Table of Contents</a></h1>
+<ul>
+<li><a href="#example-1-from-graph-extraction-to-pytorch-geometric-data-object">Example 1: From Graph Extraction to PyTorch Geometric <code>Data</code> Object</a>
+<ul>
+<li><a href="#creating-a-test-file">Creating a test file</a></li>
+<li><a href="#extracting-intermediate-data">Extracting Intermediate Data</a></li>
+<li><a href="#generating-networkx-compatible-attributed-control-flow-graphs-acfgs">Generating <code>networkx</code> compatible Attributed Control Flow Graphs (ACFG's)</a></li>
+<li><a href="#loading-networkx-graph-and-converting-to-pytorch-geometric-data-objects">Loading <code>networkx</code> graph and converting to PyTorch Geometric <code>Data</code> Objects</a></li>
+</ul>
+</li>
+<li><a href="#example-2-huggingface-tokeniser-data-generation-and-training">Example 2: <code>huggingface</code> Tokeniser Data Generation and Training</a>
+<ul>
+<li><a href="#creating-a-test-file-1">Creating a test file</a></li>
+<li><a href="#extracting-intermediate-data-1">Extracting Intermediate Data</a></li>
+<li><a href="#creating-a-training-corpus">Creating a training corpus</a></li>
+<li><a href="#training-a-hugginface-tokeniser">Training a <code>hugginface</code> Tokeniser</a></li>
+</ul>
+</li>
+</ul>
+<!-- TOC -->
+<h1 id="example-1-from-graph-extraction-to-pytorch-geometric-data-object"><a class="header" href="#example-1-from-graph-extraction-to-pytorch-geometric-data-object">Example 1: From Graph Extraction to PyTorch Geometric <code>Data</code> Object</a></h1>
+<p>The first stage is data extraction and this element of <code>bin2ml</code> builds on the shoulders of giants and uses <code>radare2</code>'s automation interface, <code>r2pipe</code>. This provides a flexible method of piping in <code>r2</code> commands and collecting the results. The primary supported command is <code>agfj</code> which essentially stands for <em>analyse graph functions and output in JSON</em>.</p>
+<h2 id="creating-a-test-file"><a class="header" href="#creating-a-test-file">Creating a test file</a></h2>
+<p>In order to take <code>bin2ml</code> out for a spin, we need a binary to process! The <code>bin2ml</code> repository comes with a simple test program which can be compiled as using the following command (assumes a C compiler is already installed):</p>
+<pre><code>cd /path/to/bin2mlrepo
+gcc test-files/test_bin.c -o test-files/test_bin
+</code></pre>
+<h2 id="extracting-intermediate-data"><a class="header" href="#extracting-intermediate-data">Extracting Intermediate Data</a></h2>
+<p>Once compiled, the file can be processed using</p>
+<pre><code>bin2ml extract --fpath test-files/test_bin --output-dir . --mode cfg
+</code></pre>
+<p>Let's break this down.</p>
+<ol>
+<li><code>bin2ml extract</code> means we want to use the extraction functionality of <code>bin2ml</code></li>
+<li><code>--fpath</code> determines what files or directories to processed. There is support for processing single files, single directories or nested directories.</li>
+<li><code>--output-dir</code> determines where you want to save the processed files.</li>
+<li><code>--mode</code> determines which extraction mode you want. <code>cfg</code> is <code>afgj</code></li>
+</ol>
+<p>This command will have created a <code>test_bin.json</code> containing the <code>agfj</code> output for each of the functions within the binary (A sample of this data can be found <a href="agfj_output.html">here</a>). This output is very verbose and contains detailed information at an instruction and basic block level for each functions within the binary - Perfect for further processing!</p>
+<h2 id="generating-networkx-compatible-attributed-control-flow-graphs-acfgs"><a class="header" href="#generating-networkx-compatible-attributed-control-flow-graphs-acfgs">Generating <code>networkx</code> compatible Attributed Control Flow Graphs (ACFG's)</a></h2>
+<p><code>bin2ml</code> makes it simple to create Attributed Control Flow Graphs (ACFG's) with a variety of different node features (Supported node features can be found <a href="./supported_node_features.html">here</a>) which are then saved in <code>networkx</code> compatible JSON files.</p>
+<p>The following command can be used to create Attributed Control Flow Graphs (ACFG's) with Gemini node features:</p>
+<pre><code>bin2ml graph --path test-files/test_bin.json --output-path . --feature-type gemini
+</code></pre>
+<p>This will have created a <code>test_bin/</code> folder which contains three JSON files. Each of these JSON files is a <code>networkx</code> directed graph with node attributes. Try opening <code>test_bin-main.json</code> and it should look like the JSON you can see below.</p>
+<pre><code class="language-json">{
+    &quot;adjacency&quot;: [
+        [
+            {
+                &quot;id&quot;: 1,
+                &quot;weight&quot;: 1
+            },
+            {
+                &quot;id&quot;: 2,
+                &quot;weight&quot;: 2
+            }
+        ],
+        [
+            {
+                &quot;id&quot;: 3,
+                &quot;weight&quot;: 1
+            }
+        ],
+        [
+            {
+                &quot;id&quot;: 3,
+                &quot;weight&quot;: 1
+            }
+        ],
+        [
+            {
+                &quot;id&quot;: 4,
+                &quot;weight&quot;: 1
+            },
+            {
+                &quot;id&quot;: 5,
+                &quot;weight&quot;: 2
+            }
+        ],
+        [
+            {
+                &quot;id&quot;: 7,
+                &quot;weight&quot;: 1
+            },
+            {
+                &quot;id&quot;: 8,
+                &quot;weight&quot;: 2
+            }
+        ],
+        [
+            {
+                &quot;id&quot;: 6,
+                &quot;weight&quot;: 1
+            }
+        ],
+        [],
+        [
+            {
+                &quot;id&quot;: 6,
+                &quot;weight&quot;: 1
+            }
+        ],
+        [
+            {
+                &quot;id&quot;: 6,
+                &quot;weight&quot;: 1
+            }
+        ]
+    ],
+    &quot;directed&quot;: &quot;True&quot;,
+    &quot;graph&quot;: [],
+    &quot;multigraph&quot;: false,
+    &quot;nodes&quot;: [
+        {
+            &quot;id&quot;: 0,
+            &quot;num arith&quot;: 10.0,
+            &quot;num calls&quot;: 1.0,
+            &quot;num ins&quot;: 1.0,
+            &quot;num offspring&quot;: 2.0,
+            &quot;num transfer&quot;: 5.0,
+            &quot;numeric consts&quot;: 1.0,
+            &quot;string consts&quot;: 1.0
+        },
+        {
+            &quot;id&quot;: 1,
+            &quot;num arith&quot;: 4.0,
+            &quot;num calls&quot;: 1.0,
+            &quot;num ins&quot;: 0.0,
+            &quot;num offspring&quot;: 2.0,
+            &quot;num transfer&quot;: 2.0,
+            &quot;numeric consts&quot;: 0.0,
+            &quot;string consts&quot;: 1.0
+        },
+        {
+            &quot;id&quot;: 2,
+            &quot;num arith&quot;: 3.0,
+            &quot;num calls&quot;: 1.0,
+            &quot;num ins&quot;: 0.0,
+            &quot;num offspring&quot;: 2.0,
+            &quot;num transfer&quot;: 2.0,
+            &quot;numeric consts&quot;: 0.0,
+            &quot;string consts&quot;: 1.0
+        },
+        {
+            &quot;id&quot;: 3,
+            &quot;num arith&quot;: 5.0,
+            &quot;num calls&quot;: 0.0,
+            &quot;num ins&quot;: 1.0,
+            &quot;num offspring&quot;: 2.0,
+            &quot;num transfer&quot;: 2.0,
+            &quot;numeric consts&quot;: 0.0,
+            &quot;string consts&quot;: 0.0
+        },
+        {
+            &quot;id&quot;: 4,
+            &quot;num arith&quot;: 4.0,
+            &quot;num calls&quot;: 1.0,
+            &quot;num ins&quot;: 0.0,
+            &quot;num offspring&quot;: 2.0,
+            &quot;num transfer&quot;: 2.0,
+            &quot;numeric consts&quot;: 0.0,
+            &quot;string consts&quot;: 1.0
+        },
+        {
+            &quot;id&quot;: 5,
+            &quot;num arith&quot;: 2.0,
+            &quot;num calls&quot;: 0.0,
+            &quot;num ins&quot;: 0.0,
+            &quot;num offspring&quot;: 2.0,
+            &quot;num transfer&quot;: 0.0,
+            &quot;numeric consts&quot;: 1.0,
+            &quot;string consts&quot;: 0.0
+        },
+        {
+            &quot;id&quot;: 6,
+            &quot;num arith&quot;: 4.0,
+            &quot;num calls&quot;: 1.0,
+            &quot;num ins&quot;: 0.0,
+            &quot;num offspring&quot;: 2.0,
+            &quot;num transfer&quot;: 2.0,
+            &quot;numeric consts&quot;: 0.0,
+            &quot;string consts&quot;: 1.0
+        },
+        {
+            &quot;id&quot;: 7,
+            &quot;num arith&quot;: 3.0,
+            &quot;num calls&quot;: 1.0,
+            &quot;num ins&quot;: 0.0,
+            &quot;num offspring&quot;: 2.0,
+            &quot;num transfer&quot;: 2.0,
+            &quot;numeric consts&quot;: 0.0,
+            &quot;string consts&quot;: 1.0
+        },
+        {
+            &quot;id&quot;: 8,
+            &quot;num arith&quot;: 3.0,
+            &quot;num calls&quot;: 0.0,
+            &quot;num ins&quot;: 0.0,
+            &quot;num offspring&quot;: 2.0,
+            &quot;num transfer&quot;: 1.0,
+            &quot;numeric consts&quot;: 0.0,
+            &quot;string consts&quot;: 0.0
+        }
+    ]
+}
+</code></pre>
+<h2 id="loading-networkx-graph-and-converting-to-pytorch-geometric-data-objects"><a class="header" href="#loading-networkx-graph-and-converting-to-pytorch-geometric-data-objects">Loading <code>networkx</code> graph and converting to PyTorch Geometric <code>Data</code> Objects</a></h2>
+<p>This can then be loaded into <code>networkx</code> easily using the following commands:</p>
+<pre><code class="language-python">from networkx.readwrite import json_graph
+fd = open(&quot;./test_bin/test_bin-main.json&quot;)
+json_data = json.load(fd)
+G = json_graph.adjacency_graph(json_data)
+</code></pre>
+<p>To complete the Gemini feature set, we can also compute the betweenness and add that to the graph:</p>
+<pre><code class="language-python">bb = nx.betweenness_centrality(G)
+nx.set_node_attributes(G, bb, &quot;betweenness&quot;)
+</code></pre>
+<p>Now that we have a <code>networkx</code> graph we can easily convert this into a PyTorch Geometric <code>Data</code> object using the <code>from_networkx()</code> function ready for experimenting with graph neural networks (GNN's)!</p>
+<pre><code class="language-python">node_attr_names = [&quot;num arith&quot;,&quot;num calls&quot;,&quot;num ins&quot;,&quot;num offspring&quot;,&quot;num transfer&quot;,&quot;numeric consts&quot;,&quot;string consts&quot;, &quot;betweenness&quot;]
+pyg_data_tensor = from_networkx(G, group_node_attrs=node_attr_names)
+</code></pre>
+<h1 id="example-2-huggingface-tokeniser-data-generation-and-training"><a class="header" href="#example-2-huggingface-tokeniser-data-generation-and-training">Example 2: <code>huggingface</code> Tokeniser Data Generation and Training</a></h1>
+<p>The first stage of this example is the same as <code>Example 1</code> - We must extract the raw data using <code>bin2ml</code>'s extract functionality. </p>
+<h2 id="creating-a-test-file-1"><a class="header" href="#creating-a-test-file-1">Creating a test file</a></h2>
+<p>The <code>bin2ml</code> repository comes with a simple test program which can be compiled as using the following command (assumes a C compiler is already installed such as <code>gcc</code>):</p>
+<pre><code>cd /path/to/bin2mlrepo
+gcc test-files/test_bin.c -o test-files/test_bin
+</code></pre>
+<h2 id="extracting-intermediate-data-1"><a class="header" href="#extracting-intermediate-data-1">Extracting Intermediate Data</a></h2>
+<p>Once compiled, the file can be processed using</p>
+<pre><code>bin2ml extract --fpath test-files/test_bin --output-dir . --mode cfg
+</code></pre>
+<p>This command will have created a <code>test_bin.json</code> containing the <code>agfj</code> output for each of the functions within the binary (A sample of this data can be found <a href="agfj_output.html">here</a>). This output is very verbose and contains detailed information at an instruction and basic block level for each functions within the binary - Perfect for further processing!</p>
+<h2 id="creating-a-training-corpus"><a class="header" href="#creating-a-training-corpus">Creating a training corpus</a></h2>
+<pre><code class="language-bash">bin2ml nlp --path test_bin.json --data-type disasm --format single --output-path test_bin_ins_corpus.txt
+</code></pre>
+<p>This command will load the extracted data and create a text file containing each of the instructions from all functions with the JSON file.</p>
+<h2 id="training-a-hugginface-tokeniser"><a class="header" href="#training-a-hugginface-tokeniser">Training a <code>hugginface</code> Tokeniser</a></h2>
+<p><code>bin2ml</code> takes advantage of the rust library that underpins huggingface tokenisers and uses it directly. We can now train a tokeniser using the data we just generated 
+by executing the following command.</p>
+<pre><code class="language-bash">bin2ml tokeniser --data test_bin_ins_corpus.txt --output-name test_bin_tokeniser.json --vocab-size 1000
+</code></pre>
+<blockquote>
+<p>The tokeniser created here is configured specifically for Masked Language Modelling tasks and is Byte-Level Byte Pair Encoding. Further configurations/support is likely to be added in the future.</p>
+</blockquote>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="installation.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="supported_node_features.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="installation.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="supported_node_features.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

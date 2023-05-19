@@ -1,0 +1,40 @@
+[package]
+name = "bin2ml"
+version = "0.1.7"
+edition = "2021"
+
+[dependencies]
+r2pipe = "0.6.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.60"
+clap = { version = "4.0.29", features = ["derive"] }
+goblin = { version = "0.6.0", optional = true }
+walkdir = "2"
+rayon = "1.6"
+anyhow = "1.0"
+serde_with = "2.2.0"
+regex = "1.7.1"
+tokenizers = "0.13.2"
+rust_search = "2.1.0"
+tch = {version = "0.10.3", optional = true}
+mimalloc = { version = "*", default-features = false }
+indicatif = { version = "0.17.3", features = ["rayon"]}
+itertools = "0.10.5"
+prettytable = "0.10.0"
+serde-aux = "4.2.0"
+[dependencies.petgraph]
+version = "0.6.2"
+features = ["serde-1"]
+
+[features]
+inference = ["dep:tch"]
+goblin = ["dep:goblin"]
+
+#https://github.com/johnthagen/min-sized-rust
+[profile.release]
+lto = true
+codegen-units = 1
+panic = 'abort'
+strip = true
+opt-level = 3 # Speed
+rpath = true

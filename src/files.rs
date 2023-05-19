@@ -1,0 +1,285 @@
+use crate::agfj::AGFJFunc;
+use crate::bb::{FeatureType, InstructionMode};
+use crate::consts::*;
+#[cfg(feature = "inference")]
+use crate::inference::InferenceJob;
+use crate::utils::get_save_file_path;
+use indicatif::ParallelProgressIterator;
+use rayon::iter::ParallelIterator;
+use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use std::collections::HashMap;
+use std::fs::{read_to_string, File};
+use std::io::{BufWriter, Write};
+use std::path::Path;
+use std::string::String;
+use std::sync::mpsc::channel;
+#[cfg(feature = "inference")]
+use std::sync::Arc;
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AGFJFile {
+    pub filename: String,
+    pub functions: Option<Vec<Vec<AGFJFunc>>>,
+    pub output_path: String,
+    pub min_blocks: u16,
+    pub feature_type: Option<FeatureType>,
+    pub architecture: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]
+pub enum FormatMode {
+    SingleInstruction,
+    FuncAsString,
+    Invalid,
+}
+
+impl AGFJFile {
+    #[allow(clippy::result_unit_err)]
+    // Allowed to enable propagation of errors from both reading to wstring and serde from str.
+    pub fn load_and_deserialize(&mut self) -> Result<(), ()> {
+        let data = read_to_string(&self.filename).expect("Unable to read file");
+
+        #[allow(clippy::expect_fun_call)]
+        // Kept in to ensure that the JSON decode error message is printed alongside the filename
+        let json: Vec<Vec<AGFJFunc>> = serde_json::from_str(&data).expect(&format!(
+            "Unable to load function data from {}",
+            self.filename
+        ));
+
+        self.functions = Some(json);
+
+        self.architecture = self.detect_architecture();
+
+        Ok(())
+    }
+
+    fn detect_architecture(&self) -> Option<String> {
+        let mut call_op: Option<String> = None;
+
+        for func in self.functions.as_ref().unwrap() {
+            for block in &func[0].blocks {
+                for op in &block.ops {
+                    if op.r#type == "call" || op.r#type == "rcall" {
+                        call_op = Some(op.disasm.as_ref().unwrap().clone())
+                    }
+
+                    if call_op.is_some() {
+                        let opcode = call_op.as_ref().unwrap().split_whitespace().next().unwrap();
+                        if X86_CALL.contains(&opcode) {
+                            //println!("Data is X86");
+                            return Some("X86".to_string());
+                        } else if ARM_CALL.contains(&opcode) {
+                            //println!("Data is ARM");
+                            return Some("ARM".to_string());
+                        } else if MIPS_CALL.contains(&opcode) {
+                            //println!("Data is MIPS");
+                            return Some("MIPS".to_string());
+                        } else {
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
+
+        call_op
+    }
+
+    pub fn execute_data_generation(
+        self,
+        format_type: FormatMode,
+        instruction_type: InstructionMode,
+        reg_norm: &bool,
+        random_walk: &bool,
+    ) {
+        if format_type == FormatMode::SingleInstruction {
+            if !(*random_walk) {
+                if instruction_type == InstructionMode::Disasm {
+                    self.generate_linear_bb_walk(false);
+                } else if instruction_type == InstructionMode::ESIL {
+                    self.generate_linear_bb_walk(true);
+                }
+            } else if instruction_type == InstructionMode::Disasm {
+                self.generate_random_bb_walk(false);
+            } else if instruction_type == InstructionMode::ESIL {
+                self.generate_random_bb_walk(true);
+            }
+        } else if format_type == FormatMode::FuncAsString {
+            if instruction_type == InstructionMode::Disasm {
+                self.generate_disasm_func_strings(*reg_norm);
+            } else if instruction_type == InstructionMode::ESIL {
+                self.generate_esil_func_strings();
+            }
+        }
+    }
+
+    pub fn paralell_attributed_cfg_gen(self) {
+        self.functions.unwrap().par_iter().for_each(|func| {
+            func[0].generate_attributed_cfg(
+                &self.filename,
+                &self.min_blocks,
+                &self.output_path,
+                self.feature_type.unwrap(),
+                self.architecture.as_ref().unwrap(),
+            )
+        });
+    }
+
+    // TODO: This needs to be changed. This currently randomly walks a graph at a basic block level
+    // and then flattens the walks and then saves them to a file
+    // This is not very useful as there is no idication of start and end.
+    pub fn generate_random_bb_walk(mut self, esil: bool) -> Vec<String> {
+        self.load_and_deserialize()
+            .expect("Unable to load and desearilize JSON");
+
+        let (sender, receiver) = channel();
+
+        self.functions.unwrap().par_iter_mut().for_each_with(
+            sender,
+            |s, func: &mut Vec<AGFJFunc>| {
+                s.send(func[0].disasm_random_walks(&self.min_blocks, esil))
+                    .unwrap()
+            },
+        );
+
+        let res = receiver.iter();
+
+        let flattened: Vec<String> = res
+            .into_iter()
+            .flatten()
+            .flatten()
+            .flatten()
+            .flatten()
+            .collect();
+
+        println!("Total Number of Lines: {:?}", flattened.len());
+        flattened
+    }
+
+    pub fn generate_esil_func_strings(mut self) {
+        let fname_string: String = get_save_file_path(&self.filename, &self.output_path);
+        let fname_string = format!("{}-efs.json", fname_string);
+
+        if !Path::new(&fname_string).exists() {
+            self.load_and_deserialize()
+                .expect("Unable to load and desearilize JSON");
+
+            if self.functions.is_some() {
+                let (sender, receiver) = channel();
+
+                self.functions
+                    .unwrap()
+                    .par_iter_mut()
+                    .progress()
+                    .for_each_with(sender, |s, func: &mut Vec<AGFJFunc>| {
+                        s.send(func[0].get_esil_function_string(&self.min_blocks))
+                            .unwrap()
+                    });
+
+                let res: Vec<Option<(String, String)>> = receiver.iter().collect();
+                if !res.is_empty() {
+                    let fixed: Vec<(String, String)> =
+                        res.into_iter().filter(|x| x.is_some()).flatten().collect();
+                    let map: HashMap<_, _> = fixed.into_iter().collect();
+
+                    let json = json!(map);
+
+                    serde_json::to_writer(
+                        &File::create(fname_string).expect("Failed to create writer"),
+                        &json,
+                    )
+                    .expect("Unable to write JSON");
+                }
+            }
+        }
+    }
+
+    pub fn generate_disasm_func_strings(mut self, reg_norm: bool) {
+        // This needs to be amended so that there is a AGFJFunc function
+        // that returns a function as a func string.
+        let fname_string: String = get_save_file_path(&self.filename, &self.output_path);
+        let fname_string = format!("{}-dfs.json", fname_string);
+
+        if !Path::new(&fname_string).exists() {
+            self.load_and_deserialize()
+                .expect("Unable to load and desearilize JSON");
+
+            if self.functions.is_some() {
+                let (sender, receiver) = channel();
+
+                self.functions
+                    .unwrap()
+                    .par_iter_mut()
+                    .progress()
+                    .for_each_with(sender, |s, func: &mut Vec<AGFJFunc>| {
+                        s.send(func[0].get_disasm_function_string(&self.min_blocks, reg_norm))
+                            .unwrap()
+                    });
+
+                let res: Vec<Option<(String, String)>> = receiver.iter().collect();
+                let fixed: Vec<(String, String)> =
+                    res.into_iter().filter(|x| x.is_some()).flatten().collect();
+                let map: HashMap<_, _> = fixed.into_iter().collect();
+
+                let json = json!(map);
+                let fname_string: String = get_save_file_path(&self.filename, &self.output_path);
+                let fname_string = format!("{}-dfs.json", fname_string);
+
+                serde_json::to_writer(
+                    &File::create(fname_string).expect("Failed to create writer"),
+                    &json,
+                )
+                .expect("Unable to write JSON");
+            }
+        }
+    }
+
+    pub fn generate_linear_bb_walk(mut self, esil: bool) {
+        self.load_and_deserialize()
+            .expect("Unable to load and desearlize JSON");
+
+        let (sender, receiver) = channel();
+
+        self.functions.unwrap().par_iter_mut().for_each_with(
+            sender,
+            |s, func: &mut Vec<AGFJFunc>| {
+                s.send(func[0].get_function_instructions(esil, &self.min_blocks))
+                    .unwrap()
+            },
+        );
+
+        let res: Vec<Vec<String>> = receiver.iter().filter(|x| x.is_some()).flatten().collect();
+
+        let write_file = File::create(self.output_path).unwrap();
+        let mut writer = BufWriter::new(&write_file);
+
+        for func in res {
+            for bb in func {
+                writer
+                    .write_all(bb.as_bytes())
+                    .expect("Unable to write bytes.");
+                writer.write_all(b"\n").expect("Unable to write bytes.");
+            }
+        }
+    }
+
+    #[cfg(feature = "inference")]
+    pub fn parallel_embedded_cfg_gen(mut self, inference_job: Option<Arc<InferenceJob>>) {
+        self.load_and_deserialize()
+            .expect("Unable to load and desearilize JSON");
+
+        if inference_job.is_some() {
+            self.functions.unwrap().par_iter().for_each(|func| {
+                func[0].generate_embedded_cfg(
+                    &self.filename,
+                    &self.min_blocks,
+                    &self.output_path,
+                    self.feature_type.unwrap(),
+                    &inference_job,
+                )
+            });
+        }
+    }
+}
