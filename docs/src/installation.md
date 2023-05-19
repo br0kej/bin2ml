@@ -10,6 +10,11 @@ cargo build --release
 
 The `bin2ml` will be stored within the `target/release/` directory.
 
+## Pre-Requisites
+`bin2ml` relies heavily on Radare2 for the binary analysis tasks and therefore expects that radare2 is installed
+Installed - Info on how to do this can be found [here](https://github.com/radareorg/radare2).
+
+
 ## Experimental Features
 
 `bin2ml` also has experimental features which are either still in active development or still being tested.

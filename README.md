@@ -9,6 +9,9 @@
 
 > `bin2ml` is under active development and is in an alpha state. Things will change as the tool is developed and built upon further.
 
+## Pre-Requisites
+- Radare2 Installed - Info on how to do this can be found [here](https://github.com/radareorg/radare2).
+
 ## Quickstart
 ```bash
 git pull https://github.com/br0kej/bin2ml
