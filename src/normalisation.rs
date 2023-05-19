@@ -45,6 +45,10 @@ pub fn normalise_disasm_simple(input: &str, reg_norm: bool) -> String {
     let re = Regex::new(r"\[obj\S*\]").unwrap();
     let normalised = re.replace_all(&normalised, "DATA");
 
+    // reloc in brackets
+    let re = Regex::new(r"\[reloc\S*\]").unwrap();
+    let normalised = re.replace_all(&normalised, "FUNC");
+
     // Normalise multi byte nops
     let re = Regex::new(r"nop.*").unwrap();
     let normalised = re.replace_all(&normalised, "nop");
@@ -300,6 +304,14 @@ mod tests {
         assert_eq!(
             normalise_disasm("movzx ecx word [obj.DNS::Factory::progressiveId]", true),
             "movzx reg32 word DATA"
+        )
+    }
+
+    #[test]
+    fn test_disasm_x86_stderr_reloc_in_brackets() {
+        assert_eq!(
+            normalise_disasm("mov reg64 qword [reloc.stderr]", true),
+            "mov reg64 qword FUNC"
         )
     }
 
