@@ -28,3 +28,16 @@ Alternatively, they can be viewed raw by going to the docs folder [here](docs/sr
 ## License
 
 The `bin2ml` source and documentation are released under the MIT license.
+
+## Citation
+
+```bibtex
+@misc{collyer2023bin2ml,
+  author = {Josh Collyer},
+  title = {bin2ml},
+  year = {2023},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  howpublished = {\url{https://github.com/br0kej/bin2ml/}},
+}
+```
