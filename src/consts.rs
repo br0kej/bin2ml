@@ -33,7 +33,7 @@ pub const DGIS_FEATURE_MAP: [&str; 8] = [
 // REGISTERS BY SIZE
 // Link to FP regs https://software-dl.ti.com/codegen/docs/tiarmclang/compiler_tools_user_guide/compiler_manual/runtime_environment/register-conventions-stdz0543031.html
 
-pub const GENERAL_PURPOSE_32_BIT_REGS: [&str; 148] = [
+pub const GENERAL_PURPOSE_32_BIT_REGS: [&str; 163] = [
     "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "v0", "v1", "v2", "v3",
     "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17",
     "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30",
@@ -44,16 +44,18 @@ pub const GENERAL_PURPOSE_32_BIT_REGS: [&str; 148] = [
     "s11", "s12", "s13", "s14", "s15", "s16", "s17", "s18", "s19", "s20", "s21", "s22", "s23",
     "s24", "s25", "s26", "s27", "s29", "s30", "s31", "f0", "f1", "f2", "f3", "f4", "f5", "f6",
     "f7", "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20",
-    "f21", "f22", "f23", "f24", "f25", "f26", "f27", "f29", "f30", "f31",
+    "f21", "f22", "f23", "f24", "f25", "f26", "f27", "f29", "f30", "f31", "v0", "v1", "a0", "a1",
+    "a2", "a3", "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "s0",
 ];
-
-pub const GENERAL_PURPOSE_64_BIT_REGS: [&str; 74] = [
+// MIPS registers are normalised to 32 bit always - This is becuase the name of the registers
+// is always the same regardless of architecture - Different to x86/x64.
+pub const GENERAL_PURPOSE_64_BIT_REGS: [&str; 75] = [
     "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14",
     "x15", "x16", "x17", "x18", "x19", "x20", "x21", "x22", "x23", "x24", "x25", "x26", "x27",
     "x28", "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "r8", "r9", "r10", "r11", "r12", "r13", "r14",
     "r15", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "d9", "d10", "d11", "d12", "d13",
     "d14", "d15", "d16", "d17", "d18", "d19", "d20", "d21", "d22", "d23", "d24", "d25", "d26",
-    "d27", "d29", "d30", "d31",
+    "d27", "d29", "d30", "d31", "x30",
 ];
 
 pub const MULTI_ARCH_FRAME_POINTERS: [&str; 6] = [

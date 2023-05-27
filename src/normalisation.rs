@@ -1,7 +1,9 @@
 /*
 Instruction Normalisation
 */
-use crate::consts::{GENERAL_PURPOSE_32_BIT_REGS, GENERAL_PURPOSE_64_BIT_REGS};
+use crate::consts::{
+    GENERAL_PURPOSE_32_BIT_REGS, GENERAL_PURPOSE_64_BIT_REGS, MULTI_ARCH_FRAME_POINTERS,
+};
 use regex::Regex;
 
 // Cross Arch Disasm Normalisation
@@ -42,7 +44,7 @@ pub fn normalise_disasm_simple(input: &str, reg_norm: bool) -> String {
     let normalised = re.replace_all(&normalised, "FUNC");
 
     // obj in brackets
-    let re = Regex::new(r"\[obj\S*\]").unwrap();
+    let re = Regex::new(r"[-]{0,1}[\[]{0,1}obj\S*[\]]{0,1}").unwrap();
     let normalised = re.replace_all(&normalised, "DATA");
 
     // reloc in brackets
@@ -61,8 +63,11 @@ pub fn normalise_disasm_simple(input: &str, reg_norm: bool) -> String {
         let split: Vec<String> = split
             .iter()
             .map(|s| {
+                if MULTI_ARCH_FRAME_POINTERS.contains(s) {
+                    "fp".to_string()
+                }
                 // If direct match to a 32 bit reg, replace with reg32
-                if GENERAL_PURPOSE_32_BIT_REGS.contains(s) {
+                else if GENERAL_PURPOSE_32_BIT_REGS.contains(s) {
                     "reg32".to_string()
                 // If direct match to a 64 bit reg, replace with reg64
                 } else if GENERAL_PURPOSE_64_BIT_REGS.contains(s) {
@@ -187,11 +192,13 @@ mod tests {
             "IMM,rcx,+,[4],rdx,="
         );
     }
+
     #[test]
     fn test_esil_big_mem() {
         let normalised_ins = normalise_esil("rcx,rax,-=,rcx,0x8000000000000000,-,!,63,$o,^,of,:=,63,$s,sf,:=,$z,zf,:=,$p,pf,:=,64,$b,cf,:=,3,$b,af,:=", "not_call", false);
         assert_eq!(normalised_ins, "rcx,rax,-=,rcx,MEM,-,!,63,$o,^,of,:=,63,$s,sf,:=,$z,zf,:=,$p,pf,:=,64,$b,cf,:=,3,$b,af,:=");
     }
+
     #[test]
     fn test_esil_normal_mem() {
         assert_eq!(
@@ -207,6 +214,7 @@ mod tests {
             "MEM,rcx,8,*,+,[8],rcx,="
         )
     }
+
     #[test]
     fn test_esil_2s_compliment_indexing() {
         assert_eq!(
@@ -226,6 +234,7 @@ mod tests {
             "ecx,rcx,^,IMM,&,rcx,=,$z,zf,:=,$p,pf,:=,31,$s,sf,:=,0,cf,:=,0,of,:="
         )
     }
+
     #[test]
     fn test_esil_func_call() {
         assert_eq!(
@@ -245,15 +254,15 @@ mod tests {
     #[test]
     fn test_reg_norm_arm32() {
         assert_eq!(normalise_esil("r4 r5 = DATA pc := IMM fp - IMM & [4] IMM & r0 = r0 sb | IMM & r0 = 0 r8 = 0 1 r0 & == $z zf := 31 $s nf := zf ! ?{ DATA pc := } ip 1 + [1] r0 = ip 1 + ip = 0 r0 == $z zf := 31 $s nf := 32 $b ! cf := 31 $o vf := zf ?{ DATA pc := } IMM fp - IMM & [4] IMM & r0 = r0 0 + [1] r0 = -1 0 ^ IMM & r1 = 0 r0 == $z zf := 31 $s nf := 32 $b ! cf := 31 $o vf := r5 r4 = zf ?{ DATA pc := } DATA pc :=", "no_call", true),
-        "reg32 reg32 = DATA pc := IMM fp - IMM & [4] IMM & reg32 = reg32 sb | IMM & reg32 = 0 reg32 = 0 1 reg32 & == $z zf := 31 $s nf := zf ! ?{ DATA pc := } ip 1 + [1] reg32 = ip 1 + ip = 0 reg32 == $z zf := 31 $s nf := 32 $b ! cf := 31 $o vf := zf ?{ DATA pc := } IMM fp - IMM & [4] IMM & reg32 = reg32 0 + [1] reg32 = -1 0 ^ IMM & reg32 = 0 reg32 == $z zf := 31 $s nf := 32 $b ! cf := 31 $o vf := reg32 reg32 = zf ?{ DATA pc := } DATA pc :=");
+                   "reg32 reg32 = DATA pc := IMM fp - IMM & [4] IMM & reg32 = reg32 sb | IMM & reg32 = 0 reg32 = 0 1 reg32 & == $z zf := 31 $s nf := zf ! ?{ DATA pc := } ip 1 + [1] reg32 = ip 1 + ip = 0 reg32 == $z zf := 31 $s nf := 32 $b ! cf := 31 $o vf := zf ?{ DATA pc := } IMM fp - IMM & [4] IMM & reg32 = reg32 0 + [1] reg32 = -1 0 ^ IMM & reg32 = 0 reg32 == $z zf := 31 $s nf := 32 $b ! cf := 31 $o vf := reg32 reg32 = zf ?{ DATA pc := } DATA pc :=");
         assert_eq!(normalise_esil("924 r4 + IMM & [4] IMM & r8 = 0 r4 + IMM & [4] IMM & r5 = r4 r0 = pc lr := FUNC pc := 0 r0 == $z zf := 31 $s nf := 32 $b ! cf := 31 $o vf := zf ?{ DATA pc := } sb r0 = 28 fp", "not_call", true),
-        "924 reg32 + IMM & [4] IMM & reg32 = 0 reg32 + IMM & [4] IMM & reg32 = reg32 reg32 = pc lr := FUNC pc := 0 reg32 == $z zf := 31 $s nf := 32 $b ! cf := 31 $o vf := zf ?{ DATA pc := } sb reg32 = 28 fp")
+                   "924 reg32 + IMM & [4] IMM & reg32 = 0 reg32 + IMM & [4] IMM & reg32 = reg32 reg32 = pc lr := FUNC pc := 0 reg32 == $z zf := 31 $s nf := 32 $b ! cf := 31 $o vf := zf ?{ DATA pc := } sb reg32 = 28 fp")
     }
 
     #[test]
     fn test_reg_norm_arm64() {
         assert_eq!(normalise_esil("0 MEM w8 & == 31 $s nf := $z zf := 0 cf := 0 vf := xzr 16 sp + DUP tmp = =[8] DATA pc := IMM x22 - x22 = 40 sp + DUP tmp = [8] x8 = x20 x1 = IMM w8 & w0 = pc lr := x19 pc := IMM w0 -1 *", "not_call", true),
-        "0 MEM reg32 & == 31 $s nf := $z zf := 0 cf := 0 vf := xzr 16 sp + DUP tmp = =[8] DATA pc := IMM reg64 - reg64 = 40 sp + DUP tmp = [8] reg64 = reg64 reg64 = IMM reg32 & reg32 = pc lr := reg64 pc := IMM reg32 -1 *")
+                   "0 MEM reg32 & == 31 $s nf := $z zf := 0 cf := 0 vf := xzr 16 sp + DUP tmp = =[8] DATA pc := IMM reg64 - reg64 = 40 sp + DUP tmp = [8] reg64 = reg64 reg64 = IMM reg32 & reg32 = pc lr := reg64 pc := IMM reg32 -1 *")
     }
 
     // x86 Disasm Normalisation Tests
@@ -318,18 +327,18 @@ mod tests {
     // MIPS Disasm Normalisation Tests
     #[test]
     fn test_disasm_mips_cpp_func_call() {
-        assert_eq!(normalise_disasm("jal method std::__cxx11::_List_base<FingerTest const*, std::allocator<FingerTest const*> >::~_List_base()",  false), 
+        assert_eq!(normalise_disasm("jal method std::__cxx11::_List_base<FingerTest const*, std::allocator<FingerTest const*> >::~_List_base()", false),
                    "jal FUNC");
         assert_eq!(normalise_disasm("jal method std::__cxx11::_List_base<data_file_record  std::allocator<data_file_record> >::_M_inc_size(unsigned int)", false),
                    "jal FUNC");
-        assert_eq!(normalise_disasm("jal method std::reverse_iterator<__gnu_cxx::__normal_iterator<char const*  std::__cxx11::basic_STRtraits<char>  std::allocator<char> > > > const&)",  false),
-            "jal FUNC");
+        assert_eq!(normalise_disasm("jal method std::reverse_iterator<__gnu_cxx::__normal_iterator<char const*  std::__cxx11::basic_STRtraits<char>  std::allocator<char> > > > const&)", false),
+                   "jal FUNC");
         assert_eq!(
             normalise_disasm("jal method std::__cxx11::basic_STRtraits<char>", false),
             "jal FUNC"
         );
         assert_eq!(normalise_disasm("jal method __gnu_cxx::__normal_iterator<AVal*  std::vector<AVal  std::allocator<AVal> > > std::copy<__gnu_cxx::__normal_iterator<AVal const*  std::vector<AVal  std::allocator<AVal> > >  __gnu_cxx::__normal_iterator<AVal*  std::vector<AVal  std::allocator<AVal> > > >(__gnu_cxx::__normal_iterator<AVal const*  std::vector<AVal  std::allocator<AVal> > >  __gnu_cxx::__normal_iterator<AVal const*  std::vector<AVal  std::allocator<AVal> > >  __gnu_cxx::__normal_iterator<AVal*  std::vector<AVal  std::allocator<AVa", false),
-            "jal FUNC");
+                   "jal FUNC");
     }
 
     #[test]
@@ -342,6 +351,26 @@ mod tests {
     fn test_disasm_mips_func_call() {
         assert_eq!(normalise_disasm("jal fcn.001f79f0", false), "jal FUNC");
         assert_eq!(normalise_disasm("jal sym.safe_zalloc", false), "jal FUNC");
+    }
+
+    #[test]
+    fn test_disasm_mips_obj_call() {
+        assert_eq!(
+            normalise_disasm("lw reg32 -obj.__DTOR_END__(gp)", false),
+            "lw reg32 DATA"
+        );
+        assert_eq!(
+            normalise_disasm("addiu a2 reg32 obj.__func__.6741", true),
+            "addiu reg32 reg32 DATA"
+        );
+        assert_eq!(
+            normalise_disasm("lw reg32 -obj.__dso_handle(gp)", true),
+            "lw reg32 DATA"
+        );
+        assert_eq!(
+            normalise_disasm("daddiu a2 a2 obj.__func__.7160", true),
+            "daddiu reg32 reg32 DATA"
+        );
     }
 
     // ARM Disasm Normalisation Tests
@@ -363,6 +392,23 @@ mod tests {
         assert_eq!(normalise_disasm("mov x0 x20", true), "mov reg64 reg64");
         assert_eq!(normalise_disasm("mov x0 w20", true), "mov reg64 reg32")
     }
+
+    #[test]
+    fn test_disasm_arm_obj_call() {
+        assert_eq!(
+            normalise_disasm("adrp reg64 obj.completed.8887", true),
+            "adrp reg64 DATA"
+        )
+    }
+
+    #[test]
+    fn test_disasm_arm_fp() {
+        assert_eq!(
+            normalise_disasm("sub sp sp 0x70 stp x29 x30 [sp IMM] add x29 sp 0x60", true),
+            "sub sp sp 0x70 stp fp reg64 [sp IMM] add fp sp 0x60"
+        )
+    }
+
     // X86 Disasm Normalisation Tests
     #[test]
     fn test_disasm_x86_reg_norm_with_brackets() {
@@ -398,7 +444,6 @@ mod tests {
         assert_eq!(normalise_disasm("nop dword [rax + rax]", true), "nop")
     }
 }
-
 /*
 
 "0x30,rbp,-,[8],rax,=",
