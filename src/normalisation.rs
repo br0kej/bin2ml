@@ -27,8 +27,9 @@ pub fn normalise_disasm_simple(input: &str, reg_norm: bool) -> String {
 
     // Memory addresses
     // This normalisation is very naive. It assume any hex value longer than 0x+4 digits
-    // is a memory address.
-    let re = Regex::new(r"(0[xX][0-9a-fA-F]{4,})").unwrap();
+    // is a memory address. This regex also includes to variants - One to catch straight
+    // memory addrs and another to catch an edge case in r2 output.
+    let re = Regex::new(r"(case\.|0x|aav\.){0,1}0x[0-9a-fA-F]{3,}(.[0-9]){0,}").unwrap();
     let normalised = re.replace_all(&normalised, "MEM");
 
     // Strings
@@ -373,6 +374,10 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_disasm_mips_case_mem() {
+        assert_eq!(normalise_disasm("ja case.0x74543.3", false), "ja MEM")
+    }
     // ARM Disasm Normalisation Tests
     #[test]
     fn test_disasm_arm_reg_brackets() {
@@ -406,6 +411,14 @@ mod tests {
         assert_eq!(
             normalise_disasm("sub sp sp 0x70 stp x29 x30 [sp IMM] add x29 sp 0x60", true),
             "sub sp sp 0x70 stp fp reg64 [sp IMM] add fp sp 0x60"
+        )
+    }
+
+    #[test]
+    fn test_disasm_arm_aav() {
+        assert_eq!(
+            normalise_disasm("ldr reg32 aav.0x24633", false),
+            "ldr reg32 MEM"
         )
     }
 
