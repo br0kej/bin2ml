@@ -52,6 +52,10 @@ pub fn normalise_disasm_simple(input: &str, reg_norm: bool) -> String {
     let re = Regex::new(r"\[reloc\S*\]").unwrap();
     let normalised = re.replace_all(&normalised, "FUNC");
 
+    // loc calls
+    let re = Regex::new(r"loc.[a-z]+.[a-z_]+").unwrap();
+    let normalised = re.replace_all(&normalised, "FUNC");
+
     // Normalise multi byte nops
     let re = Regex::new(r"nop.*").unwrap();
     let normalised = re.replace_all(&normalised, "nop");
@@ -322,8 +326,10 @@ mod tests {
         assert_eq!(
             normalise_disasm("mov reg64 qword [reloc.stderr]", true),
             "mov reg64 qword FUNC"
-        )
+        );
+        assert_eq!(normalise_disasm("cmp qword [reloc.__cxa_finalize] 0", true), "cmp qword FUNC 0")
     }
+
 
     // MIPS Disasm Normalisation Tests
     #[test]
@@ -452,9 +458,19 @@ mod tests {
     }
 
     #[test]
-    fn test_disasm_fix_multi_byte_nop() {
+    fn test_disasm_x86_fix_multi_byte_nop() {
         assert_eq!(normalise_disasm("nop word cs:[rax + rax]", true), "nop");
         assert_eq!(normalise_disasm("nop dword [rax + rax]", true), "nop")
+    }
+
+    #[test]
+    fn test_disasm_x86_obj_call() {
+        assert_eq!(normalise_disasm("lea reg64 obj.__func__.7896", true), "lea reg64 DATA")
+    }
+
+    #[test]
+    fn test_disasm_x86_call_ins() {
+        assert_eq!(normalise_disasm("call loc.imp.__cxa_finalize", true), "call FUNC")
     }
 }
 /*
