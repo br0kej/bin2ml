@@ -36,8 +36,13 @@ pub enum FormatMode {
 }
 
 impl AGFJFile {
-    #[allow(clippy::result_unit_err)]
     // Allowed to enable propagation of errors from both reading to wstring and serde from str.
+    #[allow(clippy::result_unit_err)]
+    /// Loads and desearializes an AGFJ JSON file into a Vec<Vec<AGFJFunc>> and
+    /// then detects the architecure of the functions stored within
+    ///
+    /// `agfj` is the radare2 command used to generate the `cfg` data. The code for this
+    /// can be found in extract.rs.
     pub fn load_and_deserialize(&mut self) -> Result<(), ()> {
         let data = read_to_string(&self.filename).expect("Unable to read file");
 
@@ -55,6 +60,9 @@ impl AGFJFile {
         Ok(())
     }
 
+    /// Detects the architecture of a file by iterating through the functions
+    /// until a call instruction type is found. Once found, the opcode is then
+    /// matched with architecture specific options.
     fn detect_architecture(&self) -> Option<String> {
         let mut call_op: Option<String> = None;
 
@@ -68,13 +76,10 @@ impl AGFJFile {
                     if call_op.is_some() {
                         let opcode = call_op.as_ref().unwrap().split_whitespace().next().unwrap();
                         if X86_CALL.contains(&opcode) {
-                            //println!("Data is X86");
                             return Some("X86".to_string());
                         } else if ARM_CALL.contains(&opcode) {
-                            //println!("Data is ARM");
                             return Some("ARM".to_string());
                         } else if MIPS_CALL.contains(&opcode) {
-                            //println!("Data is MIPS");
                             return Some("MIPS".to_string());
                         } else {
                             continue;
@@ -87,6 +92,9 @@ impl AGFJFile {
         call_op
     }
 
+    /// Executes a generation option based on provided inputs
+    /// This acts as the primary public API for creating downstream
+    /// data from an AGFJ extracted JSON file
     pub fn execute_data_generation(
         self,
         format_type: FormatMode,
@@ -115,21 +123,17 @@ impl AGFJFile {
         }
     }
 
-    pub fn paralell_attributed_cfg_gen(self) {
-        self.functions.unwrap().par_iter().for_each(|func| {
-            func[0].generate_attributed_cfg(
-                &self.filename,
-                &self.min_blocks,
-                &self.output_path,
-                self.feature_type.unwrap(),
-                self.architecture.as_ref().unwrap(),
-            )
-        });
-    }
-
-    // TODO: This needs to be changed. This currently randomly walks a graph at a basic block level
-    // and then flattens the walks and then saves them to a file
-    // This is not very useful as there is no idication of start and end.
+    /// Generates basic block level random walks
+    ///
+    /// This function iterates across the functions within a AGFJ
+    /// file before collecting the random walks and saving them into a text
+    /// file
+    ///
+    /// This function is useful for creating single instuction pre-training
+    /// data where you want to do things like masked language modelling
+    ///
+    /// It is *not* suitable for doing any other sort of tasks such as Next Sentence
+    /// Prediction (NSP) as there is not indication of where a basic block starts or ends.
     pub fn generate_random_bb_walk(mut self, esil: bool) -> Vec<String> {
         self.load_and_deserialize()
             .expect("Unable to load and desearilize JSON");
@@ -158,6 +162,8 @@ impl AGFJFile {
         flattened
     }
 
+    /// Generates a single string which contains the ESIL representation of every
+    /// instruction within a function
     pub fn generate_esil_func_strings(mut self) {
         let fname_string: String = get_save_file_path(&self.filename, &self.output_path);
         let fname_string = format!("{}-efs.json", fname_string);
@@ -196,6 +202,7 @@ impl AGFJFile {
         }
     }
 
+    /// Generates a single string which contains the every instruction within a function
     pub fn generate_disasm_func_strings(mut self, reg_norm: bool) {
         // This needs to be amended so that there is a AGFJFunc function
         // that returns a function as a func string.
@@ -236,6 +243,11 @@ impl AGFJFile {
         }
     }
 
+    /// Generates a file containing every instruction within each of the functions
+    /// within the AGFJFile.
+    ///
+    /// This ignores control flow and simple iterates the JSON objects from the top to
+    /// the bottom.
     pub fn generate_linear_bb_walk(mut self, esil: bool) {
         self.load_and_deserialize()
             .expect("Unable to load and desearlize JSON");
@@ -265,6 +277,24 @@ impl AGFJFile {
         }
     }
 
+    /// Generate Attributed Control Flow Graph (ACFG)'s for each of the functions
+    /// within an AGFJFile.
+    pub fn paralell_attributed_cfg_gen(self) {
+        self.functions.unwrap().par_iter().for_each(|func| {
+            func[0].generate_attributed_cfg(
+                &self.filename,
+                &self.min_blocks,
+                &self.output_path,
+                self.feature_type.unwrap(),
+                self.architecture.as_ref().unwrap(),
+            )
+        });
+    }
+
+    /// EXPERIMENTAL
+    ///
+    /// Generate a CFG where each basic blocks contents is embedded using a provided
+    /// machine learning model (represented as an InferenceJob)
     #[cfg(feature = "inference")]
     pub fn parallel_embedded_cfg_gen(mut self, inference_job: Option<Arc<InferenceJob>>) {
         self.load_and_deserialize()
