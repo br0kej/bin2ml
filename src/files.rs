@@ -134,7 +134,7 @@ impl AGFJFile {
     ///
     /// It is *not* suitable for doing any other sort of tasks such as Next Sentence
     /// Prediction (NSP) as there is not indication of where a basic block starts or ends.
-    pub fn generate_random_bb_walk(mut self, esil: bool) -> Vec<String> {
+    pub fn generate_random_bb_walk(mut self, esil: bool) {
         self.load_and_deserialize()
             .expect("Unable to load and desearilize JSON");
 
@@ -158,9 +158,22 @@ impl AGFJFile {
             .flatten()
             .collect();
 
+        // TODO - Turn this into an info level log
         println!("Total Number of Lines: {:?}", flattened.len());
-        flattened
-    }
+
+        let file_start = Path::new(&self.filename).file_stem().unwrap().to_string_lossy();
+        let full_output_path = format!(
+            "{}-{}.txt",
+            self.output_path,
+            file_start
+        );
+
+        let write_file = File::create(full_output_path).unwrap();
+        let mut writer = BufWriter::new(&write_file);
+
+        writer.write(flattened.join("\n").as_bytes()).expect("");
+        
+        }
 
     /// Generates a single string which contains the ESIL representation of every
     /// instruction within a function
