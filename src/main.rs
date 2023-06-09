@@ -65,12 +65,15 @@ enum Commands {
         #[arg(short, long, value_name = "DIR")]
         fpath: String,
 
+        /// The path for the output directory
         #[arg(short, long, value_name = "DIR")]
         output_dir: String,
+
         /// The extraction mode - Currently only supports 'cfg'
         #[arg(short, long, value_name = "EXTRACT_MODE")]
         mode: String,
 
+        /// The number of threads Rayon can use when parallel processing
         #[arg(short, long, value_name = "NUM_THREADS", default_value = "2")]
         num_threads: usize,
 
@@ -82,27 +85,34 @@ enum Commands {
         /// The path to a JSON file extracted using the <EXTRACT> command
         #[arg(short, long, value_name = "FILENAME")]
         path: String,
+
         /// The min number of basic blocks. Any CFG's below this number will be skipped
         #[arg(long, default_value = "5")]
         min_blocks: u16,
+
         /// The output path for the processed Networkx graphs (1 per function)
         #[arg(short, long, value_name = "OUTPUT")]
         output_path: String,
+
         /// The type of features to generate per basic block (node)
         #[arg(short, long, value_name = "FEATURE_TYPE")]
         feature_type: String,
+
         /// The filepath to a HuggingFace tokeniser.json
         #[cfg(feature = "inference")]
         #[arg(short, long, value_name = "TOKENISER_FP")]
         tokeniser_fp: Option<String>,
+
         /// The filepath to a TorchScript HuggingFace Model
         #[cfg(feature = "inference")]
         #[arg(long, value_name = "MODEL_FP")]
         model_fp: Option<String>,
+
         /// Flag to mean_pool embedding output
         #[cfg(feature = "inference")]
         #[arg(long, default_value = "true")]
         mean_pool: bool,
+
         /// Embedding dimension
         #[cfg(feature = "inference")]
         #[arg(short, long, value_name = "EMBED_DIM")]
@@ -113,22 +123,28 @@ enum Commands {
         /// The path to a JSON file extracted using the <EXTRACT> command
         #[arg(short, long, value_name = "FILENAME")]
         path: String,
+
         /// The type of data to be generated - Currently supports ['esil', 'disasm']
         #[arg(short, long, value_name = "DATA_TYPE")]
         data_type: String,
-        // The min number of basic blocks. Any CFG's below this number will be skipped
+
+        /// The min number of basic blocks. Any CFG's below this number will be skipped
         #[arg(long, default_value = "5")]
         min_blocks: u16,
+
         /// The output path for the processed data
         #[arg(short, long, value_name = "OUTPUT")]
         output_path: String,
+
         /// The format of the output data
         #[arg(short, long, value_name = "FORMAT")]
         format: String,
-        // Toggle to determine if blocks are sampled in a random walk nature
+
+        /// Toggle to determine if blocks are sampled in a random walk nature
         #[arg(long, default_value = "false")]
         random_walk: bool,
-        // Toggle register normalisation
+
+        /// Toggle register normalisation
         #[arg(long, default_value = "true")]
         reg_norm: bool,
     },
@@ -147,6 +163,7 @@ enum Commands {
         /// The path to the text file containing the corpus to process
         #[arg(short, long, value_name = "VOCAB_SIZE", default_value = "10000")]
         vocab_size: usize,
+        /// The type of tokeniser to create
         #[arg(short, long, value_name = "BPE or Byte-BPE", default_value = "BPE")]
         tokeniser_type: String,
     },
@@ -174,14 +191,23 @@ enum Commands {
     },
     /// Utility to remove duplicate entries within processed data
     Dedup {
+        /// The filename to dedup
         #[arg(short, long, value_name = "FILENAME")]
         filename: String,
+
+        /// Toggle to print statistics of number of functions before and after dedup
         #[arg(long, default_value = "false")]
         print_stats: bool,
+
+        /// Toggle for just calculating stats without creating any files
         #[arg(long, default_value = "false")]
         just_stats: bool,
+
+        /// Number of threads to use with Rayon
         #[arg(short, long, value_name = "NUM_THREADS", default_value = "2")]
         num_threads: usize,
+
+        /// Toggle whether to dedup based on hashing only the value (and ignoring the key)
         #[arg(short, long, default_value = "false")]
         hash_just_value: bool,
     },
@@ -355,7 +381,6 @@ fn main() {
             };
             if t_type == TokeniserType::CommaBPE {
                 todo!("not implemented")
-                //train_comma_bpe_tokeniser(data, output_name, *vocab_size).unwrap();
             } else if t_type == TokeniserType::ByteBPE {
                 train_byte_bpe_tokeniser(data, output_name, *vocab_size).unwrap();
             } else {
