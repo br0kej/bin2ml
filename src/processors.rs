@@ -1,16 +1,13 @@
 /*
 ALOT OF THIS IS DEPRECATED - NEED TO WORK OUT WHAT TO KEEP AND WHAT TO REMOVE
  */
-use crate::bb::{FeatureType, InstructionMode};
+use crate::bb::FeatureType;
 use crate::files::AGFJFile;
 #[cfg(feature = "inference")]
 use crate::inference::InferenceJob;
 use serde::{Deserialize, Serialize};
-use std::fs::write;
-use std::path::Path;
 #[cfg(feature = "inference")]
 use std::process::exit;
-use std::string::String;
 #[cfg(feature = "inference")]
 use std::sync::Arc;
 

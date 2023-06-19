@@ -23,6 +23,7 @@ pub mod files;
 pub mod inference;
 pub mod normalisation;
 pub mod processors;
+pub mod sample;
 pub mod tokeniser;
 pub mod utils;
 
