@@ -58,13 +58,18 @@ pub const GENERAL_PURPOSE_64_BIT_REGS: [&str; 75] = [
     "d27", "d29", "d30", "d31", "x30",
 ];
 
-pub const MULTI_ARCH_FRAME_POINTERS: [&str; 6] = [
+//Risc-V Specific 32-bit Registers - Using the ABI names here https://en.wikichip.org/wiki/risc-v/registers
+pub const RISCV_32_BIT_REGS: [&str; 10] =
+    ["t0", "t1", "t2", "s1", "a0", "a1", "a2", "a3", "a4", "a5"];
+
+pub const MULTI_ARCH_FRAME_POINTERS: [&str; 7] = [
     "r11", // arm32
     "x29", // aarch64 - 64 bit version
     "w29", // aarch64 - 32 bit version
     "EBP", // x86
     "RBP", // x86-64
-    "fp",  // MIPS
+    "fp",  // MIPS / RISC-V
+    "s0",  // RISC-V
 ];
 
 // INSTRUCTION CATEGORIES

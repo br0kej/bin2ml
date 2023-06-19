@@ -3,6 +3,7 @@ Instruction Normalisation
 */
 use crate::consts::{
     GENERAL_PURPOSE_32_BIT_REGS, GENERAL_PURPOSE_64_BIT_REGS, MULTI_ARCH_FRAME_POINTERS,
+    RISCV_32_BIT_REGS,
 };
 use regex::Regex;
 
@@ -150,7 +151,7 @@ pub fn normalise_esil_simple(input: &str, op_type: &str, reg_norm: bool) -> Stri
             .iter()
             .map(|s| {
                 //println!("{}\n", s);
-                if GENERAL_PURPOSE_32_BIT_REGS.contains(s) {
+                if GENERAL_PURPOSE_32_BIT_REGS.contains(s) | RISCV_32_BIT_REGS.contains(s) {
                     "reg32".to_string()
                 } else if GENERAL_PURPOSE_64_BIT_REGS.contains(s) {
                     "reg64".to_string()
@@ -196,6 +197,12 @@ mod tests {
             normalise_esil("0x74,rcx,+,[4],rdx,=", "not_call", false),
             "IMM,rcx,+,[4],rdx,="
         );
+    }
+
+    #[test]
+    fn test_esil_riscv_reg_masking() {
+        assert_eq!(normalise_esil("a0 4 + [4] a3 = 0 a4 = a0 a5 = 0 ra == $z ! ?{ MEM pc := }  a0 0 + [4] t1 = 0 a4 = 0 a0 = 0 0 <= ?{ MEM pc := }", "not_call", true), "reg32 4 + [4] reg32 = 0 reg32 = reg32 reg32 = 0 ra == $z ! ?{ MEM pc := } reg32 0 + [4] reg32 = 0 reg32 = 0 reg32 = 0 0 <= ?{ MEM pc := }");
+        assert_eq!(normalise_esil("a0 0 == $z ?{ MEM pc := }  sp -16 + sp = s0 sp 8 + =[4] a0 s0 = a0 8 + [4] a0 = ra sp 12 + =[4] a0 0 == $z ?{ MEM pc := } s0 12", "not_call", true), "reg32 0 == $z ?{ MEM pc := } sp -16 + sp = reg32 sp 8 + =[4] reg32 reg32 = reg32 8 + [4] reg32 = ra sp 12 + =[4] reg32 0 == $z ?{ MEM pc := } reg32 12");
     }
 
     #[test]
@@ -327,9 +334,11 @@ mod tests {
             normalise_disasm("mov reg64 qword [reloc.stderr]", true),
             "mov reg64 qword FUNC"
         );
-        assert_eq!(normalise_disasm("cmp qword [reloc.__cxa_finalize] 0", true), "cmp qword FUNC 0")
+        assert_eq!(
+            normalise_disasm("cmp qword [reloc.__cxa_finalize] 0", true),
+            "cmp qword FUNC 0"
+        )
     }
-
 
     // MIPS Disasm Normalisation Tests
     #[test]
@@ -465,12 +474,18 @@ mod tests {
 
     #[test]
     fn test_disasm_x86_obj_call() {
-        assert_eq!(normalise_disasm("lea reg64 obj.__func__.7896", true), "lea reg64 DATA")
+        assert_eq!(
+            normalise_disasm("lea reg64 obj.__func__.7896", true),
+            "lea reg64 DATA"
+        )
     }
 
     #[test]
     fn test_disasm_x86_call_ins() {
-        assert_eq!(normalise_disasm("call loc.imp.__cxa_finalize", true), "call FUNC")
+        assert_eq!(
+            normalise_disasm("call loc.imp.__cxa_finalize", true),
+            "call FUNC"
+        )
     }
 }
 /*
