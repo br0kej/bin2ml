@@ -430,12 +430,12 @@ impl ACFJBlock {
 
     // Creates a vector containing the ESIL representation for
     // each instruction within a given basic block
-    pub fn get_esil_bb(&self) -> Vec<String> {
+    pub fn get_esil_bb(&self, reg_norm: bool) -> Vec<String> {
         let mut esil_ins: Vec<String> = Vec::new();
         for op in &self.ops {
             if op.esil.is_some() && op.esil.as_ref().unwrap().len() > 1 {
                 let esil_single = &op.esil.as_ref().unwrap();
-                let normd = normalise_esil_simple(esil_single, &op.r#type, true);
+                let normd = normalise_esil_simple(esil_single, &op.r#type, reg_norm);
                 esil_ins.push((*normd).to_string())
             }
         }

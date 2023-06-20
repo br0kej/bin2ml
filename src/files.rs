@@ -26,6 +26,7 @@ pub struct AGFJFile {
     pub min_blocks: u16,
     pub feature_type: Option<FeatureType>,
     pub architecture: Option<String>,
+    pub reg_norm: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]
@@ -99,7 +100,6 @@ impl AGFJFile {
         self,
         format_type: FormatMode,
         instruction_type: InstructionMode,
-        reg_norm: &bool,
         random_walk: &bool,
     ) {
         if format_type == FormatMode::SingleInstruction {
@@ -116,7 +116,7 @@ impl AGFJFile {
             }
         } else if format_type == FormatMode::FuncAsString {
             if instruction_type == InstructionMode::Disasm {
-                self.generate_disasm_func_strings(*reg_norm);
+                self.generate_disasm_func_strings();
             } else if instruction_type == InstructionMode::ESIL {
                 self.generate_esil_func_strings();
             }
@@ -143,7 +143,7 @@ impl AGFJFile {
         self.functions.unwrap().par_iter_mut().for_each_with(
             sender,
             |s, func: &mut Vec<AGFJFunc>| {
-                s.send(func[0].disasm_random_walks(&self.min_blocks, esil))
+                s.send(func[0].disasm_random_walks(&self.min_blocks, esil, self.reg_norm))
                     .unwrap()
             },
         );
@@ -161,19 +161,17 @@ impl AGFJFile {
         // TODO - Turn this into an info level log
         println!("Total Number of Lines: {:?}", flattened.len());
 
-        let file_start = Path::new(&self.filename).file_stem().unwrap().to_string_lossy();
-        let full_output_path = format!(
-            "{}-{}.txt",
-            self.output_path,
-            file_start
-        );
+        let file_start = Path::new(&self.filename)
+            .file_stem()
+            .unwrap()
+            .to_string_lossy();
+        let full_output_path = format!("{}-{}.txt", self.output_path, file_start);
 
         let write_file = File::create(full_output_path).unwrap();
         let mut writer = BufWriter::new(&write_file);
 
         writer.write(flattened.join("\n").as_bytes()).expect("");
-        
-        }
+    }
 
     /// Generates a single string which contains the ESIL representation of every
     /// instruction within a function
@@ -193,7 +191,7 @@ impl AGFJFile {
                     .par_iter_mut()
                     .progress()
                     .for_each_with(sender, |s, func: &mut Vec<AGFJFunc>| {
-                        s.send(func[0].get_esil_function_string(&self.min_blocks))
+                        s.send(func[0].get_esil_function_string(&self.min_blocks, self.reg_norm))
                             .unwrap()
                     });
 
@@ -216,7 +214,7 @@ impl AGFJFile {
     }
 
     /// Generates a single string which contains the every instruction within a function
-    pub fn generate_disasm_func_strings(mut self, reg_norm: bool) {
+    pub fn generate_disasm_func_strings(mut self) {
         // This needs to be amended so that there is a AGFJFunc function
         // that returns a function as a func string.
         let fname_string: String = get_save_file_path(&self.filename, &self.output_path);
@@ -234,7 +232,7 @@ impl AGFJFile {
                     .par_iter_mut()
                     .progress()
                     .for_each_with(sender, |s, func: &mut Vec<AGFJFunc>| {
-                        s.send(func[0].get_disasm_function_string(&self.min_blocks, reg_norm))
+                        s.send(func[0].get_disasm_function_string(&self.min_blocks, self.reg_norm))
                             .unwrap()
                     });
 
@@ -270,7 +268,7 @@ impl AGFJFile {
         self.functions.unwrap().par_iter_mut().for_each_with(
             sender,
             |s, func: &mut Vec<AGFJFunc>| {
-                s.send(func[0].get_function_instructions(esil, &self.min_blocks))
+                s.send(func[0].get_function_instructions(esil, &self.min_blocks, self.reg_norm))
                     .unwrap()
             },
         );

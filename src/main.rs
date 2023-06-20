@@ -146,7 +146,7 @@ enum Commands {
         random_walk: bool,
 
         /// Toggle register normalisation
-        #[arg(long, default_value = "true")]
+        #[arg(long, default_value = "false")]
         reg_norm: bool,
     },
     /// Generate HuggingFace tokeniser.json files from a corpus (REFACTOR_NEEDED)
@@ -345,9 +345,10 @@ fn main() {
                     min_blocks: *min_blocks,
                     feature_type: None,
                     architecture: None,
+                    reg_norm: *reg_norm,
                 };
 
-                file.execute_data_generation(format_type, instruction_type, reg_norm, random_walk)
+                file.execute_data_generation(format_type, instruction_type, random_walk)
             } else {
                 for file in WalkDir::new(path).into_iter().filter_map(|file| file.ok()) {
                     if file.path().to_string_lossy().ends_with(".json") {
@@ -358,13 +359,9 @@ fn main() {
                             min_blocks: *min_blocks,
                             feature_type: None,
                             architecture: None,
+                            reg_norm: *reg_norm,
                         };
-                        file.execute_data_generation(
-                            format_type,
-                            instruction_type,
-                            reg_norm,
-                            random_walk,
-                        )
+                        file.execute_data_generation(format_type, instruction_type, random_walk)
                     }
                 }
             }

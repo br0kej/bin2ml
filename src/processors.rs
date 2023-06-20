@@ -57,6 +57,8 @@ pub fn agfj_graph_embedded_feats(
         min_blocks: *min_blocks,
         feature_type: Some(feature_type),
         architecture: None,
+        // This may actually break this feature in certain examples. May need to be togglable
+        reg_norm: false,
     };
 
     // TODO: Add logic here that creates an inference job differently depending on if tokeniser_fp and model_fp
@@ -96,6 +98,7 @@ pub fn agfj_graph_statistical_features(
         min_blocks: *min_blocks,
         feature_type: Some(feature_type),
         architecture: None,
+        reg_norm: false,
     };
 
     file.load_and_deserialize()

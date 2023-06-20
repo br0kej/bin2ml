@@ -51,11 +51,15 @@ impl AGFJFunc {
         self.create_petgraph_from_edgelist();
     }
 
-    pub fn get_esil_function_string(&self, min_blocks: &u16) -> Option<(String, String)> {
+    pub fn get_esil_function_string(
+        &self,
+        min_blocks: &u16,
+        reg_norm: bool,
+    ) -> Option<(String, String)> {
         let mut esil_function = Vec::<String>::new();
         if self.blocks.len() >= (*min_blocks).into() && self.blocks[0].offset != 1 {
             for bb in &self.blocks {
-                let esil: Vec<String> = bb.get_esil_bb();
+                let esil: Vec<String> = bb.get_esil_bb(reg_norm);
                 for ins in esil.iter() {
                     if !ins.is_empty() {
                         let split: Vec<String> = ins.split(',').map(|s| s.to_string()).collect();
@@ -123,13 +127,14 @@ impl AGFJFunc {
         &mut self,
         esil: bool,
         min_blocks: &u16,
+        reg_norm: bool,
     ) -> Option<Vec<String>> {
         let mut function_instructions = Vec::<Vec<String>>::new();
 
         if self.blocks.len() >= (*min_blocks).into() {
             for bb in &self.blocks {
                 if esil {
-                    let bb_ins = bb.get_esil_bb();
+                    let bb_ins = bb.get_esil_bb(reg_norm);
                     function_instructions.push(bb_ins)
                 } else {
                     let bb_ins = bb.get_ins();
@@ -144,7 +149,7 @@ impl AGFJFunc {
     }
     // This function traverses the functions control flow graph and currently
     // calculates the number of instructions per node
-    pub fn dfs_cfg(&self, max_hops: u8, esil: bool) -> Vec<Vec<Vec<String>>> {
+    pub fn dfs_cfg(&self, max_hops: u8, esil: bool, reg_norm: bool) -> Vec<Vec<Vec<String>>> {
         let graph = self.graph.as_ref().unwrap();
         let mut disasm_walks = Vec::<Vec<Vec<String>>>::new();
         let mut hop_counter: u8 = 0;
@@ -167,7 +172,7 @@ impl AGFJFunc {
                     // IF MATCH FOUND, DO BLOCK PROCESSING STUFF HERE
                     if !basic_block.is_empty() {
                         if esil {
-                            let bb_esil = basic_block.first().unwrap().get_esil_bb();
+                            let bb_esil = basic_block.first().unwrap().get_esil_bb(reg_norm);
                             single_disasm_walk.push(bb_esil)
                         } else {
                             let bb_ins = basic_block.first().unwrap().get_ins();
@@ -186,10 +191,11 @@ impl AGFJFunc {
         &mut self,
         min_blocks: &u16,
         esil: bool,
+        reg_norm: bool,
     ) -> Option<Vec<Vec<Vec<String>>>> {
         if self.blocks.len() > (*min_blocks).into() && self.blocks[0].offset != 1 {
             self.create_graph_struct_members(min_blocks);
-            let disasm_walks = self.dfs_cfg(10, esil);
+            let disasm_walks = self.dfs_cfg(10, esil, reg_norm);
             Some(disasm_walks)
         } else {
             None
