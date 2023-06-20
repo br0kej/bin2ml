@@ -59,8 +59,9 @@ pub const GENERAL_PURPOSE_64_BIT_REGS: [&str; 75] = [
 ];
 
 //Risc-V Specific 32-bit Registers - Using the ABI names here https://en.wikichip.org/wiki/risc-v/registers
-pub const RISCV_32_BIT_REGS: [&str; 10] =
-    ["t0", "t1", "t2", "s1", "a0", "a1", "a2", "a3", "a4", "a5"];
+pub const RISCV_32_BIT_REGS: [&str; 12] = [
+    "t0", "t1", "t2", "s1", "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7",
+];
 
 pub const MULTI_ARCH_FRAME_POINTERS: [&str; 7] = [
     "r11", // arm32

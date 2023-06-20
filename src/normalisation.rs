@@ -143,15 +143,14 @@ pub fn normalise_esil_simple(input: &str, op_type: &str, reg_norm: bool) -> Stri
     };
 
     if reg_norm {
-        // Split the disasm into it's parts
-        let split: Vec<&str> = normalised.split(' ').filter(|e| !e.is_empty()).collect();
-        //println!("{:?}", split);
+        // Split the esil into it's parts
+        let split: Vec<&str> = normalised.split(',').filter(|e| !e.is_empty()).collect();
         // Match parts of the split instruction with known regs and apply mask
         let split: Vec<String> = split
             .iter()
             .map(|s| {
                 //println!("{}\n", s);
-                if GENERAL_PURPOSE_32_BIT_REGS.contains(s) | RISCV_32_BIT_REGS.contains(s) {
+                if GENERAL_PURPOSE_32_BIT_REGS.contains(s) || RISCV_32_BIT_REGS.contains(s) {
                     "reg32".to_string()
                 } else if GENERAL_PURPOSE_64_BIT_REGS.contains(s) {
                     "reg64".to_string()
