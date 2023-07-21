@@ -10,7 +10,6 @@ use serde_json::json;
 use serde_json::{Map, Number, Value};
 use std::collections::HashMap;
 use std::fs::{create_dir_all, File};
-use std::panic;
 use std::path::Path;
 #[cfg(feature = "inference")]
 use std::process::exit;
@@ -351,9 +350,22 @@ impl AGFJFunc {
                     let file_name = path.split('/').last().unwrap();
                     let binary_name: Vec<_> = file_name.split(".j").collect();
 
+                    let mut function_name = self.name.clone();
+
+                    // This is a pretty dirty fix and may break things
+                    if function_name.chars().count() > 100 {
+                        println!(
+                            "{} is longer than 100 chracters. Trimming...",
+                            function_name
+                        );
+
+                        function_name = self.name[..75].to_string();
+                        println!("Post Trim: {}", function_name);
+                    }
+
                     let fname_string = format!(
                         "{}/{}-{}.json",
-                        &full_output_path, binary_name[0], self.name
+                        &full_output_path, binary_name[0], function_name
                     );
                     serde_json::to_writer(
                         &File::create(fname_string).expect("Failed to create writer"),
