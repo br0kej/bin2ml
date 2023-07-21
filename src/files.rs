@@ -170,7 +170,7 @@ impl AGFJFile {
         let write_file = File::create(full_output_path).unwrap();
         let mut writer = BufWriter::new(&write_file);
 
-        writer.write(flattened.join("\n").as_bytes()).expect("");
+        writer.write_all(flattened.join("\n").as_bytes()).expect("");
     }
 
     /// Generates a single string which contains the ESIL representation of every

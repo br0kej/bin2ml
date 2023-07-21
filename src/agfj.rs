@@ -492,7 +492,7 @@ impl AGFJFunc {
             }
         }
 
-        if equal_nodes_to_feature_vecs == true {
+        if equal_nodes_to_feature_vecs {
             json_map.remove("nodes");
             json_map.insert(
                 "nodes".to_string(),
