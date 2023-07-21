@@ -10,6 +10,7 @@ use serde_json::json;
 use serde_json::{Map, Number, Value};
 use std::collections::HashMap;
 use std::fs::{create_dir_all, File};
+use std::panic;
 use std::path::Path;
 #[cfg(feature = "inference")]
 use std::process::exit;
@@ -328,7 +329,7 @@ impl AGFJFunc {
                 let mut graph = Graph::<std::string::String, u32>::from_edges(&edge_list);
 
                 Self::str_to_hex_node_idxs(&mut graph, &mut addr_idxs);
-                let json_map: serde_json::Map<std::string::String, serde_json::Value> =
+                let json_map: Option<serde_json::Map<std::string::String, serde_json::Value>> =
                     if feature_type == FeatureType::Encoded {
                         Self::petgraph_to_nx(
                             &self.name,
@@ -346,19 +347,20 @@ impl AGFJFunc {
                             Some(feature_type),
                         )
                     };
+                if json_map.is_some() {
+                    let file_name = path.split('/').last().unwrap();
+                    let binary_name: Vec<_> = file_name.split(".j").collect();
 
-                let file_name = path.split('/').last().unwrap();
-                let binary_name: Vec<_> = file_name.split(".j").collect();
-
-                let fname_string = format!(
-                    "{}/{}-{}.json",
-                    &full_output_path, binary_name[0], self.name
-                );
-                serde_json::to_writer(
-                    &File::create(fname_string).expect("Failed to create writer"),
-                    &json_map,
-                )
-                .expect("Unable to write JSON");
+                    let fname_string = format!(
+                        "{}/{}-{}.json",
+                        &full_output_path, binary_name[0], self.name
+                    );
+                    serde_json::to_writer(
+                        &File::create(fname_string).expect("Failed to create writer"),
+                        &json_map,
+                    )
+                    .expect("Unable to write JSON");
+                }
             } else {
                 println!("Function {} has no edges. Skipping...", self.name)
             }
@@ -373,7 +375,7 @@ impl AGFJFunc {
         feature_vecs: Option<Vec<Vec<f64>>>,
         feature_vec_of_vecs: Option<Vec<Vec<Vec<f64>>>>,
         feature_type: Option<FeatureType>,
-    ) -> serde_json::Map<std::string::String, serde_json::Value> {
+    ) -> Option<serde_json::Map<std::string::String, serde_json::Value>> {
         // GRAPH TRANSFORMATION TO NETWORKX
         let mut json_graph = serde_json::to_value(graph).unwrap();
 
@@ -418,32 +420,38 @@ impl AGFJFunc {
         // Fix Node Format
         let mut all_node_list: Vec<HashMap<std::string::String, Value>> = Vec::new();
         let n_nodes = graph.node_count();
+        let mut equal_nodes_to_feature_vecs = true;
+
         if let Some(feature_vecs) = feature_vecs {
             let n_feature_vecs = feature_vecs.len();
-            assert_eq!(
-                n_nodes, n_feature_vecs,
-                "\nFailed for function: {} had {} nodes and {} feature vectors",
-                func_name, n_nodes, n_feature_vecs
-            );
 
-            // PROBLEM AREA!
-            let feature_map: Option<Vec<&str>> =
-                feature_type.map(|feature_type| feature_type.get_feature_map());
+            if n_nodes != n_feature_vecs {
+                println!(
+                    "{}: Number of Nodes to Number Feature Vecs is not equal!",
+                    func_name
+                );
+                equal_nodes_to_feature_vecs = false;
+            } else {
+                // PROBLEM AREA!
+                let feature_map: Option<Vec<&str>> =
+                    feature_type.map(|feature_type| feature_type.get_feature_map());
 
-            #[allow(clippy::needless_range_loop)]
-            for n in 0..n_nodes {
-                let mut node_ele: HashMap<std::string::String, Value> = HashMap::new();
-                node_ele.insert("id".to_string(), Value::Number(Number::from(n)));
+                #[allow(clippy::needless_range_loop)]
+                for n in 0..n_nodes {
+                    let mut node_ele: HashMap<std::string::String, Value> = HashMap::new();
+                    node_ele.insert("id".to_string(), Value::Number(Number::from(n)));
 
-                // Generate vectors as normal!
-                if feature_type.is_some() {
-                    for (i, val) in feature_map.as_ref().unwrap().iter().enumerate() {
-                        node_ele.insert(val.to_string(), Value::from(feature_vecs[n][i]));
+                    // Generate vectors as normal!
+                    if feature_type.is_some() {
+                        for (i, val) in feature_map.as_ref().unwrap().iter().enumerate() {
+                            node_ele.insert(val.to_string(), Value::from(feature_vecs[n][i]));
+                        }
+                        all_node_list.push(node_ele);
+                    } else {
+                        node_ele
+                            .insert("features".to_string(), Value::from(feature_vecs[n].clone()));
+                        all_node_list.push(node_ele);
                     }
-                    all_node_list.push(node_ele);
-                } else {
-                    node_ele.insert("features".to_string(), Value::from(feature_vecs[n].clone()));
-                    all_node_list.push(node_ele);
                 }
             }
         } else if let Some(feature_vecs_of_vecs) = feature_vec_of_vecs {
@@ -471,19 +479,24 @@ impl AGFJFunc {
                 all_node_list.push(node_ele);
             }
         }
-        json_map.remove("nodes");
-        json_map.insert(
-            "nodes".to_string(),
-            serde_json::to_value(all_node_list).unwrap(),
-        );
 
-        // Adding missing expected key 'graph'
-        let empty_vec = Vec::<i8>::new();
-        json_map.insert(
-            "graph".to_string(),
-            serde_json::to_value(empty_vec).unwrap(),
-        );
-        json_map
+        if equal_nodes_to_feature_vecs == true {
+            json_map.remove("nodes");
+            json_map.insert(
+                "nodes".to_string(),
+                serde_json::to_value(all_node_list).unwrap(),
+            );
+
+            // Adding missing expected key 'graph'
+            let empty_vec = Vec::<i8>::new();
+            json_map.insert(
+                "graph".to_string(),
+                serde_json::to_value(empty_vec).unwrap(),
+            );
+            Some(json_map)
+        } else {
+            None
+        }
     }
 
     // Convert string memory address to hex / string
