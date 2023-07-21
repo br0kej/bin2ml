@@ -282,7 +282,20 @@ fn main() {
                 || feature_vec_type == FeatureType::DiscovRE
                 || feature_vec_type == FeatureType::DGIS
             {
-                agfj_graph_statistical_features(path, min_blocks, output_path, feature_vec_type)
+                if Path::new(path).is_file() {
+                    agfj_graph_statistical_features(path, min_blocks, output_path, feature_vec_type)
+                } else {
+                    for file in WalkDir::new(path).into_iter().filter_map(|file| file.ok()) {
+                        if file.path().to_string_lossy().ends_with(".json") {
+                            agfj_graph_statistical_features(
+                                file.path().to_str().unwrap(),
+                                min_blocks,
+                                output_path,
+                                feature_vec_type,
+                            )
+                        }
+                    }
+                }
             } else if feature_vec_type == FeatureType::Encoded {
                 todo!("Need to implement Encoded FeatureTypes!")
             } else if cfg!(inference) {
