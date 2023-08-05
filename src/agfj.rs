@@ -259,26 +259,21 @@ impl AGFJFunc {
 
                 Self::str_to_hex_node_idxs(&mut graph, &mut addr_idxs);
                 println!("{:?}", feature_type);
-                let json_map: serde_json::Map<std::string::String, serde_json::Value> =
-                    if inference_job.is_some() && feature_type == FeatureType::ModelEmbedded {
-                        Self::petgraph_to_nx(&self.name, &graph, Some(feature_vecs), None, None)
-                    } else if feature_type == FeatureType::Encoded {
-                        Self::petgraph_to_nx(
-                            &self.name,
-                            &graph,
-                            None,
-                            Some(feature_vec_of_vecs),
-                            None,
-                        )
-                    } else {
-                        Self::petgraph_to_nx(
-                            &self.name,
-                            &graph,
-                            Some(feature_vecs),
-                            None,
-                            Some(feature_type),
-                        )
-                    };
+                let json_map: Option<Map<String, Value>> = if inference_job.is_some()
+                    && feature_type == FeatureType::ModelEmbedded
+                {
+                    Self::petgraph_to_nx(&self.name, &graph, Some(feature_vecs), None, None)
+                } else if feature_type == FeatureType::Encoded {
+                    Self::petgraph_to_nx(&self.name, &graph, None, Some(feature_vec_of_vecs), None)
+                } else {
+                    Self::petgraph_to_nx(
+                        &self.name,
+                        &graph,
+                        Some(feature_vecs),
+                        None,
+                        Some(feature_type),
+                    )
+                };
 
                 let file_name = path.split('/').last().unwrap();
                 let binary_name: Vec<_> = file_name.split(".j").collect();
@@ -308,76 +303,76 @@ impl AGFJFunc {
     ) {
         let full_output_path = get_save_file_path(path, output_path);
         self.check_or_create_dir(&full_output_path);
+        let file_name = path.split('/').last().unwrap();
+        let binary_name: Vec<_> = file_name.split(".j").collect();
+        let mut function_name = self.name.clone();
 
-        // offset != 1 has been added to skip functions with invalid instructions
-        if self.blocks.len() >= (*min_blocks).into() && self.blocks[0].offset != 1 {
-            println!("Processing {:?}", self.name);
-            let mut addr_idxs = Vec::<i64>::new();
-            let mut edge_list = Vec::<(u32, u32, u32)>::new();
-            let mut feature_vecs = Vec::<_>::new();
-            let feature_vec_of_vecs = Vec::<_>::new();
+        // This is a pretty dirty fix and may break things
+        if function_name.chars().count() > 100 {
+            function_name = self.name[..75].to_string();
+        }
 
-            let min_offset: u64 = self.offset;
-            let max_offset: u64 = self.offset + self.size.unwrap_or(0);
-            for bb in &self.blocks {
-                bb.get_block_edges(&mut addr_idxs, &mut edge_list, max_offset, min_offset);
-                bb.generate_bb_feature_vec(&mut feature_vecs, feature_type, architecture);
-            }
+        let fname_string = format!(
+            "{}/{}-{}.json",
+            &full_output_path, binary_name[0], function_name
+        );
 
-            if !edge_list.is_empty() {
-                let mut graph = Graph::<std::string::String, u32>::from_edges(&edge_list);
+        if !Path::new(&fname_string).is_file() {
+            // offset != 1 has been added to skip functions with invalid instructions
+            if self.blocks.len() >= (*min_blocks).into() && self.blocks[0].offset != 1 {
+                let mut addr_idxs = Vec::<i64>::new();
+                let mut edge_list = Vec::<(u32, u32, u32)>::new();
+                let mut feature_vecs = Vec::<_>::new();
+                let feature_vec_of_vecs = Vec::<_>::new();
 
-                Self::str_to_hex_node_idxs(&mut graph, &mut addr_idxs);
-                let json_map: Option<serde_json::Map<std::string::String, serde_json::Value>> =
-                    if feature_type == FeatureType::Encoded {
-                        Self::petgraph_to_nx(
-                            &self.name,
-                            &graph,
-                            None,
-                            Some(feature_vec_of_vecs),
-                            None,
+                let min_offset: u64 = self.offset;
+                let max_offset: u64 = self.offset + self.size.unwrap_or(0);
+                for bb in &self.blocks {
+                    bb.get_block_edges(&mut addr_idxs, &mut edge_list, max_offset, min_offset);
+                    bb.generate_bb_feature_vec(&mut feature_vecs, feature_type, architecture);
+                }
+
+                if !edge_list.is_empty() {
+                    let mut graph = Graph::<std::string::String, u32>::from_edges(&edge_list);
+
+                    Self::str_to_hex_node_idxs(&mut graph, &mut addr_idxs);
+                    let json_map: Option<serde_json::Map<std::string::String, serde_json::Value>> =
+                        if feature_type == FeatureType::Encoded {
+                            Self::petgraph_to_nx(
+                                &self.name,
+                                &graph,
+                                None,
+                                Some(feature_vec_of_vecs),
+                                None,
+                            )
+                        } else {
+                            Self::petgraph_to_nx(
+                                &self.name,
+                                &graph,
+                                Some(feature_vecs),
+                                None,
+                                Some(feature_type),
+                            )
+                        };
+                    if json_map.is_some() {
+                        serde_json::to_writer(
+                            &File::create(fname_string).expect("Failed to create writer"),
+                            &json_map,
                         )
-                    } else {
-                        Self::petgraph_to_nx(
-                            &self.name,
-                            &graph,
-                            Some(feature_vecs),
-                            None,
-                            Some(feature_type),
-                        )
-                    };
-                if json_map.is_some() {
-                    let file_name = path.split('/').last().unwrap();
-                    let binary_name: Vec<_> = file_name.split(".j").collect();
-
-                    let mut function_name = self.name.clone();
-
-                    // This is a pretty dirty fix and may break things
-                    if function_name.chars().count() > 100 {
-                        println!(
-                            "{} is longer than 100 chracters. Trimming...",
-                            function_name
-                        );
-
-                        function_name = self.name[..75].to_string();
-                        println!("Post Trim: {}", function_name);
+                        .expect("Unable to write JSON");
                     }
-
-                    let fname_string = format!(
-                        "{}/{}-{}.json",
-                        &full_output_path, binary_name[0], function_name
-                    );
-                    serde_json::to_writer(
-                        &File::create(fname_string).expect("Failed to create writer"),
-                        &json_map,
-                    )
-                    .expect("Unable to write JSON");
+                } else {
+                    println!("Function {} has no edges. Skipping...", self.name)
                 }
             } else {
-                println!("Function {} has no edges. Skipping...", self.name)
+                println!(
+                    "Function {} has already been processed. Skipping...",
+                    self.name
+                )
             }
         }
     }
+
     // This function transforms a petgraph graph
     // to a valid JSON object that can be loaded in Pythons
     // Networkx
