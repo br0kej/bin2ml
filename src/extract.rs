@@ -86,7 +86,6 @@ impl ExtractJob {
             if file.metadata().unwrap().is_file()
                 && !file.file_name().to_string_lossy().ends_with(".json")
             {
-                //let f_string = String::from(file.path().clone().to_str().unwrap());
                 let f_string =
                     String::from(<&std::path::Path>::clone(&file.path()).to_str().unwrap());
                 str_vec.push(f_string.clone());
@@ -157,13 +156,17 @@ impl ExtractJob {
         let fp_filename = Path::new(fp).file_name().expect("Unable to get filename");
         let f_name = format!("{}/{}.json", output_path, fp_filename.to_string_lossy());
         if !Path::new(&f_name).exists() {
+            info!("{} not found. Continuing processing.", f_name);
             // This creates HUGE JSON files for each file
             // Approximately 40x file size to JSON
             let mut r2p = ExtractJob::setup_r2_pipe(fp, debug);
+            info!("Executing agfj @@f on {}", fp);
             let mut json = r2p.cmd("agfj @@f").expect("Command failed..");
 
+            info!("Closing r2p process for {}", fp);
             r2p.close();
 
+            info!("Starting JSON fixup for {}", fp);
             // Fix JSON object
             json = json.replace("[]\n", ",");
             json = json.replace("}]\n[{", "}],\n[{");
@@ -172,9 +175,8 @@ impl ExtractJob {
             json = json.replace("}]\n,]", "}]\n]");
             json = json.replace("\n,,[{", "\n,[{");
             json = json.replace("\n,,[{", "\n,[{");
+            info!("JSON fixup finished for {}", fp);
 
-            // TODO: Add in a log message here that states if a file was empty after being disassembled
-            // by r2
             if json != "[,]" {
                 #[allow(clippy::expect_fun_call)]
                 // Kept in to ensure that the JSON decode error message is printed alongside the filename
@@ -185,9 +187,14 @@ impl ExtractJob {
                 ));
 
                 ExtractJob::write_to_json(fp, output_path, &json);
+            } else {
+                error!(
+                    "File empty after JSON fixup - Only contains [,] - {}",
+                    f_name
+                )
             }
         } else {
-            println!("Skipping {} as already exists", f_name)
+            info!("{} as already exists. Skipping", f_name)
         }
     }
 
@@ -208,26 +215,29 @@ impl ExtractJob {
         // Setup R2 pipe with options and return it
         // Could be extended to include toggling of options
         // + more args?
-
         let opts = if !(*debug) {
+            debug!("Creating r2 handle without debugging");
             R2PipeSpawnOptions {
                 exepath: "r2".to_owned(),
                 args: vec!["-e bin.cache=true", "-e log.level=1", "-2"],
             }
         } else {
+            debug!("Creating r2 handle with debugging");
             R2PipeSpawnOptions {
                 exepath: "r2".to_owned(),
                 args: vec!["-e bin.cache=true", "-e log.level=0"],
             }
         };
-
+        debug!("Attempting to create r2pipe using {}", s);
         let mut r2p = match R2Pipe::in_session() {
             Some(_) => R2Pipe::open().expect("Unable to open R2Pipe"),
             None => R2Pipe::spawn(s, Some(opts)).expect("Failed to spawn new R2Pipe"),
         };
 
+        debug!("Executing 'aa' r2 command for {}", s);
         r2p.cmd("aa")
             .expect("Unable to complete standard analysis!");
+        debug!("'aa' r2 command complete for {}", s);
         r2p
     }
 }

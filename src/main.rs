@@ -3,6 +3,9 @@
 #![allow(clippy::expect_fun_call)]
 
 use clap::{Parser, Subcommand};
+#[macro_use]
+extern crate log;
+use env_logger::Env;
 use indicatif::ParallelProgressIterator;
 use mimalloc::MiMalloc;
 use rayon::iter::ParallelIterator;
@@ -215,11 +218,16 @@ enum Commands {
 }
 
 fn main() {
-    let cli = Cli::parse();
+    let env = Env::default()
+        .filter_or("MY_LOG_LEVEL", "trace")
+        .write_style_or("MY_LOG_STYLE", "always");
 
+    env_logger::init_from_env(env);
+    let cli = Cli::parse();
     match &cli.command {
         #[cfg(feature = "goblin")]
         Commands::Info { path } => {
+            info!("starting Information Gathering");
             if let Some(fpath) = &path {
                 goblin_info(fpath).expect("Failed to get info!");
             }
@@ -231,14 +239,18 @@ fn main() {
             num_threads,
             debug,
         } => {
-            rayon::ThreadPoolBuilder::new()
-                .num_threads(*num_threads)
-                .build_global()
-                .unwrap();
+            info!("Creating extraction job");
             let job = ExtractJob::new(fpath, output_dir, mode).unwrap();
 
             if job.p_type == PathType::Dir {
-                println!("Beginning Parallel processing...");
+                info!("Directory found - will parallel process");
+
+                info!("Creating threadpool with {} threads ", num_threads);
+                rayon::ThreadPoolBuilder::new()
+                    .num_threads(*num_threads)
+                    .build_global()
+                    .unwrap();
+
                 let str_vec: Vec<String> = job.get_file_paths_dir();
                 #[allow(clippy::redundant_closure)]
                 str_vec
@@ -246,9 +258,11 @@ fn main() {
                     .progress()
                     .for_each(|path| ExtractJob::get_func_cfgs(path, output_dir, debug));
 
-                println!("Extraction complete. Processed {} files.", str_vec.len())
+                info!("Extraction complete. Processed {} files.", str_vec.len())
             } else if job.p_type == PathType::File {
+                info!("Single file found");
                 ExtractJob::get_func_cfgs(fpath, output_dir, debug);
+                info!("Extraction complete for {}", fpath)
             }
         }
         Commands::Graph {
@@ -276,15 +290,22 @@ fn main() {
             };
 
             if feature_vec_type == FeatureType::Invalid {
-                println!("Invalid feature type: {}", feature_type);
+                error!("Invalid feature type: {}", feature_type);
                 exit(1)
             } else if feature_vec_type == FeatureType::Gemini
                 || feature_vec_type == FeatureType::DiscovRE
                 || feature_vec_type == FeatureType::DGIS
             {
+                info!(
+                    "Creating graphs with {:?} feature vectors.",
+                    feature_vec_type
+                );
+
                 if Path::new(path).is_file() {
+                    info!("Single file found");
                     agfj_graph_statistical_features(path, min_blocks, output_path, feature_vec_type)
                 } else {
+                    info!("Multiple files found. Will parallel process.");
                     for file in WalkDir::new(path).into_iter().filter_map(|file| file.ok()) {
                         if file.path().to_string_lossy().ends_with(".json") {
                             agfj_graph_statistical_features(
@@ -335,7 +356,7 @@ fn main() {
             };
 
             if instruction_type == InstructionMode::Invalid {
-                println!("Invalid instruction mode: {:?}", data_type);
+                error!("Invalid instruction mode: {:?}", data_type);
                 exit(1)
             }
 
@@ -346,11 +367,12 @@ fn main() {
             };
 
             if format_type == FormatMode::Invalid {
-                println!("Invalid format type: {:?}", format_type);
+                error!("Invalid format type: {:?}", format_type);
                 exit(1)
             }
 
             if Path::new(path).is_file() {
+                info!("Single file found");
                 let file = AGFJFile {
                     functions: None,
                     filename: path.to_owned(),
@@ -363,6 +385,9 @@ fn main() {
 
                 file.execute_data_generation(format_type, instruction_type, random_walk)
             } else {
+                // TODO: look at the utility function used by "job" stuct which gets all of the file names
+                // as a string vec and add here - This will allow for using progress bars
+                info!("Multiple files found. Will parallel process.");
                 for file in WalkDir::new(path).into_iter().filter_map(|file| file.ok()) {
                     if file.path().to_string_lossy().ends_with(".json") {
                         let file = AGFJFile {
