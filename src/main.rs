@@ -31,6 +31,7 @@ pub mod tokeniser;
 pub mod utils;
 
 use crate::dedup::EsilFuncStringCorpus;
+use crate::extract::ExtractionJobType;
 use crate::tokeniser::{train_byte_bpe_tokeniser, TokeniserType};
 use bb::{FeatureType, InstructionMode};
 #[cfg(feature = "goblin")]
@@ -252,17 +253,35 @@ fn main() {
                     .build_global()
                     .unwrap();
 
+                info!("Collection file paths from directory");
                 let str_vec: Vec<String> = job.get_file_paths_dir();
-                #[allow(clippy::redundant_closure)]
-                str_vec
-                    .par_iter()
-                    .progress()
-                    .for_each(|path| ExtractJob::get_func_cfgs(path, output_dir, debug));
 
+                if job.extraction_job_type == ExtractionJobType::CFG {
+                    info!("Extraction Job Type: CFG");
+                    info!("Starting Parallel generation.");
+                    #[allow(clippy::redundant_closure)]
+                    str_vec
+                        .par_iter()
+                        .progress()
+                        .for_each(|path| ExtractJob::get_func_cfgs(path, output_dir, debug));
+                } else if job.extraction_job_type == ExtractionJobType::RegisterBehaviour {
+                    info!("Extraction Job Type: Register Behaviour");
+                    info!("Starting Parallel generation.");
+                    #[allow(clippy::redundant_closure)]
+                    str_vec.par_iter().progress().for_each(|path| {
+                        ExtractJob::get_register_behaviour(path, output_dir, debug)
+                    });
+                }
                 info!("Extraction complete. Processed {} files.", str_vec.len())
             } else if job.p_type == PathType::File {
                 info!("Single file found");
-                ExtractJob::get_func_cfgs(fpath, output_dir, debug);
+                if job.extraction_job_type == ExtractionJobType::CFG {
+                    info!("Extraction Job Type: CFG");
+                    ExtractJob::get_func_cfgs(fpath, output_dir, debug);
+                } else if job.extraction_job_type == ExtractionJobType::RegisterBehaviour {
+                    info!("Extraction Job Type: Register Behaviour");
+                    ExtractJob::get_register_behaviour(fpath, output_dir, debug)
+                }
                 info!("Extraction complete for {}", fpath)
             }
         }

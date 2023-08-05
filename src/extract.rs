@@ -3,8 +3,10 @@ use anyhow::Error;
 use anyhow::Result;
 use r2pipe::R2Pipe;
 use r2pipe::R2PipeSpawnOptions;
+use serde::{Deserialize, Serialize};
 use serde_json;
-use serde_json::Value;
+use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::path::Path;
@@ -16,18 +18,19 @@ pub enum PathType {
     Dir,
     Unk,
 }
-#[derive(Debug)]
-pub enum WhatDo {
+#[derive(Debug, PartialEq)]
+pub enum ExtractionJobType {
     ExInfo, // Extract high level information from the binary (r2 ij)
     BasicBlocks,
-    ESIL,
+    RegisterBehaviour,
     CFG,
 }
+
 #[derive(Debug)]
 pub struct ExtractJob {
     pub bin_path: String, // Refactored this but still think the name is wrong
     pub p_type: PathType,
-    pub what_do: WhatDo,
+    pub extraction_job_type: ExtractionJobType,
     pub output_path: String, // Not sure whether to add the file paths vector to this
 }
 
@@ -36,8 +39,131 @@ impl std::fmt::Display for ExtractJob {
         write!(
             f,
             "bin_path: {} p_type: {:?} what_do: {:?}",
-            self.bin_path, self.p_type, self.what_do
+            self.bin_path, self.p_type, self.extraction_job_type
         )
+    }
+}
+
+// Structs related to AFLJ r2 command
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AFLJFuncDetails {
+    pub offset: i64,
+    pub name: String,
+    pub size: i64,
+    #[serde(rename = "is-pure")]
+    pub is_pure: String,
+    pub realsz: i64,
+    pub noreturn: bool,
+    pub stackframe: i64,
+    pub calltype: String,
+    pub cost: i64,
+    pub cc: i64,
+    pub bits: i64,
+    #[serde(rename = "type")]
+    pub type_field: String,
+    pub nbbs: i64,
+    #[serde(rename = "is-lineal")]
+    pub is_lineal: bool,
+    pub ninstrs: i64,
+    pub edges: i64,
+    pub ebbs: i64,
+    pub signature: String,
+    pub minbound: i64,
+    pub maxbound: i64,
+    #[serde(default)]
+    pub callrefs: Vec<Callref>,
+    #[serde(default)]
+    pub datarefs: Vec<i64>,
+    pub indegree: i64,
+    pub outdegree: i64,
+    pub nlocals: i64,
+    pub nargs: i64,
+    pub bpvars: Vec<Bpvar>,
+    pub spvars: Vec<Value>,
+    pub regvars: Vec<Regvar>,
+    pub difftype: String,
+    #[serde(default)]
+    pub codexrefs: Vec<Codexref>,
+    #[serde(default)]
+    pub dataxrefs: Vec<i64>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Callref {
+    pub addr: i128,
+    #[serde(rename = "type")]
+    pub type_field: String,
+    pub at: i64,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Bpvar {
+    pub name: String,
+    pub kind: String,
+    #[serde(rename = "type")]
+    pub type_field: String,
+    #[serde(rename = "ref")]
+    pub ref_field: Ref,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Ref {
+    pub base: String,
+    pub offset: i64,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Regvar {
+    pub name: String,
+    pub kind: String,
+    #[serde(rename = "type")]
+    pub type_field: String,
+    #[serde(rename = "ref")]
+    pub ref_field: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Codexref {
+    pub addr: i64,
+    #[serde(rename = "type")]
+    pub type_field: String,
+    pub at: i64,
+}
+
+// Structs related to AEAFJ
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AEAFJRegisterBehaviour {
+    #[serde(rename = "A")]
+    pub a: Vec<String>,
+    #[serde(rename = "I")]
+    pub i: Vec<String>,
+    #[serde(rename = "R")]
+    pub r: Vec<String>,
+    #[serde(rename = "W")]
+    pub w: Vec<String>,
+    #[serde(rename = "V")]
+    pub v: Vec<String>,
+    #[serde(rename = "N")]
+    #[serde(default)]
+    pub n: Vec<String>,
+    #[serde(rename = "@R")]
+    #[serde(default)]
+    pub r2: Vec<i64>,
+    #[serde(rename = "@W")]
+    #[serde(default)]
+    pub w2: Vec<i64>,
+}
+
+impl std::fmt::Display for AFLJFuncDetails {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "name: {}", self.name)
     }
 }
 
@@ -57,12 +183,12 @@ impl ExtractJob {
         }
 
         // This functionality is currently not being used!
-        fn get_whatdo_type(mode: &str) -> Result<WhatDo, Error> {
+        fn get_whatdo_type(mode: &str) -> Result<ExtractionJobType, Error> {
             match mode {
-                "info" => Ok(WhatDo::ExInfo),
-                "bb" => Ok(WhatDo::BasicBlocks),
-                "esil" => Ok(WhatDo::ESIL),
-                "cfg" => Ok(WhatDo::CFG),
+                "info" => Ok(ExtractionJobType::ExInfo),
+                "bb" => Ok(ExtractionJobType::BasicBlocks),
+                "reg" => Ok(ExtractionJobType::RegisterBehaviour),
+                "cfg" => Ok(ExtractionJobType::CFG),
                 _ => bail!("Incorrect command type - got {}", mode),
             }
         }
@@ -72,7 +198,7 @@ impl ExtractJob {
         Ok(ExtractJob {
             bin_path: bin_path.to_string(),
             p_type,
-            what_do,
+            extraction_job_type: what_do,
             output_path: output_path.to_string(),
         })
     }
@@ -135,21 +261,31 @@ impl ExtractJob {
         ExtractJob::write_to_json(s, &self.output_path, &json_obj)
     }
 
-    pub fn get_esil_func_info(self, s: &String) {
-        let mut r2p = ExtractJob::setup_r2_pipe(s, &false);
-        let mut json = r2p.cmd("aeafj @@f").expect("Command failed..");
+    pub fn get_register_behaviour(fp: &String, output_path: &String, debug: &bool) {
+        let mut r2p = ExtractJob::setup_r2_pipe(fp, debug);
+        let function_details = ExtractJob::get_function_details(&mut r2p);
+
+        let mut register_behaviour_vec: HashMap<String, AEAFJRegisterBehaviour> = HashMap::new();
+
+        for function in function_details.iter() {
+            r2p.cmd(format!("s @ {}", &function.name).as_str());
+            let mut json = r2p.cmd("aeafj").expect("Command failed..");
+            let json_obj: AEAFJRegisterBehaviour =
+                serde_json::from_str(&json).expect("Unable to convert to JSON object!");
+            register_behaviour_vec.insert(function.name.clone(), json_obj);
+        }
 
         r2p.close();
 
-        // Fix JSON object
-        json = json.replace('}', "},");
-        json.insert(0, '[');
-        json.push(']');
-        json = json.replace("]},\n]", "]}]");
+        ExtractJob::write_to_json(fp, output_path, &json!(register_behaviour_vec))
+    }
 
-        let json_obj: Value =
+    fn get_function_details(r2p: &mut R2Pipe) -> Vec<AFLJFuncDetails> {
+        let mut json = r2p.cmd("aflj").expect("aflj command failed");
+        let json_obj: Vec<AFLJFuncDetails> =
             serde_json::from_str(&json).expect("Unable to convert to JSON object!");
-        ExtractJob::write_to_json(s, &self.output_path, &json_obj)
+
+        json_obj
     }
 
     pub fn get_func_cfgs(fp: &String, output_path: &String, debug: &bool) {
