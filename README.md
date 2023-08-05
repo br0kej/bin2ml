@@ -14,7 +14,7 @@
 
 ## Quickstart
 ```bash
-git pull https://github.com/br0kej/bin2ml
+git clone https://github.com/br0kej/bin2ml
 cd bin2ml
 cargo build --release
 ```
