@@ -1,4 +1,5 @@
 use std::path::Path;
+use walkdir::WalkDir;
 
 pub fn get_save_file_path(path: &str, output_path: &String) -> String {
     let file_name = Path::new(path).file_stem().unwrap();
@@ -10,6 +11,19 @@ pub fn get_save_file_path(path: &str, output_path: &String) -> String {
     );
 
     full_output_path
+}
+
+pub fn get_json_paths_from_dir(path: &String) -> Vec<String> {
+    let mut str_vec: Vec<String> = Vec::new();
+    for file in WalkDir::new(path).into_iter().filter_map(|file| file.ok()) {
+        if file.metadata().unwrap().is_file()
+            && file.file_name().to_string_lossy().ends_with(".json")
+        {
+            let f_string = String::from(<&std::path::Path>::clone(&file.path()).to_str().unwrap());
+            str_vec.push(f_string.clone());
+        }
+    }
+    str_vec
 }
 
 #[cfg(test)]

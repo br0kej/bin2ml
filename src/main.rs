@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 #[macro_use]
 extern crate log;
 use env_logger::Env;
-use indicatif::ParallelProgressIterator;
+use indicatif::{ParallelProgressIterator, ProgressIterator};
 use mimalloc::MiMalloc;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::IntoParallelRefIterator;
@@ -42,6 +42,7 @@ use inference::inference;
 #[cfg(feature = "inference")]
 use processors::agfj_graph_embedded_feats;
 use processors::agfj_graph_statistical_features;
+use utils::get_json_paths_from_dir;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -385,22 +386,23 @@ fn main() {
 
                 file.execute_data_generation(format_type, instruction_type, random_walk)
             } else {
-                // TODO: look at the utility function used by "job" stuct which gets all of the file names
-                // as a string vec and add here - This will allow for using progress bars
                 info!("Multiple files found. Will parallel process.");
-                for file in WalkDir::new(path).into_iter().filter_map(|file| file.ok()) {
-                    if file.path().to_string_lossy().ends_with(".json") {
-                        let file = AGFJFile {
-                            functions: None,
-                            filename: file.path().to_string_lossy().to_string(),
-                            output_path: output_path.to_string(),
-                            min_blocks: *min_blocks,
-                            feature_type: None,
-                            architecture: None,
-                            reg_norm: *reg_norm,
-                        };
-                        file.execute_data_generation(format_type, instruction_type, random_walk)
-                    }
+                let file_paths_vec = get_json_paths_from_dir(path);
+                info!(
+                    "{} files found. Beginning Processing.",
+                    file_paths_vec.len()
+                );
+                for file in file_paths_vec.iter().progress() {
+                    let file = AGFJFile {
+                        functions: None,
+                        filename: file.to_string(),
+                        output_path: output_path.to_string(),
+                        min_blocks: *min_blocks,
+                        feature_type: None,
+                        architecture: None,
+                        reg_norm: *reg_norm,
+                    };
+                    file.execute_data_generation(format_type, instruction_type, random_walk)
                 }
             }
         }

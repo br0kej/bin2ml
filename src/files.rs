@@ -186,14 +186,13 @@ impl AGFJFile {
             if self.functions.is_some() {
                 let (sender, receiver) = channel();
 
-                self.functions
-                    .unwrap()
-                    .par_iter_mut()
-                    .progress()
-                    .for_each_with(sender, |s, func: &mut Vec<AGFJFunc>| {
+                self.functions.unwrap().par_iter_mut().for_each_with(
+                    sender,
+                    |s, func: &mut Vec<AGFJFunc>| {
                         s.send(func[0].get_esil_function_string(&self.min_blocks, self.reg_norm))
                             .unwrap()
-                    });
+                    },
+                );
 
                 let res: Vec<Option<(String, String)>> = receiver.iter().collect();
                 if !res.is_empty() {
