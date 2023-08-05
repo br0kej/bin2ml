@@ -262,11 +262,11 @@ impl ExtractJob {
     }
 
     pub fn get_register_behaviour(fp: &String, output_path: &String, debug: &bool) {
+        info!("Starting register behaviour extraction");
         let mut r2p = ExtractJob::setup_r2_pipe(fp, debug);
         let function_details = ExtractJob::get_function_details(&mut r2p);
-
         let mut register_behaviour_vec: HashMap<String, AEAFJRegisterBehaviour> = HashMap::new();
-
+        info!("Executing aeafj for each function");
         for function in function_details.iter() {
             r2p.cmd(format!("s @ {}", &function.name).as_str()).expect("Command failed..");
             let json = r2p.cmd("aeafj").expect("Command failed..");
@@ -274,13 +274,16 @@ impl ExtractJob {
                 serde_json::from_str(&json).expect("Unable to convert to JSON object!");
             register_behaviour_vec.insert(function.name.clone(), json_obj);
         }
-
+        info!("All functions processed");
         r2p.close();
+        info!("r2p closed");
 
+        info!("Writing extracted data to file");
         ExtractJob::write_to_json(fp, output_path, &json!(register_behaviour_vec))
     }
 
     fn get_function_details(r2p: &mut R2Pipe) -> Vec<AFLJFuncDetails> {
+        info!("Getting function information from binary");
         let json = r2p.cmd("aflj").expect("aflj command failed");
         let json_obj: Vec<AFLJFuncDetails> =
             serde_json::from_str(&json).expect("Unable to convert to JSON object!");
