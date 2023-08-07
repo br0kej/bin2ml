@@ -36,7 +36,7 @@ use crate::tokeniser::{train_byte_bpe_tokeniser, TokeniserType};
 use bb::{FeatureType, InstructionMode};
 #[cfg(feature = "goblin")]
 use binnfo::goblin_info;
-use extract::{ExtractJob, PathType};
+use extract::{ExtractionJob, PathType};
 use files::{AGFJFile, FormatMode};
 #[cfg(feature = "inference")]
 use inference::inference;
@@ -242,9 +242,9 @@ fn main() {
             debug,
         } => {
             info!("Creating extraction job");
-            let job = ExtractJob::new(fpath, output_dir, mode).unwrap();
+            let job = ExtractionJob::new(fpath, output_dir, mode).unwrap();
 
-            if job.p_type == PathType::Dir {
+            if job.input_path_type == PathType::Dir {
                 info!("Directory found - will parallel process");
 
                 info!("Creating threadpool with {} threads ", num_threads);
@@ -253,37 +253,37 @@ fn main() {
                     .build_global()
                     .unwrap();
 
-                info!("Collection file paths from directory");
-                let str_vec: Vec<String> = job.get_file_paths_dir();
+                // info!("Collection file paths from directory");
+                // let str_vec: Vec<String> = job.get_file_paths_dir();
 
-                if job.extraction_job_type == ExtractionJobType::CFG {
+                if job.job_type == ExtractionJobType::CFG {
                     info!("Extraction Job Type: CFG");
                     info!("Starting Parallel generation.");
                     #[allow(clippy::redundant_closure)]
-                    str_vec
+                    job.files_to_be_processed
                         .par_iter()
                         .progress()
-                        .for_each(|path| ExtractJob::extract_func_cfgs(path, output_dir, debug));
-                } else if job.extraction_job_type == ExtractionJobType::RegisterBehaviour {
+                        .for_each(|path| path.extract_func_cfgs(debug));
+                } else if job.job_type == ExtractionJobType::RegisterBehaviour {
                     info!("Extraction Job Type: Register Behaviour");
                     info!("Starting Parallel generation.");
                     #[allow(clippy::redundant_closure)]
-                    str_vec.par_iter().progress().for_each(|path| {
-                        ExtractJob::extract_register_behaviour(path, output_dir, debug)
+                    job.files_to_be_processed.par_iter().progress().for_each(|path| {
+                        path.extract_register_behaviour(debug)
                     });
                 }
-                info!("Extraction complete. Processed {} files.", str_vec.len())
-            } else if job.p_type == PathType::File {
+                //info!("Extraction complete. Processed {} files.", str_vec.len())
+            } else if job.input_path_type == PathType::File {
                 info!("Single file found");
-                if job.extraction_job_type == ExtractionJobType::CFG {
+                if job.job_type == ExtractionJobType::CFG {
                     info!("Extraction Job Type: CFG");
-                    ExtractJob::extract_func_cfgs(fpath, output_dir, debug);
-                } else if job.extraction_job_type == ExtractionJobType::RegisterBehaviour {
+                    job.files_to_be_processed[0].extract_func_cfgs(debug);
+                } else if job.job_type == ExtractionJobType::RegisterBehaviour {
                     info!("Extraction Job Type: Register Behaviour");
-                    ExtractJob::extract_register_behaviour(fpath, output_dir, debug)
-                } else if job.extraction_job_type == ExtractionJobType::FunctionXrefs {
+                    job.files_to_be_processed[0].extract_register_behaviour(debug)
+                } else if job.job_type == ExtractionJobType::FunctionXrefs {
                     info!("Extraction Job type: Function Xrefs");
-                    ExtractJob::extract_function_xrefs(fpath, output_dir, debug)
+                    job.files_to_be_processed[0].extract_function_xrefs(debug)
                 }
                 info!("Extraction complete for {}", fpath)
             }
