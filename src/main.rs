@@ -263,13 +263,13 @@ fn main() {
                     str_vec
                         .par_iter()
                         .progress()
-                        .for_each(|path| ExtractJob::get_func_cfgs(path, output_dir, debug));
+                        .for_each(|path| ExtractJob::extract_func_cfgs(path, output_dir, debug));
                 } else if job.extraction_job_type == ExtractionJobType::RegisterBehaviour {
                     info!("Extraction Job Type: Register Behaviour");
                     info!("Starting Parallel generation.");
                     #[allow(clippy::redundant_closure)]
                     str_vec.par_iter().progress().for_each(|path| {
-                        ExtractJob::get_register_behaviour(path, output_dir, debug)
+                        ExtractJob::extract_register_behaviour(path, output_dir, debug)
                     });
                 }
                 info!("Extraction complete. Processed {} files.", str_vec.len())
@@ -277,10 +277,13 @@ fn main() {
                 info!("Single file found");
                 if job.extraction_job_type == ExtractionJobType::CFG {
                     info!("Extraction Job Type: CFG");
-                    ExtractJob::get_func_cfgs(fpath, output_dir, debug);
+                    ExtractJob::extract_func_cfgs(fpath, output_dir, debug);
                 } else if job.extraction_job_type == ExtractionJobType::RegisterBehaviour {
                     info!("Extraction Job Type: Register Behaviour");
-                    ExtractJob::get_register_behaviour(fpath, output_dir, debug)
+                    ExtractJob::extract_register_behaviour(fpath, output_dir, debug)
+                } else if job.extraction_job_type == ExtractionJobType::FunctionXrefs {
+                    info!("Extraction Job type: Function Xrefs");
+                    ExtractJob::extract_function_xrefs(fpath, output_dir, debug)
                 }
                 info!("Extraction complete for {}", fpath)
             }

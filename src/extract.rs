@@ -275,7 +275,7 @@ impl ExtractJob {
         ExtractJob::write_to_json(s, &self.output_path, &json_obj)
     }
 
-    pub fn get_register_behaviour(fp: &String, output_path: &String, debug: &bool) {
+    pub fn extract_register_behaviour(fp: &String, output_path: &String, debug: &bool) {
         info!("Starting register behaviour extraction");
         let mut r2p = ExtractJob::setup_r2_pipe(fp, debug);
         let function_details = ExtractJob::get_function_details(&mut r2p);
@@ -297,39 +297,7 @@ impl ExtractJob {
         ExtractJob::write_to_json(fp, output_path, &json!(register_behaviour_vec))
     }
 
-    fn get_function_details(r2p: &mut R2Pipe) -> Vec<AFLJFuncDetails> {
-        info!("Getting function information from binary");
-        let json = r2p.cmd("aflj").expect("aflj command failed");
-        let json_obj: Vec<AFLJFuncDetails> =
-            serde_json::from_str(&json).expect("Unable to convert to JSON object!");
-
-        json_obj
-    }
-
-    fn get_function_xref_details(function_addr: i64, r2p: &mut R2Pipe) /*-> Vec<FunctionXrefDetails> */
-    {
-        info!("Getting function xref details");
-        r2p.cmd(format!("s @ {}", function_addr).as_str())
-            .expect("failed to seek addr");
-        let json = r2p.cmd("axffj").expect("axffj command failed");
-        let mut json_obj: Vec<FunctionXrefDetails> =
-            serde_json::from_str(&json).expect("Unable to convert to JSON object!");
-        debug!("Replacing all CALL xrefs with actual function name");
-        if json_obj.len() > 0 {
-            debug!("Replacing all CALL xrefs with actual function name");
-            for element in json_obj.iter_mut() {
-                if element.type_field == "CALL" {
-                    let function_name = r2p
-                        .cmd(format!("afi. @ {}", &element.ref_field).as_str())
-                        .expect("afi. command failed");
-                    element.name = function_name;
-                }
-            }
-            println!("{:?}", json_obj);
-        };
-    }
-
-    pub fn get_func_cfgs(fp: &String, output_path: &String, debug: &bool) {
+    pub fn extract_func_cfgs(fp: &String, output_path: &String, debug: &bool) {
         let fp_filename = Path::new(fp).file_name().expect("Unable to get filename");
         let f_name = format!("{}/{}.json", output_path, fp_filename.to_string_lossy());
         if !Path::new(&f_name).exists() {
@@ -417,4 +385,56 @@ impl ExtractJob {
         debug!("'aa' r2 command complete for {}", s);
         r2p
     }
+
+    // r2 commands to structs
+
+    fn get_function_details(r2p: &mut R2Pipe) -> Vec<AFLJFuncDetails> {
+        info!("Getting function information from binary");
+        let json = r2p.cmd("aflj").expect("aflj command failed");
+        let json_obj: Vec<AFLJFuncDetails> =
+            serde_json::from_str(&json).expect("Unable to convert to JSON object!");
+
+        json_obj
+    }
+
+    pub fn extract_function_xrefs(fp: &String, output_path: &String, debug: &bool) {
+        let mut r2p = ExtractJob::setup_r2_pipe(fp, debug);
+        let function_details = ExtractJob::get_function_details(&mut r2p);
+        let mut function_xrefs: HashMap<String, Vec<FunctionXrefDetails>> = HashMap::new();
+        info!("Extracting xrefs for each function");
+        for function in function_details.iter() {
+            let ret = ExtractJob::get_function_xref_details(function.offset, &mut r2p);
+            function_xrefs.insert(function.name.clone(), ret);
+        }
+        info!("All functions processed");
+        r2p.close();
+        info!("r2p closed");
+
+        info!("Writing extracted data to file");
+        ExtractJob::write_to_json(fp, output_path, &json!(function_xrefs))
+    }
+
+    fn get_function_xref_details(function_addr: i64, r2p: &mut R2Pipe) -> Vec<FunctionXrefDetails>
+    {
+        info!("Getting function xref details");
+        r2p.cmd(format!("s @ {}", function_addr).as_str())
+            .expect("failed to seek addr");
+        let json = r2p.cmd("axffj").expect("axffj command failed");
+        let mut json_obj: Vec<FunctionXrefDetails> =
+            serde_json::from_str(&json).expect("Unable to convert to JSON object!");
+        debug!("Replacing all CALL xrefs with actual function name");
+        if json_obj.len() > 0 {
+            debug!("Replacing all CALL xrefs with actual function name");
+            for element in json_obj.iter_mut() {
+                if element.type_field == "CALL" {
+                    let function_name = r2p
+                        .cmd(format!("afi. @ {}", &element.ref_field).as_str())
+                        .expect("afi. command failed");
+                    element.name = function_name;
+                }
+            }
+        };
+        json_obj
+    }
+
 }
