@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use petgraph::prelude::Graph;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -9,11 +10,19 @@ pub struct AGCJFunctionCallGraphs {
 }
 
 impl AGCJFunctionCallGraphs {
-    fn to_petgraph() {
-        todo!()
+    pub fn to_petgraph(&self) {
+
+        let mut graph = Graph::<String, u32>::new();
+
+        let calling_func = graph.add_node(self.name.clone());
+        for ele in self.imports.iter() {
+            let callee = graph.add_node(ele.clone());
+            graph.update_edge(calling_func, callee, 0);
+        };
+        println!("{:?}", graph);
     }
 
-    fn to_petgraph_one_hop() {
-        todo!()
+    pub fn return_callees(&self) /*-> Vec<String>*/ {
+        println!("{:?}", self.imports)
     }
 }

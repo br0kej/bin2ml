@@ -46,6 +46,7 @@ use inference::inference;
 use processors::agfj_graph_embedded_feats;
 use processors::agfj_graph_statistical_features;
 use utils::get_json_paths_from_dir;
+use crate::files::AGCJFile;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -102,22 +103,22 @@ enum Commands {
         #[arg(short, long, value_name = "FILENAME")]
         path: String,
 
-        /// The min number of basic blocks. Any CFG's below this number will be skipped
-        #[arg(long, default_value = "5")]
-        min_blocks: u16,
-
-        /// The output path for the processed Networkx graphs (1 per function)
-        #[arg(short, long, value_name = "OUTPUT")]
-        output_path: String,
-
         /// The target data type
         #[arg(short, long, value_name = "DATA_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["cfg", "cg"])
         .map(|s| s.parse::<String>().unwrap()),)]
         data_type: String,
 
+        /// The output path for the processed Networkx graphs (1 per function)
+        #[arg(short, long, value_name = "OUTPUT")]
+        output_path: String,
+
         /// The type of features to generate per basic block (node)
         #[arg(short, long, value_name = "FEATURE_TYPE")]
-        feature_type: String,
+        feature_type: Option<String>,
+
+        /// The min number of basic blocks. Any CFG's below this number will be skipped
+        #[arg(long, default_value = "5")]
+        min_blocks: Option<u16>,
 
         /// The filepath to a HuggingFace tokeniser.json
         #[cfg(feature = "inference")]
@@ -341,7 +342,7 @@ fn main() {
             };
 
             if data_type == DataType::CFG {
-                let feature_vec_type = match feature_type.as_str() {
+                let feature_vec_type = match feature_type.as_ref().unwrap().as_str() {
                     "gemini" => FeatureType::Gemini,
                     "discovre" => FeatureType::DiscovRE,
                     "dgis" => FeatureType::DGIS,
@@ -352,7 +353,7 @@ fn main() {
                 };
 
                 if feature_vec_type == FeatureType::Invalid {
-                    error!("Invalid feature type: {}", feature_type);
+                    error!("Invalid feature type: {}", feature_type.as_ref().unwrap());
                     exit(1)
                 } else if feature_vec_type == FeatureType::Gemini
                     || feature_vec_type == FeatureType::DiscovRE
@@ -367,8 +368,8 @@ fn main() {
                         info!("Single file found");
                         agfj_graph_statistical_features(
                             path,
-                            min_blocks,
-                            output_path,
+                            &min_blocks.unwrap(),
+                            &output_path,
                             feature_vec_type,
                         )
                     } else {
@@ -377,7 +378,7 @@ fn main() {
                             if file.path().to_string_lossy().ends_with(".json") {
                                 agfj_graph_statistical_features(
                                     file.path().to_str().unwrap(),
-                                    min_blocks,
+                                    &min_blocks.unwrap(),
                                     output_path,
                                     feature_vec_type,
                                 )
@@ -395,7 +396,7 @@ fn main() {
                         } else {
                             agfj_graph_embedded_feats(
                                 path,
-                                min_blocks,
+                                &min_blocks.unwrap(),
                                 output_path,
                                 feature_vec_type,
                                 tokeniser_fp,
@@ -407,7 +408,18 @@ fn main() {
                     }
                 }
             } else if data_type == DataType::CG {
-                info!("Data Type Chosen: Call Graph")
+                info!("Data Type Chosen: Call Graph");
+                let mut file = AGCJFile {
+                    filename: path.to_owned(),
+                    function_call_graphs: None,
+                    output_path: output_path.to_owned(),
+                };
+                file.load_and_deserialize().expect("Unable to load and desearilize JSON");
+
+                for fcg in file.function_call_graphs.unwrap() {
+                    fcg.to_petgraph();
+                    fcg.return_callees()
+                }
             }
         }
         Commands::Nlp {
