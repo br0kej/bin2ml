@@ -216,7 +216,7 @@ impl ExtractionJob {
         }
 
         // This functionality is currently not being used!
-        fn extraction_jon_matcher(mode: &str) -> Result<ExtractionJobType, Error> {
+        fn extraction_job_matcher(mode: &str) -> Result<ExtractionJobType, Error> {
             match mode {
                 "info" => Ok(ExtractionJobType::ExInfo),
                 "bb" => Ok(ExtractionJobType::BasicBlocks),
@@ -229,7 +229,7 @@ impl ExtractionJob {
         }
 
         let p_type = get_path_type(input_path);
-        let job_type = extraction_jon_matcher(mode).unwrap();
+        let job_type = extraction_job_matcher(mode).unwrap();
 
         if p_type == PathType::File {
             let file = FileToBeProcessed { file_path: input_path.to_string(), output_path:
