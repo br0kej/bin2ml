@@ -13,6 +13,8 @@ use rayon::prelude::IntoParallelRefIterator;
 use std::path::Path;
 use std::process::exit;
 use walkdir::WalkDir;
+use clap::builder::TypedValueParser;
+
 
 pub mod agfj;
 pub mod bb;
@@ -29,6 +31,7 @@ pub mod processors;
 pub mod sample;
 pub mod tokeniser;
 pub mod utils;
+pub mod agcj;
 
 use crate::dedup::EsilFuncStringCorpus;
 use crate::extract::ExtractionJobType;
@@ -47,6 +50,13 @@ use utils::get_json_paths_from_dir;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
+
+#[derive(PartialEq)]
+enum DataType {
+    CFG,
+    CG,
+    Invalid,
+}
 
 /// Turn binaries into machine learning ready formats
 #[derive(Parser)]
@@ -76,7 +86,8 @@ enum Commands {
         output_dir: String,
 
         /// The extraction mode - Currently only supports 'cfg'
-        #[arg(short, long, value_name = "EXTRACT_MODE")]
+        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["info", "bb", "reg", "cfg", "xrefs","cg"])
+        .map(|s| s.parse::<String>().unwrap()),)]
         mode: String,
 
         /// The number of threads Rayon can use when parallel processing
@@ -99,6 +110,11 @@ enum Commands {
         /// The output path for the processed Networkx graphs (1 per function)
         #[arg(short, long, value_name = "OUTPUT")]
         output_path: String,
+
+        /// The target data type
+        #[arg(short, long, value_name = "DATA_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["cfg", "cg"])
+        .map(|s| s.parse::<String>().unwrap()),)]
+        data_type: String,
 
         /// The type of features to generate per basic block (node)
         #[arg(short, long, value_name = "FEATURE_TYPE")]
@@ -303,6 +319,7 @@ fn main() {
         }
         Commands::Graph {
             path,
+            data_type,
             min_blocks,
             output_path,
             feature_type,
@@ -315,6 +332,14 @@ fn main() {
             #[cfg(feature = "inference")]
             embed_dim,
         } => {
+            let data_type = match data_type.as_str() {
+                "cfg" => DataType::CFG,
+                "cg" => DataType::CG,
+                _ => DataType::Invalid,
+            };
+
+            if data_type == DataType::CFG {
+
             let feature_vec_type = match feature_type.as_str() {
                 "gemini" => FeatureType::Gemini,
                 "discovre" => FeatureType::DiscovRE,
@@ -374,6 +399,9 @@ fn main() {
                         );
                     }
                 }
+            }
+            } else if data_type == DataType::CG {
+                info!("Data Type Chosen: Call Graph")
             }
         }
         Commands::Nlp {
