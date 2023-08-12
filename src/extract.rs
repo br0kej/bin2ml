@@ -1,3 +1,4 @@
+use crate::agcj::AGCJFunctionCallGraphs;
 use anyhow::bail;
 use anyhow::Error;
 use anyhow::Result;
@@ -11,7 +12,6 @@ use std::fs;
 use std::fs::File;
 use std::path::Path;
 use walkdir::WalkDir;
-use crate::agcj::AGCJFunctionCallGraphs;
 
 #[derive(PartialEq, Debug)]
 pub enum PathType {
@@ -191,11 +191,11 @@ impl std::fmt::Display for AFLJFuncDetails {
 }
 
 impl From<(String, String, String)> for FileToBeProcessed {
-    fn from(orig: (String, String, String,)) -> FileToBeProcessed {
+    fn from(orig: (String, String, String)) -> FileToBeProcessed {
         FileToBeProcessed {
             file_path: orig.0,
             output_path: orig.1,
-            job_type_suffix: orig.2
+            job_type_suffix: orig.2,
         }
     }
 }
@@ -232,18 +232,24 @@ impl ExtractionJob {
         let job_type = extraction_job_matcher(mode).unwrap();
 
         if p_type == PathType::File {
-            let file = FileToBeProcessed { file_path: input_path.to_string(), output_path:
-                output_path.to_string(), job_type_suffix: mode.clone().to_string()};
+            let file = FileToBeProcessed {
+                file_path: input_path.to_string(),
+                output_path: output_path.to_string(),
+                job_type_suffix: mode.clone().to_string(),
+            };
             Ok(ExtractionJob {
                 input_path: input_path.to_string(),
                 input_path_type: p_type,
                 job_type,
                 files_to_be_processed: vec![file],
-                output_path: output_path.clone().to_string()
+                output_path: output_path.clone().to_string(),
             })
         } else if p_type == PathType::Dir {
             let files = ExtractionJob::get_file_paths_dir(input_path.clone().to_string());
-            let files_with_output_path: Vec<(String, String, String)> = files.into_iter().map(|f| (f, output_path.clone().to_string(), mode.clone().to_string())).collect();
+            let files_with_output_path: Vec<(String, String, String)> = files
+                .into_iter()
+                .map(|f| (f, output_path.clone().to_string(), mode.clone().to_string()))
+                .collect();
             let files_to_be_processed: Vec<FileToBeProcessed> = files_with_output_path
                 .into_iter()
                 .map(FileToBeProcessed::from)
@@ -253,7 +259,7 @@ impl ExtractionJob {
                 input_path_type: p_type,
                 job_type,
                 files_to_be_processed,
-                output_path: output_path.clone().to_string()
+                output_path: output_path.clone().to_string(),
             })
         } else {
             bail!("Failed to create extraction job.")
@@ -279,7 +285,6 @@ impl ExtractionJob {
 }
 
 impl FileToBeProcessed {
-
     pub fn extract_register_behaviour(&self, debug: &bool) {
         info!("Starting register behaviour extraction");
         let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
@@ -304,7 +309,11 @@ impl FileToBeProcessed {
 
     // TODO: Refactor this so it uses the AGFJ struct
     pub fn extract_func_cfgs(&self, debug: &bool) {
-        let mut fp_filename = Path::new(&self.file_path).file_name().expect("Unable to get filename").to_string_lossy().to_string();
+        let mut fp_filename = Path::new(&self.file_path)
+            .file_name()
+            .expect("Unable to get filename")
+            .to_string_lossy()
+            .to_string();
         fp_filename = fp_filename + "_" + &self.job_type_suffix.clone();
         let f_name = format!("{}/{}.json", &self.output_path, fp_filename);
         if !Path::new(&f_name).exists() {
@@ -331,11 +340,10 @@ impl FileToBeProcessed {
 
             if json != "[,]" {
                 #[allow(clippy::expect_fun_call)]
-                    // Kept in to ensure that the JSON decode error message is printed alongside the filename
-                    let json: Value = serde_json::from_str(&json).expect(&format!(
+                // Kept in to ensure that the JSON decode error message is printed alongside the filename
+                let json: Value = serde_json::from_str(&json).expect(&format!(
                     "Unable to parse json for {}: {}",
-                    fp_filename,
-                    json
+                    fp_filename, json
                 ));
 
                 self.write_to_json(&json);
@@ -354,14 +362,14 @@ impl FileToBeProcessed {
         info!("Starting function call graph extraction");
         let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
         let json = r2p.cmd("agCj").expect("agCj command failed to execute");
-        let function_call_graphs: Vec<AGCJFunctionCallGraphs> = serde_json::from_str(&json).expect("Unable to convert to JSON object!");
+        let function_call_graphs: Vec<AGCJFunctionCallGraphs> =
+            serde_json::from_str(&json).expect("Unable to convert to JSON object!");
         info!("Function call graph extracted.");
         r2p.close();
         info!("r2p closed");
 
         info!("Writing extracted data to file");
         self.write_to_json(&json!(function_call_graphs))
-
     }
 
     pub fn extract_function_xrefs(&self, debug: &bool) {
@@ -392,8 +400,11 @@ impl FileToBeProcessed {
         json_obj
     }
 
-    fn get_function_xref_details(&self, function_addr: i64, r2p: &mut R2Pipe) -> Vec<FunctionXrefDetails>
-    {
+    fn get_function_xref_details(
+        &self,
+        function_addr: i64,
+        r2p: &mut R2Pipe,
+    ) -> Vec<FunctionXrefDetails> {
         info!("Getting function xref details");
         r2p.cmd(format!("s @ {}", function_addr).as_str())
             .expect("failed to seek addr");
@@ -423,15 +434,16 @@ impl FileToBeProcessed {
         let mut fp_filename = Path::new(self.file_path.as_str())
             .file_name()
             .expect("Unable to get filename")
-            .to_string_lossy().to_string();
+            .to_string_lossy()
+            .to_string();
 
-        fp_filename = fp_filename +  "_" + &self.job_type_suffix.clone();
+        fp_filename = fp_filename + "_" + &self.job_type_suffix.clone();
         let f_name = format!("{}/{}.json", self.output_path, fp_filename);
         serde_json::to_writer(
             &File::create(&f_name).expect("Unable to create file!"),
             &json_obj,
         )
-            .unwrap_or_else(|_| panic!("the world is ending: {}", f_name));
+        .unwrap_or_else(|_| panic!("the world is ending: {}", f_name));
     }
 
     fn setup_r2_pipe(&self, s: &String, debug: &bool) -> R2Pipe {

@@ -9,7 +9,6 @@ pub struct AGCJFunctionCallGraphs {
 }
 
 impl AGCJFunctionCallGraphs {
-
     fn to_petgraph() {
         todo!()
     }

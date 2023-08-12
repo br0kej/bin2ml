@@ -1,5 +1,5 @@
-use crate::agfj::AGFJFunc;
 use crate::agcj::AGCJFunctionCallGraphs;
+use crate::agfj::AGFJFunc;
 use crate::bb::{FeatureType, InstructionMode};
 use crate::consts::*;
 #[cfg(feature = "inference")]
@@ -337,8 +337,8 @@ impl AGCJFile {
         let data = read_to_string(&self.filename).expect("Unable to read file");
 
         #[allow(clippy::expect_fun_call)]
-            // Kept in to ensure that the JSON decode error message is printed alongside the filename
-            let json: Vec<AGCJFunctionCallGraphs> = serde_json::from_str(&data).expect(&format!(
+        // Kept in to ensure that the JSON decode error message is printed alongside the filename
+        let json: Vec<AGCJFunctionCallGraphs> = serde_json::from_str(&data).expect(&format!(
             "Unable to load function data from {}",
             self.filename
         ));
