@@ -11,6 +11,7 @@ use std::fs;
 use std::fs::File;
 use std::path::Path;
 use walkdir::WalkDir;
+use crate::agcj::AGCJFunctionCallGraphs;
 
 #[derive(PartialEq, Debug)]
 pub enum PathType {
@@ -52,15 +53,6 @@ impl std::fmt::Display for ExtractionJob {
             self.input_path, self.input_path_type, self.job_type
         )
     }
-}
-
-// Global Call Graph Struct
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AGCJFunctionCallGraphs {
-    pub name: String,
-    pub size: i64,
-    pub imports: Vec<String>,
 }
 
 // Structs related to AFLJ r2 command
@@ -310,6 +302,7 @@ impl FileToBeProcessed {
         self.write_to_json(&json!(register_behaviour_vec))
     }
 
+    // TODO: Refactor this so it uses the AGFJ struct
     pub fn extract_func_cfgs(&self, debug: &bool) {
         let mut fp_filename = Path::new(&self.file_path).file_name().expect("Unable to get filename").to_string_lossy().to_string();
         fp_filename = fp_filename + "_" + &self.job_type_suffix.clone();
