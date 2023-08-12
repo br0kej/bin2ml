@@ -253,9 +253,6 @@ fn main() {
                     .build_global()
                     .unwrap();
 
-                // info!("Collection file paths from directory");
-                // let str_vec: Vec<String> = job.get_file_paths_dir();
-
                 if job.job_type == ExtractionJobType::CFG {
                     info!("Extraction Job Type: CFG");
                     info!("Starting Parallel generation.");
@@ -271,8 +268,21 @@ fn main() {
                     job.files_to_be_processed.par_iter().progress().for_each(|path| {
                         path.extract_register_behaviour(debug)
                     });
+                } else if job.job_type == ExtractionJobType::FunctionXrefs {
+                    info!("Extraction Job Type: Register Behaviour");
+                    info!("Starting Parallel generation.");
+                    #[allow(clippy::redundant_closure)]
+                    job.files_to_be_processed.par_iter().progress().for_each(|path| {
+                        path.extract_function_xrefs(debug)
+                    });
+                } else if job.job_type == ExtractionJobType::CallGraphs {
+                    info!("Extraction Job Type: Register Behaviour");
+                    info!("Starting Parallel generation.");
+                    #[allow(clippy::redundant_closure)]
+                    job.files_to_be_processed.par_iter().progress().for_each(|path| {
+                        path.extract_function_call_graphs(debug)
+                    });
                 }
-                //info!("Extraction complete. Processed {} files.", str_vec.len())
             } else if job.input_path_type == PathType::File {
                 info!("Single file found");
                 if job.job_type == ExtractionJobType::CFG {
@@ -284,6 +294,9 @@ fn main() {
                 } else if job.job_type == ExtractionJobType::FunctionXrefs {
                     info!("Extraction Job type: Function Xrefs");
                     job.files_to_be_processed[0].extract_function_xrefs(debug)
+                } else if job.job_type == ExtractionJobType::CallGraphs {
+                    info!("Extraction Job type: Function Call Graphs");
+                    job.files_to_be_processed[0].extract_function_call_graphs(debug)
                 }
                 info!("Extraction complete for {}", fpath)
             }

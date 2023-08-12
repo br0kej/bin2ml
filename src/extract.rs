@@ -25,6 +25,7 @@ pub enum ExtractionJobType {
     RegisterBehaviour,
     FunctionXrefs,
     CFG,
+    CallGraphs,
 }
 
 #[derive(Debug)]
@@ -51,6 +52,15 @@ impl std::fmt::Display for ExtractionJob {
             self.input_path, self.input_path_type, self.job_type
         )
     }
+}
+
+// Global Call Graph Struct
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AGCJFunctionCallGraphs {
+    pub name: String,
+    pub size: i64,
+    pub imports: Vec<String>,
 }
 
 // Structs related to AFLJ r2 command
@@ -221,6 +231,7 @@ impl ExtractionJob {
                 "reg" => Ok(ExtractionJobType::RegisterBehaviour),
                 "cfg" => Ok(ExtractionJobType::CFG),
                 "xrefs" => Ok(ExtractionJobType::FunctionXrefs),
+                "cg" => Ok(ExtractionJobType::CallGraphs),
                 _ => bail!("Incorrect command type - got {}", mode),
             }
         }
@@ -346,49 +357,18 @@ impl FileToBeProcessed {
         }
     }
 
-    fn write_to_json(&self, json_obj: &Value) {
-        let mut fp_filename = Path::new(self.file_path.as_str())
-            .file_name()
-            .expect("Unable to get filename")
-            .to_string_lossy().to_string();
+    pub fn extract_function_call_graphs(&self, debug: &bool) {
+        info!("Starting function call graph extraction");
+        let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
+        let json = r2p.cmd("agCj").expect("agCj command failed to execute");
+        let function_call_graphs: Vec<AGCJFunctionCallGraphs> = serde_json::from_str(&json).expect("Unable to convert to JSON object!");
+        info!("Function call graph extracted.");
+        r2p.close();
+        info!("r2p closed");
 
-        fp_filename = fp_filename +  "_" + &self.job_type_suffix.clone();
-        let f_name = format!("{}/{}.json", self.output_path, fp_filename);
-        serde_json::to_writer(
-            &File::create(&f_name).expect("Unable to create file!"),
-            &json_obj,
-        )
-            .unwrap_or_else(|_| panic!("the world is ending: {}", f_name));
-    }
+        info!("Writing extracted data to file");
+        self.write_to_json(&json!(function_call_graphs))
 
-    fn setup_r2_pipe(&self, s: &String, debug: &bool) -> R2Pipe {
-        // Setup R2 pipe with options and return it
-        // Could be extended to include toggling of options
-        // + more args?
-        let opts = if !(*debug) {
-            debug!("Creating r2 handle without debugging");
-            R2PipeSpawnOptions {
-                exepath: "r2".to_owned(),
-                args: vec!["-e bin.cache=true", "-e log.level=1", "-2"],
-            }
-        } else {
-            debug!("Creating r2 handle with debugging");
-            R2PipeSpawnOptions {
-                exepath: "r2".to_owned(),
-                args: vec!["-e bin.cache=true", "-e log.level=0"],
-            }
-        };
-        debug!("Attempting to create r2pipe using {}", s);
-        let mut r2p = match R2Pipe::in_session() {
-            Some(_) => R2Pipe::open().expect("Unable to open R2Pipe"),
-            None => R2Pipe::spawn(s, Some(opts)).expect("Failed to spawn new R2Pipe"),
-        };
-
-        debug!("Executing 'aa' r2 command for {}", s);
-        r2p.cmd("aa")
-            .expect("Unable to complete standard analysis!");
-        debug!("'aa' r2 command complete for {}", s);
-        r2p
     }
 
     pub fn extract_function_xrefs(&self, debug: &bool) {
@@ -442,5 +422,52 @@ impl FileToBeProcessed {
             }
         };
         json_obj
+    }
+
+    // Helper Functions
+
+    fn write_to_json(&self, json_obj: &Value) {
+        let mut fp_filename = Path::new(self.file_path.as_str())
+            .file_name()
+            .expect("Unable to get filename")
+            .to_string_lossy().to_string();
+
+        fp_filename = fp_filename +  "_" + &self.job_type_suffix.clone();
+        let f_name = format!("{}/{}.json", self.output_path, fp_filename);
+        serde_json::to_writer(
+            &File::create(&f_name).expect("Unable to create file!"),
+            &json_obj,
+        )
+            .unwrap_or_else(|_| panic!("the world is ending: {}", f_name));
+    }
+
+    fn setup_r2_pipe(&self, s: &String, debug: &bool) -> R2Pipe {
+        // Setup R2 pipe with options and return it
+        // Could be extended to include toggling of options
+        // + more args?
+        let opts = if !(*debug) {
+            debug!("Creating r2 handle without debugging");
+            R2PipeSpawnOptions {
+                exepath: "r2".to_owned(),
+                args: vec!["-e bin.cache=true", "-e log.level=1", "-2"],
+            }
+        } else {
+            debug!("Creating r2 handle with debugging");
+            R2PipeSpawnOptions {
+                exepath: "r2".to_owned(),
+                args: vec!["-e bin.cache=true", "-e log.level=0"],
+            }
+        };
+        debug!("Attempting to create r2pipe using {}", s);
+        let mut r2p = match R2Pipe::in_session() {
+            Some(_) => R2Pipe::open().expect("Unable to open R2Pipe"),
+            None => R2Pipe::spawn(s, Some(opts)).expect("Failed to spawn new R2Pipe"),
+        };
+
+        debug!("Executing 'aa' r2 command for {}", s);
+        r2p.cmd("aa")
+            .expect("Unable to complete standard analysis!");
+        debug!("'aa' r2 command complete for {}", s);
+        r2p
     }
 }
