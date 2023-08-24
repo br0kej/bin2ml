@@ -73,11 +73,11 @@ impl From<Graph<String, u32>> for NetworkxDiGraph<CallGraphFuncNameNode> {
         }
 
         NetworkxDiGraph {
-            adjacency: adjacency,
+            adjacency,
             directed: "True".to_string(),
             graph: vec![],
             multigraph: false,
-            nodes: nodes,
+            nodes,
         }
     }
 }

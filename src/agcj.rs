@@ -1,6 +1,5 @@
 use crate::files::AGCJFile;
-use crate::networkx::{CallGraphFuncNameNode, NetworkxDiGraph};
-use itertools::Itertools;
+use crate::networkx::NetworkxDiGraph;
 use petgraph::prelude::Graph;
 use serde::{Deserialize, Serialize};
 use std::fs::File;

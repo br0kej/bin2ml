@@ -32,6 +32,7 @@ pub mod processors;
 pub mod sample;
 pub mod tokeniser;
 pub mod utils;
+pub mod errors;
 
 use crate::dedup::EsilFuncStringCorpus;
 use crate::extract::ExtractionJobType;
@@ -54,8 +55,8 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 #[derive(PartialEq)]
 enum DataType {
-    CFG,
-    CG,
+    Cfg,
+    Cg,
     Invalid,
 }
 
@@ -337,12 +338,12 @@ fn main() {
             embed_dim,
         } => {
             let graph_type = match graph_type.as_str() {
-                "cfg" => DataType::CFG,
-                "cg" => DataType::CG,
+                "cfg" => DataType::Cfg,
+                "cg" => DataType::Cg,
                 _ => DataType::Invalid,
             };
 
-            if graph_type == DataType::CFG {
+            if graph_type == DataType::Cfg {
                 info!("Chosen Graph Type: Control Flow Graph");
                 if feature_type.is_some() {
                     let feature_vec_type = match feature_type.as_ref().unwrap().as_str() {
@@ -372,7 +373,7 @@ fn main() {
                             agfj_graph_statistical_features(
                                 path,
                                 &min_blocks.unwrap(),
-                                &output_path,
+                                output_path,
                                 feature_vec_type,
                             )
                         } else {
@@ -414,7 +415,7 @@ fn main() {
                 } else {
                     error!("--feature-type/-f is required for creating CFG's")
                 }
-            } else if graph_type == DataType::CG {
+            } else if graph_type == DataType::Cg {
                 info!("Chosen Graph Type: Call Graph");
                 let mut file = AGCJFile {
                     filename: path.to_owned(),

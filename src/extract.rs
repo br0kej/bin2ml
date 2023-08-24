@@ -235,20 +235,20 @@ impl ExtractionJob {
             let file = FileToBeProcessed {
                 file_path: input_path.to_string(),
                 output_path: output_path.to_string(),
-                job_type_suffix: mode.clone().to_string(),
+                job_type_suffix: (*mode).to_string(),
             };
             Ok(ExtractionJob {
                 input_path: input_path.to_string(),
                 input_path_type: p_type,
                 job_type,
                 files_to_be_processed: vec![file],
-                output_path: output_path.clone().to_string(),
+                output_path: (*output_path).to_string(),
             })
         } else if p_type == PathType::Dir {
-            let files = ExtractionJob::get_file_paths_dir(input_path.clone().to_string());
+            let files = ExtractionJob::get_file_paths_dir(input_path.to_string());
             let files_with_output_path: Vec<(String, String, String)> = files
                 .into_iter()
-                .map(|f| (f, output_path.clone().to_string(), mode.clone().to_string()))
+                .map(|f| (f, output_path.to_string(), mode.to_string()))
                 .collect();
             let files_to_be_processed: Vec<FileToBeProcessed> = files_with_output_path
                 .into_iter()
@@ -259,7 +259,7 @@ impl ExtractionJob {
                 input_path_type: p_type,
                 job_type,
                 files_to_be_processed,
-                output_path: output_path.clone().to_string(),
+                output_path: output_path.to_string(),
             })
         } else {
             bail!("Failed to create extraction job.")
@@ -414,7 +414,7 @@ impl FileToBeProcessed {
         debug!("Replacing all CALL xrefs with actual function name");
         // TODO: There is a minor bug in this where functions without any xrefs are included.
         // Been left in as may be useful later down the line.
-        if json_obj.len() > 0 {
+        if !json_obj.is_empty() {
             debug!("Replacing all CALL xrefs with actual function name");
             for element in json_obj.iter_mut() {
                 if element.type_field == "CALL" {
