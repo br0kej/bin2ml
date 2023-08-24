@@ -26,6 +26,7 @@ pub mod extract;
 pub mod files;
 #[cfg(feature = "inference")]
 pub mod inference;
+pub mod networkx;
 pub mod normalisation;
 pub mod processors;
 pub mod sample;
@@ -34,6 +35,7 @@ pub mod utils;
 
 use crate::dedup::EsilFuncStringCorpus;
 use crate::extract::ExtractionJobType;
+use crate::files::AGCJFile;
 use crate::tokeniser::{train_byte_bpe_tokeniser, TokeniserType};
 use bb::{FeatureType, InstructionMode};
 #[cfg(feature = "goblin")]
@@ -46,7 +48,6 @@ use inference::inference;
 use processors::agfj_graph_embedded_feats;
 use processors::agfj_graph_statistical_features;
 use utils::get_json_paths_from_dir;
-use crate::files::AGCJFile;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -237,8 +238,8 @@ enum Commands {
 
 fn main() {
     let env = Env::default()
-        .filter_or("MY_LOG_LEVEL", "trace")
-        .write_style_or("MY_LOG_STYLE", "always");
+        .filter_or("LOG_LEVEL", "warning")
+        .write_style_or("LOG_STYLE", "always");
 
     env_logger::init_from_env(env);
     let cli = Cli::parse();
@@ -322,7 +323,7 @@ fn main() {
         }
         Commands::Graph {
             path,
-            data_type,
+            data_type: graph_type,
             min_blocks,
             output_path,
             feature_type,
@@ -335,90 +336,97 @@ fn main() {
             #[cfg(feature = "inference")]
             embed_dim,
         } => {
-            let data_type = match data_type.as_str() {
+            let graph_type = match graph_type.as_str() {
                 "cfg" => DataType::CFG,
                 "cg" => DataType::CG,
                 _ => DataType::Invalid,
             };
 
-            if data_type == DataType::CFG {
-                let feature_vec_type = match feature_type.as_ref().unwrap().as_str() {
-                    "gemini" => FeatureType::Gemini,
-                    "discovre" => FeatureType::DiscovRE,
-                    "dgis" => FeatureType::DGIS,
-                    "encode" => FeatureType::Encoded,
-                    #[cfg(feature = "inference")]
-                    "embed" => FeatureType::ModelEmbedded,
-                    _ => FeatureType::Invalid,
-                };
+            if graph_type == DataType::CFG {
+                info!("Chosen Graph Type: Control Flow Graph");
+                if feature_type.is_some() {
+                    let feature_vec_type = match feature_type.as_ref().unwrap().as_str() {
+                        "gemini" => FeatureType::Gemini,
+                        "discovre" => FeatureType::DiscovRE,
+                        "dgis" => FeatureType::DGIS,
+                        "encode" => FeatureType::Encoded,
+                        #[cfg(feature = "inference")]
+                        "embed" => FeatureType::ModelEmbedded,
+                        _ => FeatureType::Invalid,
+                    };
 
-                if feature_vec_type == FeatureType::Invalid {
-                    error!("Invalid feature type: {}", feature_type.as_ref().unwrap());
-                    exit(1)
-                } else if feature_vec_type == FeatureType::Gemini
-                    || feature_vec_type == FeatureType::DiscovRE
-                    || feature_vec_type == FeatureType::DGIS
-                {
-                    info!(
-                        "Creating graphs with {:?} feature vectors.",
-                        feature_vec_type
-                    );
+                    if feature_vec_type == FeatureType::Invalid {
+                        error!("Invalid feature type: {}", feature_type.as_ref().unwrap());
+                        exit(1)
+                    } else if feature_vec_type == FeatureType::Gemini
+                        || feature_vec_type == FeatureType::DiscovRE
+                        || feature_vec_type == FeatureType::DGIS
+                    {
+                        info!(
+                            "Creating graphs with {:?} feature vectors.",
+                            feature_vec_type
+                        );
 
-                    if Path::new(path).is_file() {
-                        info!("Single file found");
-                        agfj_graph_statistical_features(
-                            path,
-                            &min_blocks.unwrap(),
-                            &output_path,
-                            feature_vec_type,
-                        )
-                    } else {
-                        info!("Multiple files found. Will parallel process.");
-                        for file in WalkDir::new(path).into_iter().filter_map(|file| file.ok()) {
-                            if file.path().to_string_lossy().ends_with(".json") {
-                                agfj_graph_statistical_features(
-                                    file.path().to_str().unwrap(),
+                        if Path::new(path).is_file() {
+                            info!("Single file found");
+                            agfj_graph_statistical_features(
+                                path,
+                                &min_blocks.unwrap(),
+                                &output_path,
+                                feature_vec_type,
+                            )
+                        } else {
+                            info!("Multiple files found. Will parallel process.");
+                            for file in WalkDir::new(path).into_iter().filter_map(|file| file.ok())
+                            {
+                                if file.path().to_string_lossy().ends_with(".json") {
+                                    agfj_graph_statistical_features(
+                                        file.path().to_str().unwrap(),
+                                        &min_blocks.unwrap(),
+                                        output_path,
+                                        feature_vec_type,
+                                    )
+                                }
+                            }
+                        }
+                    } else if feature_vec_type == FeatureType::Encoded {
+                        todo!("Need to implement Encoded FeatureTypes!")
+                    } else if cfg!(inference) {
+                        #[cfg(feature = "inference")]
+                        if feature_vec_type == FeatureType::ModelEmbedded {
+                            if tokeniser_fp.is_none() || model_fp.is_none() {
+                                println!("Both Tokeniser and Model filespaths are needed");
+                                exit(100)
+                            } else {
+                                agfj_graph_embedded_feats(
+                                    path,
                                     &min_blocks.unwrap(),
                                     output_path,
                                     feature_vec_type,
-                                )
+                                    tokeniser_fp,
+                                    model_fp,
+                                    mean_pool,
+                                    embed_dim,
+                                );
                             }
                         }
                     }
-                } else if feature_vec_type == FeatureType::Encoded {
-                    todo!("Need to implement Encoded FeatureTypes!")
-                } else if cfg!(inference) {
-                    #[cfg(feature = "inference")]
-                    if feature_vec_type == FeatureType::ModelEmbedded {
-                        if tokeniser_fp.is_none() || model_fp.is_none() {
-                            println!("Both Tokeniser and Model filespaths are needed");
-                            exit(100)
-                        } else {
-                            agfj_graph_embedded_feats(
-                                path,
-                                &min_blocks.unwrap(),
-                                output_path,
-                                feature_vec_type,
-                                tokeniser_fp,
-                                model_fp,
-                                mean_pool,
-                                embed_dim,
-                            );
-                        }
-                    }
+                } else {
+                    error!("--feature-type/-f is required for creating CFG's")
                 }
-            } else if data_type == DataType::CG {
-                info!("Data Type Chosen: Call Graph");
+            } else if graph_type == DataType::CG {
+                info!("Chosen Graph Type: Call Graph");
                 let mut file = AGCJFile {
                     filename: path.to_owned(),
                     function_call_graphs: None,
                     output_path: output_path.to_owned(),
                 };
-                file.load_and_deserialize().expect("Unable to load and desearilize JSON");
+                file.load_and_deserialize()
+                    .expect("Unable to load and desearilize JSON");
 
-                for fcg in file.function_call_graphs.unwrap() {
-                    fcg.to_petgraph();
-                    fcg.return_callees()
+                for fcg in file.function_call_graphs.as_ref().unwrap() {
+                    fcg.to_petgraph(&file.output_path, &file.filename);
+                    fcg.one_hop_to_petgraph(&file);
                 }
             }
         }
