@@ -111,12 +111,12 @@ enum Commands {
         data_type: String,
 
         /// The output path for the processed Networkx graphs (1 per function)
-        #[arg(short, long, value_name = "OUTPUT", value_parser = clap::builder::PossibleValuesParser::new(["gemini", "discovre", "dgis"])
-        .map(|s| s.parse::<String>().unwrap()),)]
+        #[arg(short, long, value_name = "OUTPUT")]
         output_path: String,
 
         /// The type of features to generate per basic block (node)
-        #[arg(short, long, value_name = "FEATURE_TYPE")]
+        #[arg(short, long, value_name = "FEATURE_TYPE", , value_parser = clap::builder::PossibleValuesParser::new(["gemini", "discovre", "dgis"])
+        .map(|s| s.parse::<String>().unwrap()),)]
         feature_type: Option<String>,
 
         /// The min number of basic blocks. Any CFG's below this number will be skipped
