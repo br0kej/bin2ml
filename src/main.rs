@@ -111,7 +111,8 @@ enum Commands {
         data_type: String,
 
         /// The output path for the processed Networkx graphs (1 per function)
-        #[arg(short, long, value_name = "OUTPUT")]
+        #[arg(short, long, value_name = "OUTPUT", value_parser = clap::builder::PossibleValuesParser::new(["gemini", "discovre", "dgis"])
+        .map(|s| s.parse::<String>().unwrap()),)]
         output_path: String,
 
         /// The type of features to generate per basic block (node)
@@ -239,7 +240,7 @@ enum Commands {
 
 fn main() {
     let env = Env::default()
-        .filter_or("LOG_LEVEL", "warning")
+        .filter_or("LOG_LEVEL", "info")
         .write_style_or("LOG_STYLE", "always");
 
     env_logger::init_from_env(env);
@@ -357,7 +358,7 @@ fn main() {
                     };
 
                     if feature_vec_type == FeatureType::Invalid {
-                        error!("Invalid feature type: {}", feature_type.as_ref().unwrap());
+                        warn!("Invalid feature type: {}", feature_type.as_ref().unwrap());
                         exit(1)
                     } else if feature_vec_type == FeatureType::Gemini
                         || feature_vec_type == FeatureType::DiscovRE
