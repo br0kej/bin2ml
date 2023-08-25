@@ -149,7 +149,6 @@ pub fn normalise_esil_simple(input: &str, op_type: &str, reg_norm: bool) -> Stri
         let split: Vec<String> = split
             .iter()
             .map(|s| {
-                println!("{}\n", s);
                 if GENERAL_PURPOSE_32_BIT_REGS.contains(s) || RISCV_32_BIT_REGS.contains(s) {
                     "reg32".to_string()
                 } else if GENERAL_PURPOSE_64_BIT_REGS.contains(s) {
@@ -159,7 +158,6 @@ pub fn normalise_esil_simple(input: &str, op_type: &str, reg_norm: bool) -> Stri
                 }
             })
             .collect();
-        println!("{:?}\n", split);
         split.join(" ")
     } else {
         normalised.to_string()
