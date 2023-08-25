@@ -25,39 +25,40 @@ pub struct Adjacency {
 pub enum NodeType {
     Gemini(GeminiNode),
     Dgis(DGISNode),
+    Discovere(DiscovreNode)
 }
 
 #[derive(Default, Copy, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GeminiNode {
     pub id: i64,
-    #[serde(rename = "num arith")]
-    pub num_arith: f64,
     #[serde(rename = "num calls")]
     pub num_calls: f64,
-    #[serde(rename = "num ins")]
-    pub num_ins: f64,
-    #[serde(rename = "num offspring")]
-    pub num_offspring: f64,
     #[serde(rename = "num transfer")]
     pub num_transfer: f64,
+    #[serde(rename = "num arith")]
+    pub num_arith: f64,
+    #[serde(rename = "num ins")]
+    pub num_ins: f64,
     #[serde(rename = "numeric consts")]
     pub numeric_consts: f64,
     #[serde(rename = "string consts")]
     pub string_consts: f64,
+    #[serde(rename = "num offspring")]
+    pub num_offspring: f64,
 }
 
 impl From<(i64, &Vec<f64>)> for GeminiNode {
     fn from(src: (i64, &Vec<f64>)) -> GeminiNode {
         GeminiNode {
             id: src.0,
-            num_arith: src.1[0],
-            num_calls: src.1[1],
-            num_ins: src.1[2],
-            num_offspring: src.1[3],
-            num_transfer: src.1[4],
-            numeric_consts: src.1[5],
-            string_consts: src.1[6],
+            num_calls: src.1[0],
+            num_transfer: src.1[1],
+            num_arith: src.1[2],
+            num_ins: src.1[3],
+            numeric_consts: src.1[4],
+            string_consts: src.1[5],
+            num_offspring: src.1[6],
         }
     }
 }
@@ -96,6 +97,38 @@ impl From<(i64, &Vec<f64>)> for DGISNode {
             num_uncon_jumps: src.1[5],
             num_con_jumps: src.1[6],
             num_generic_ins: src.1[7],
+        }
+    }
+}
+
+#[derive(Default, Copy, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscovreNode {
+    pub id: i64,
+    #[serde(rename = "num calls")]
+    pub num_calls: f64,
+    #[serde(rename = "num transfer")]
+    pub num_transfer: f64,
+    #[serde(rename = "num arith")]
+    pub num_arith: f64,
+    #[serde(rename = "num ins")]
+    pub num_ins: f64,
+    #[serde(rename = "numeric consts")]
+    pub numeric_consts: f64,
+    #[serde(rename = "string consts")]
+    pub string_consts: f64,
+}
+
+impl From<(i64, &Vec<f64>)> for DiscovreNode {
+    fn from(src: (i64, &Vec<f64>)) -> DiscovreNode {
+        DiscovreNode {
+            id: src.0,
+            num_calls: src.1[0],
+            num_transfer: src.1[1],
+            num_arith: src.1[2],
+            num_ins: src.1[3],
+            numeric_consts: src.1[4],
+            string_consts: src.1[5],
         }
     }
 }
@@ -156,6 +189,7 @@ impl From<(&Graph<String, u32>, &Vec<Vec<f64>>, FeatureType)> for NetworkxDiGrap
                     Some(NodeType::Gemini(GeminiNode::from((i as i64, node_vector))))
                 }
                 FeatureType::DGIS => Some(NodeType::Dgis(DGISNode::from((i as i64, node_vector)))),
+                FeatureType::DiscovRE => Some(NodeType::Discovere(DiscovreNode::from((i as i64, node_vector)))),
                 _ => None,
             };
             if node.is_some() {
@@ -214,6 +248,25 @@ impl From<NetworkxDiGraph<NodeType>> for NetworkxDiGraph<GeminiNode> {
 impl From<NetworkxDiGraph<NodeType>> for NetworkxDiGraph<DGISNode> {
     fn from(src: NetworkxDiGraph<NodeType>) -> NetworkxDiGraph<DGISNode> {
         let inner_nodes_types: Vec<DGISNode> = src
+            .clone()
+            .nodes
+            .into_iter()
+            .map(|el| *el.as_dgis().unwrap())
+            .collect();
+
+        NetworkxDiGraph {
+            adjacency: src.adjacency,
+            directed: src.directed,
+            graph: vec![],
+            multigraph: false,
+            nodes: inner_nodes_types,
+        }
+    }
+}
+
+impl From<NetworkxDiGraph<NodeType>> for NetworkxDiGraph<DiscovreNode> {
+    fn from(src: NetworkxDiGraph<NodeType>) -> NetworkxDiGraph<DiscovreNode> {
+        let inner_nodes_types: Vec<DiscovreNode> = src
             .clone()
             .nodes
             .into_iter()

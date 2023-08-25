@@ -1,7 +1,7 @@
 use crate::bb::{ACFJBlock, FeatureType};
 #[cfg(feature = "inference")]
 use crate::inference::InferenceJob;
-use crate::networkx::{DGISNode, GeminiNode, NetworkxDiGraph, NodeType};
+use crate::networkx::{DGISNode, DiscovreNode, GeminiNode, NetworkxDiGraph, NodeType};
 use crate::utils::get_save_file_path;
 use petgraph::prelude::Graph;
 use petgraph::visit::Dfs;
@@ -357,6 +357,15 @@ impl AGFJFunc {
                             &networkx_graph_inners,
                         )
                         .expect("Unable to write JSON");
+                    } else if feature_type == FeatureType::DiscovRE {
+                        let networkx_graph_inners: NetworkxDiGraph<DiscovreNode> =
+                            NetworkxDiGraph::<DiscovreNode>::from(networkx_graph);
+                        info!("Saving to JSON..");
+                        serde_json::to_writer(
+                            &File::create(fname_string).expect("Failed to create writer"),
+                            &networkx_graph_inners,
+                        )
+                            .expect("Unable to write JSON");
                     }
                 } else {
                     info!("Function {} has no edges. Skipping...", self.name)
