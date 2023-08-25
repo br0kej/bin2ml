@@ -115,7 +115,7 @@ enum Commands {
         output_path: String,
 
         /// The type of features to generate per basic block (node)
-        #[arg(short, long, value_name = "FEATURE_TYPE", , value_parser = clap::builder::PossibleValuesParser::new(["gemini", "discovre", "dgis"])
+        #[arg(short, long, value_name = "FEATURE_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["gemini", "discovre", "dgis"])
         .map(|s| s.parse::<String>().unwrap()),)]
         feature_type: Option<String>,
 
