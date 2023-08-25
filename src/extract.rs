@@ -1,3 +1,4 @@
+use crate::agcj::AGCJFunctionCallGraphs;
 use anyhow::bail;
 use anyhow::Error;
 use anyhow::Result;
@@ -23,23 +24,33 @@ pub enum ExtractionJobType {
     ExInfo, // Extract high level information from the binary (r2 ij)
     BasicBlocks,
     RegisterBehaviour,
+    FunctionXrefs,
     CFG,
+    CallGraphs,
 }
 
 #[derive(Debug)]
-pub struct ExtractJob {
-    pub bin_path: String, // Refactored this but still think the name is wrong
-    pub p_type: PathType,
-    pub extraction_job_type: ExtractionJobType,
-    pub output_path: String, // Not sure whether to add the file paths vector to this
+pub struct FileToBeProcessed {
+    pub file_path: String,
+    pub output_path: String,
+    pub job_type_suffix: String,
 }
 
-impl std::fmt::Display for ExtractJob {
+#[derive(Debug)]
+pub struct ExtractionJob {
+    pub input_path: String,
+    pub input_path_type: PathType,
+    pub job_type: ExtractionJobType,
+    pub files_to_be_processed: Vec<FileToBeProcessed>,
+    pub output_path: String, // Remove - Kept for backwards compat
+}
+
+impl std::fmt::Display for ExtractionJob {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
             "bin_path: {} p_type: {:?} what_do: {:?}",
-            self.bin_path, self.p_type, self.extraction_job_type
+            self.input_path, self.input_path_type, self.job_type
         )
     }
 }
@@ -161,14 +172,36 @@ pub struct AEAFJRegisterBehaviour {
     pub w2: Vec<i64>,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+// Created using the axffj command
+pub struct FunctionXrefDetails {
+    #[serde(rename = "type")]
+    pub type_field: String,
+    pub at: i64,
+    #[serde(rename = "ref")]
+    pub ref_field: i128,
+    pub name: String,
+}
+
 impl std::fmt::Display for AFLJFuncDetails {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "name: {}", self.name)
     }
 }
 
-impl ExtractJob {
-    pub fn new(bin_path: &str, output_path: &str, mode: &str) -> Result<ExtractJob> {
+impl From<(String, String, String)> for FileToBeProcessed {
+    fn from(orig: (String, String, String)) -> FileToBeProcessed {
+        FileToBeProcessed {
+            file_path: orig.0,
+            output_path: orig.1,
+            job_type_suffix: orig.2,
+        }
+    }
+}
+
+impl ExtractionJob {
+    pub fn new(input_path: &str, output_path: &str, mode: &str) -> Result<ExtractionJob, Error> {
         fn get_path_type(bin_path: &str) -> PathType {
             let fpath_md = fs::metadata(bin_path).unwrap();
             let p_type: PathType;
@@ -183,29 +216,59 @@ impl ExtractJob {
         }
 
         // This functionality is currently not being used!
-        fn get_whatdo_type(mode: &str) -> Result<ExtractionJobType, Error> {
+        fn extraction_job_matcher(mode: &str) -> Result<ExtractionJobType, Error> {
             match mode {
                 "info" => Ok(ExtractionJobType::ExInfo),
                 "bb" => Ok(ExtractionJobType::BasicBlocks),
                 "reg" => Ok(ExtractionJobType::RegisterBehaviour),
                 "cfg" => Ok(ExtractionJobType::CFG),
+                "xrefs" => Ok(ExtractionJobType::FunctionXrefs),
+                "cg" => Ok(ExtractionJobType::CallGraphs),
                 _ => bail!("Incorrect command type - got {}", mode),
             }
         }
 
-        let p_type = get_path_type(bin_path);
-        let what_do = get_whatdo_type(mode).unwrap();
-        Ok(ExtractJob {
-            bin_path: bin_path.to_string(),
-            p_type,
-            extraction_job_type: what_do,
-            output_path: output_path.to_string(),
-        })
+        let p_type = get_path_type(input_path);
+        let job_type = extraction_job_matcher(mode).unwrap();
+
+        if p_type == PathType::File {
+            let file = FileToBeProcessed {
+                file_path: input_path.to_string(),
+                output_path: output_path.to_string(),
+                job_type_suffix: (*mode).to_string(),
+            };
+            Ok(ExtractionJob {
+                input_path: input_path.to_string(),
+                input_path_type: p_type,
+                job_type,
+                files_to_be_processed: vec![file],
+                output_path: (*output_path).to_string(),
+            })
+        } else if p_type == PathType::Dir {
+            let files = ExtractionJob::get_file_paths_dir(input_path.to_string());
+            let files_with_output_path: Vec<(String, String, String)> = files
+                .into_iter()
+                .map(|f| (f, output_path.to_string(), mode.to_string()))
+                .collect();
+            let files_to_be_processed: Vec<FileToBeProcessed> = files_with_output_path
+                .into_iter()
+                .map(FileToBeProcessed::from)
+                .collect();
+            Ok(ExtractionJob {
+                input_path: input_path.to_string(),
+                input_path_type: p_type,
+                job_type,
+                files_to_be_processed,
+                output_path: output_path.to_string(),
+            })
+        } else {
+            bail!("Failed to create extraction job.")
+        }
     }
 
-    pub fn get_file_paths_dir(&self) -> Vec<String> {
+    fn get_file_paths_dir(input_path: String) -> Vec<String> {
         let mut str_vec: Vec<String> = Vec::new();
-        for file in WalkDir::new(&self.bin_path)
+        for file in WalkDir::new(input_path)
             .into_iter()
             .filter_map(|file| file.ok())
         {
@@ -219,90 +282,52 @@ impl ExtractJob {
         }
         str_vec
     }
+}
 
-    pub fn get_func_listings(&self, print: bool) -> Option<Value> {
-        let opts = R2PipeSpawnOptions {
-            exepath: "radare2".to_owned(),
-            ..Default::default()
-        };
-
-        let mut r2p = match R2Pipe::in_session() {
-            Some(_) => R2Pipe::open().expect("Unable to open R2Pipe"),
-            None => R2Pipe::spawn(&self.bin_path, Some(opts)).expect("Failed to spawn new R2Pipe"),
-        };
-
-        let json = r2p.cmdj("ij").expect("Command failed..");
-        if print {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&json).expect("Failed to convert json to pretty json")
-            );
-            None
-        } else {
-            Some(json)
-        }
-    }
-
-    pub fn get_bb_func_info(&self, s: &String) {
-        let mut r2p = ExtractJob::setup_r2_pipe(s, &false);
-        let mut json = r2p.cmd("afbj @@f").expect("Command failed..");
-
-        r2p.close();
-
-        // Fix JSON object
-        json = json.replace("}]\n", "}],\n");
-        json.insert(0, '[');
-        json.push(']');
-        // Replace the very last one to make sure its a valid JSON object
-        json = json.replace("}],\n]", "}]\n]");
-
-        let json_obj: Value =
-            serde_json::from_str(&json).expect("Unable to convert to JSON object!");
-        ExtractJob::write_to_json(s, &self.output_path, &json_obj)
-    }
-
-    pub fn get_register_behaviour(fp: &String, output_path: &String, debug: &bool) {
-        let mut r2p = ExtractJob::setup_r2_pipe(fp, debug);
-        let function_details = ExtractJob::get_function_details(&mut r2p);
-
+impl FileToBeProcessed {
+    pub fn extract_register_behaviour(&self, debug: &bool) {
+        info!("Starting register behaviour extraction");
+        let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
+        let function_details = self.get_function_details(&mut r2p);
         let mut register_behaviour_vec: HashMap<String, AEAFJRegisterBehaviour> = HashMap::new();
-
+        info!("Executing aeafj for each function");
         for function in function_details.iter() {
-            r2p.cmd(format!("s @ {}", &function.name).as_str());
-            let mut json = r2p.cmd("aeafj").expect("Command failed..");
+            r2p.cmd(format!("s @ {}", &function.name).as_str())
+                .expect("Command failed..");
+            let json = r2p.cmd("aeafj").expect("Command failed..");
             let json_obj: AEAFJRegisterBehaviour =
                 serde_json::from_str(&json).expect("Unable to convert to JSON object!");
             register_behaviour_vec.insert(function.name.clone(), json_obj);
         }
-
+        info!("All functions processed");
         r2p.close();
+        info!("r2p closed");
 
-        ExtractJob::write_to_json(fp, output_path, &json!(register_behaviour_vec))
+        info!("Writing extracted data to file");
+        self.write_to_json(&json!(register_behaviour_vec))
     }
 
-    fn get_function_details(r2p: &mut R2Pipe) -> Vec<AFLJFuncDetails> {
-        let mut json = r2p.cmd("aflj").expect("aflj command failed");
-        let json_obj: Vec<AFLJFuncDetails> =
-            serde_json::from_str(&json).expect("Unable to convert to JSON object!");
-
-        json_obj
-    }
-
-    pub fn get_func_cfgs(fp: &String, output_path: &String, debug: &bool) {
-        let fp_filename = Path::new(fp).file_name().expect("Unable to get filename");
-        let f_name = format!("{}/{}.json", output_path, fp_filename.to_string_lossy());
+    // TODO: Refactor this so it uses the AGFJ struct
+    pub fn extract_func_cfgs(&self, debug: &bool) {
+        let mut fp_filename = Path::new(&self.file_path)
+            .file_name()
+            .expect("Unable to get filename")
+            .to_string_lossy()
+            .to_string();
+        fp_filename = fp_filename + "_" + &self.job_type_suffix.clone();
+        let f_name = format!("{}/{}.json", &self.output_path, fp_filename);
         if !Path::new(&f_name).exists() {
             info!("{} not found. Continuing processing.", f_name);
-            // This creates HUGE JSON files for each file
+            // This creates HUGE JSON files for each files
             // Approximately 40x file size to JSON
-            let mut r2p = ExtractJob::setup_r2_pipe(fp, debug);
-            info!("Executing agfj @@f on {}", fp);
+            let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
+            info!("Executing agfj @@f on {}", self.file_path);
             let mut json = r2p.cmd("agfj @@f").expect("Command failed..");
 
-            info!("Closing r2p process for {}", fp);
+            info!("Closing r2p process for {}", self.file_path);
             r2p.close();
 
-            info!("Starting JSON fixup for {}", fp);
+            info!("Starting JSON fixup for {}", self.file_path);
             // Fix JSON object
             json = json.replace("[]\n", ",");
             json = json.replace("}]\n[{", "}],\n[{");
@@ -311,18 +336,17 @@ impl ExtractJob {
             json = json.replace("}]\n,]", "}]\n]");
             json = json.replace("\n,,[{", "\n,[{");
             json = json.replace("\n,,[{", "\n,[{");
-            info!("JSON fixup finished for {}", fp);
+            info!("JSON fixup finished for {}", self.file_path);
 
             if json != "[,]" {
                 #[allow(clippy::expect_fun_call)]
                 // Kept in to ensure that the JSON decode error message is printed alongside the filename
                 let json: Value = serde_json::from_str(&json).expect(&format!(
                     "Unable to parse json for {}: {}",
-                    fp_filename.to_string_lossy(),
-                    json
+                    fp_filename, json
                 ));
 
-                ExtractJob::write_to_json(fp, output_path, &json);
+                self.write_to_json(&json);
             } else {
                 error!(
                     "File empty after JSON fixup - Only contains [,] - {}",
@@ -334,12 +358,87 @@ impl ExtractJob {
         }
     }
 
-    fn write_to_json(fp: &String, output_path: &str, json_obj: &Value) {
-        let fp_filename = Path::new(fp)
+    pub fn extract_function_call_graphs(&self, debug: &bool) {
+        info!("Starting function call graph extraction");
+        let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
+        let json = r2p.cmd("agCj").expect("agCj command failed to execute");
+        let function_call_graphs: Vec<AGCJFunctionCallGraphs> =
+            serde_json::from_str(&json).expect("Unable to convert to JSON object!");
+        info!("Function call graph extracted.");
+        r2p.close();
+        info!("r2p closed");
+
+        info!("Writing extracted data to file");
+        self.write_to_json(&json!(function_call_graphs))
+    }
+
+    pub fn extract_function_xrefs(&self, debug: &bool) {
+        let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
+        let function_details = self.get_function_details(&mut r2p);
+        let mut function_xrefs: HashMap<String, Vec<FunctionXrefDetails>> = HashMap::new();
+        info!("Extracting xrefs for each function");
+        for function in function_details.iter() {
+            let ret = self.get_function_xref_details(function.offset, &mut r2p);
+            function_xrefs.insert(function.name.clone(), ret);
+        }
+        info!("All functions processed");
+        r2p.close();
+        info!("r2p closed");
+
+        info!("Writing extracted data to file");
+        self.write_to_json(&json!(function_xrefs))
+    }
+
+    // r2 commands to structs
+
+    fn get_function_details(&self, r2p: &mut R2Pipe) -> Vec<AFLJFuncDetails> {
+        info!("Getting function information from binary");
+        let json = r2p.cmd("aflj").expect("aflj command failed");
+        let json_obj: Vec<AFLJFuncDetails> =
+            serde_json::from_str(&json).expect("Unable to convert to JSON object!");
+
+        json_obj
+    }
+
+    fn get_function_xref_details(
+        &self,
+        function_addr: i64,
+        r2p: &mut R2Pipe,
+    ) -> Vec<FunctionXrefDetails> {
+        info!("Getting function xref details");
+        r2p.cmd(format!("s @ {}", function_addr).as_str())
+            .expect("failed to seek addr");
+        let json = r2p.cmd("axffj").expect("axffj command failed");
+        let mut json_obj: Vec<FunctionXrefDetails> =
+            serde_json::from_str(&json).expect("Unable to convert to JSON object!");
+        debug!("Replacing all CALL xrefs with actual function name");
+        // TODO: There is a minor bug in this where functions without any xrefs are included.
+        // Been left in as may be useful later down the line.
+        if !json_obj.is_empty() {
+            debug!("Replacing all CALL xrefs with actual function name");
+            for element in json_obj.iter_mut() {
+                if element.type_field == "CALL" {
+                    let function_name = r2p
+                        .cmd(format!("afi. @ {}", &element.ref_field).as_str())
+                        .expect("afi. command failed");
+                    element.name = function_name;
+                }
+            }
+        };
+        json_obj
+    }
+
+    // Helper Functions
+
+    fn write_to_json(&self, json_obj: &Value) {
+        let mut fp_filename = Path::new(self.file_path.as_str())
             .file_name()
             .expect("Unable to get filename")
-            .to_string_lossy();
-        let f_name = format!("{}/{}.json", output_path, fp_filename);
+            .to_string_lossy()
+            .to_string();
+
+        fp_filename = fp_filename + "_" + &self.job_type_suffix.clone();
+        let f_name = format!("{}/{}.json", self.output_path, fp_filename);
         serde_json::to_writer(
             &File::create(&f_name).expect("Unable to create file!"),
             &json_obj,
@@ -347,7 +446,7 @@ impl ExtractJob {
         .unwrap_or_else(|_| panic!("the world is ending: {}", f_name));
     }
 
-    fn setup_r2_pipe(s: &String, debug: &bool) -> R2Pipe {
+    fn setup_r2_pipe(&self, s: &String, debug: &bool) -> R2Pipe {
         // Setup R2 pipe with options and return it
         // Could be extended to include toggling of options
         // + more args?

@@ -5,6 +5,7 @@
 use clap::{Parser, Subcommand};
 #[macro_use]
 extern crate log;
+use clap::builder::TypedValueParser;
 use env_logger::Env;
 use indicatif::{ParallelProgressIterator, ProgressIterator};
 use mimalloc::MiMalloc;
@@ -14,6 +15,7 @@ use std::path::Path;
 use std::process::exit;
 use walkdir::WalkDir;
 
+pub mod agcj;
 pub mod agfj;
 pub mod bb;
 #[cfg(feature = "goblin")]
@@ -24,19 +26,22 @@ pub mod extract;
 pub mod files;
 #[cfg(feature = "inference")]
 pub mod inference;
+pub mod networkx;
 pub mod normalisation;
 pub mod processors;
 pub mod sample;
 pub mod tokeniser;
 pub mod utils;
+pub mod errors;
 
 use crate::dedup::EsilFuncStringCorpus;
 use crate::extract::ExtractionJobType;
+use crate::files::AGCJFile;
 use crate::tokeniser::{train_byte_bpe_tokeniser, TokeniserType};
 use bb::{FeatureType, InstructionMode};
 #[cfg(feature = "goblin")]
 use binnfo::goblin_info;
-use extract::{ExtractJob, PathType};
+use extract::{ExtractionJob, PathType};
 use files::{AGFJFile, FormatMode};
 #[cfg(feature = "inference")]
 use inference::inference;
@@ -47,6 +52,13 @@ use utils::get_json_paths_from_dir;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
+
+#[derive(PartialEq)]
+enum DataType {
+    Cfg,
+    Cg,
+    Invalid,
+}
 
 /// Turn binaries into machine learning ready formats
 #[derive(Parser)]
@@ -76,7 +88,8 @@ enum Commands {
         output_dir: String,
 
         /// The extraction mode - Currently only supports 'cfg'
-        #[arg(short, long, value_name = "EXTRACT_MODE")]
+        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["info", "bb", "reg", "cfg", "xrefs","cg"])
+        .map(|s| s.parse::<String>().unwrap()),)]
         mode: String,
 
         /// The number of threads Rayon can use when parallel processing
@@ -92,9 +105,10 @@ enum Commands {
         #[arg(short, long, value_name = "FILENAME")]
         path: String,
 
-        /// The min number of basic blocks. Any CFG's below this number will be skipped
-        #[arg(long, default_value = "5")]
-        min_blocks: u16,
+        /// The target data type
+        #[arg(short, long, value_name = "DATA_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["cfg", "cg"])
+        .map(|s| s.parse::<String>().unwrap()),)]
+        data_type: String,
 
         /// The output path for the processed Networkx graphs (1 per function)
         #[arg(short, long, value_name = "OUTPUT")]
@@ -102,7 +116,11 @@ enum Commands {
 
         /// The type of features to generate per basic block (node)
         #[arg(short, long, value_name = "FEATURE_TYPE")]
-        feature_type: String,
+        feature_type: Option<String>,
+
+        /// The min number of basic blocks. Any CFG's below this number will be skipped
+        #[arg(long, default_value = "5")]
+        min_blocks: Option<u16>,
 
         /// The filepath to a HuggingFace tokeniser.json
         #[cfg(feature = "inference")]
@@ -221,8 +239,8 @@ enum Commands {
 
 fn main() {
     let env = Env::default()
-        .filter_or("MY_LOG_LEVEL", "trace")
-        .write_style_or("MY_LOG_STYLE", "always");
+        .filter_or("LOG_LEVEL", "warning")
+        .write_style_or("LOG_STYLE", "always");
 
     env_logger::init_from_env(env);
     let cli = Cli::parse();
@@ -242,9 +260,9 @@ fn main() {
             debug,
         } => {
             info!("Creating extraction job");
-            let job = ExtractJob::new(fpath, output_dir, mode).unwrap();
+            let job = ExtractionJob::new(fpath, output_dir, mode).unwrap();
 
-            if job.p_type == PathType::Dir {
+            if job.input_path_type == PathType::Dir {
                 info!("Directory found - will parallel process");
 
                 info!("Creating threadpool with {} threads ", num_threads);
@@ -253,40 +271,60 @@ fn main() {
                     .build_global()
                     .unwrap();
 
-                info!("Collection file paths from directory");
-                let str_vec: Vec<String> = job.get_file_paths_dir();
-
-                if job.extraction_job_type == ExtractionJobType::CFG {
+                if job.job_type == ExtractionJobType::CFG {
                     info!("Extraction Job Type: CFG");
                     info!("Starting Parallel generation.");
                     #[allow(clippy::redundant_closure)]
-                    str_vec
+                    job.files_to_be_processed
                         .par_iter()
                         .progress()
-                        .for_each(|path| ExtractJob::get_func_cfgs(path, output_dir, debug));
-                } else if job.extraction_job_type == ExtractionJobType::RegisterBehaviour {
+                        .for_each(|path| path.extract_func_cfgs(debug));
+                } else if job.job_type == ExtractionJobType::RegisterBehaviour {
                     info!("Extraction Job Type: Register Behaviour");
                     info!("Starting Parallel generation.");
                     #[allow(clippy::redundant_closure)]
-                    str_vec.par_iter().progress().for_each(|path| {
-                        ExtractJob::get_register_behaviour(path, output_dir, debug)
-                    });
-                }
-                info!("Extraction complete. Processed {} files.", str_vec.len())
-            } else if job.p_type == PathType::File {
-                info!("Single file found");
-                if job.extraction_job_type == ExtractionJobType::CFG {
-                    info!("Extraction Job Type: CFG");
-                    ExtractJob::get_func_cfgs(fpath, output_dir, debug);
-                } else if job.extraction_job_type == ExtractionJobType::RegisterBehaviour {
+                    job.files_to_be_processed
+                        .par_iter()
+                        .progress()
+                        .for_each(|path| path.extract_register_behaviour(debug));
+                } else if job.job_type == ExtractionJobType::FunctionXrefs {
                     info!("Extraction Job Type: Register Behaviour");
-                    ExtractJob::get_register_behaviour(fpath, output_dir, debug)
+                    info!("Starting Parallel generation.");
+                    #[allow(clippy::redundant_closure)]
+                    job.files_to_be_processed
+                        .par_iter()
+                        .progress()
+                        .for_each(|path| path.extract_function_xrefs(debug));
+                } else if job.job_type == ExtractionJobType::CallGraphs {
+                    info!("Extraction Job Type: Register Behaviour");
+                    info!("Starting Parallel generation.");
+                    #[allow(clippy::redundant_closure)]
+                    job.files_to_be_processed
+                        .par_iter()
+                        .progress()
+                        .for_each(|path| path.extract_function_call_graphs(debug));
+                }
+            } else if job.input_path_type == PathType::File {
+                info!("Single file found");
+                if job.job_type == ExtractionJobType::CFG {
+                    info!("Extraction Job Type: CFG");
+                    job.files_to_be_processed[0].extract_func_cfgs(debug);
+                } else if job.job_type == ExtractionJobType::RegisterBehaviour {
+                    info!("Extraction Job Type: Register Behaviour");
+                    job.files_to_be_processed[0].extract_register_behaviour(debug)
+                } else if job.job_type == ExtractionJobType::FunctionXrefs {
+                    info!("Extraction Job type: Function Xrefs");
+                    job.files_to_be_processed[0].extract_function_xrefs(debug)
+                } else if job.job_type == ExtractionJobType::CallGraphs {
+                    info!("Extraction Job type: Function Call Graphs");
+                    job.files_to_be_processed[0].extract_function_call_graphs(debug)
                 }
                 info!("Extraction complete for {}", fpath)
             }
         }
         Commands::Graph {
             path,
+            data_type: graph_type,
             min_blocks,
             output_path,
             feature_type,
@@ -299,64 +337,97 @@ fn main() {
             #[cfg(feature = "inference")]
             embed_dim,
         } => {
-            let feature_vec_type = match feature_type.as_str() {
-                "gemini" => FeatureType::Gemini,
-                "discovre" => FeatureType::DiscovRE,
-                "dgis" => FeatureType::DGIS,
-                "encode" => FeatureType::Encoded,
-                #[cfg(feature = "inference")]
-                "embed" => FeatureType::ModelEmbedded,
-                _ => FeatureType::Invalid,
+            let graph_type = match graph_type.as_str() {
+                "cfg" => DataType::Cfg,
+                "cg" => DataType::Cg,
+                _ => DataType::Invalid,
             };
 
-            if feature_vec_type == FeatureType::Invalid {
-                error!("Invalid feature type: {}", feature_type);
-                exit(1)
-            } else if feature_vec_type == FeatureType::Gemini
-                || feature_vec_type == FeatureType::DiscovRE
-                || feature_vec_type == FeatureType::DGIS
-            {
-                info!(
-                    "Creating graphs with {:?} feature vectors.",
-                    feature_vec_type
-                );
+            if graph_type == DataType::Cfg {
+                info!("Chosen Graph Type: Control Flow Graph");
+                if feature_type.is_some() {
+                    let feature_vec_type = match feature_type.as_ref().unwrap().as_str() {
+                        "gemini" => FeatureType::Gemini,
+                        "discovre" => FeatureType::DiscovRE,
+                        "dgis" => FeatureType::DGIS,
+                        "encode" => FeatureType::Encoded,
+                        #[cfg(feature = "inference")]
+                        "embed" => FeatureType::ModelEmbedded,
+                        _ => FeatureType::Invalid,
+                    };
 
-                if Path::new(path).is_file() {
-                    info!("Single file found");
-                    agfj_graph_statistical_features(path, min_blocks, output_path, feature_vec_type)
-                } else {
-                    info!("Multiple files found. Will parallel process.");
-                    for file in WalkDir::new(path).into_iter().filter_map(|file| file.ok()) {
-                        if file.path().to_string_lossy().ends_with(".json") {
+                    if feature_vec_type == FeatureType::Invalid {
+                        error!("Invalid feature type: {}", feature_type.as_ref().unwrap());
+                        exit(1)
+                    } else if feature_vec_type == FeatureType::Gemini
+                        || feature_vec_type == FeatureType::DiscovRE
+                        || feature_vec_type == FeatureType::DGIS
+                    {
+                        info!(
+                            "Creating graphs with {:?} feature vectors.",
+                            feature_vec_type
+                        );
+
+                        if Path::new(path).is_file() {
+                            info!("Single file found");
                             agfj_graph_statistical_features(
-                                file.path().to_str().unwrap(),
-                                min_blocks,
+                                path,
+                                &min_blocks.unwrap(),
                                 output_path,
                                 feature_vec_type,
                             )
+                        } else {
+                            info!("Multiple files found. Will parallel process.");
+                            for file in WalkDir::new(path).into_iter().filter_map(|file| file.ok())
+                            {
+                                if file.path().to_string_lossy().ends_with(".json") {
+                                    agfj_graph_statistical_features(
+                                        file.path().to_str().unwrap(),
+                                        &min_blocks.unwrap(),
+                                        output_path,
+                                        feature_vec_type,
+                                    )
+                                }
+                            }
+                        }
+                    } else if feature_vec_type == FeatureType::Encoded {
+                        todo!("Need to implement Encoded FeatureTypes!")
+                    } else if cfg!(inference) {
+                        #[cfg(feature = "inference")]
+                        if feature_vec_type == FeatureType::ModelEmbedded {
+                            if tokeniser_fp.is_none() || model_fp.is_none() {
+                                println!("Both Tokeniser and Model filespaths are needed");
+                                exit(100)
+                            } else {
+                                agfj_graph_embedded_feats(
+                                    path,
+                                    &min_blocks.unwrap(),
+                                    output_path,
+                                    feature_vec_type,
+                                    tokeniser_fp,
+                                    model_fp,
+                                    mean_pool,
+                                    embed_dim,
+                                );
+                            }
                         }
                     }
+                } else {
+                    error!("--feature-type/-f is required for creating CFG's")
                 }
-            } else if feature_vec_type == FeatureType::Encoded {
-                todo!("Need to implement Encoded FeatureTypes!")
-            } else if cfg!(inference) {
-                #[cfg(feature = "inference")]
-                if feature_vec_type == FeatureType::ModelEmbedded {
-                    if tokeniser_fp.is_none() || model_fp.is_none() {
-                        println!("Both Tokeniser and Model filespaths are needed");
-                        exit(100)
-                    } else {
-                        agfj_graph_embedded_feats(
-                            path,
-                            min_blocks,
-                            output_path,
-                            feature_vec_type,
-                            tokeniser_fp,
-                            model_fp,
-                            mean_pool,
-                            embed_dim,
-                        );
-                    }
+            } else if graph_type == DataType::Cg {
+                info!("Chosen Graph Type: Call Graph");
+                let mut file = AGCJFile {
+                    filename: path.to_owned(),
+                    function_call_graphs: None,
+                    output_path: output_path.to_owned(),
+                };
+                file.load_and_deserialize()
+                    .expect("Unable to load and desearilize JSON");
+
+                for fcg in file.function_call_graphs.as_ref().unwrap() {
+                    fcg.to_petgraph(&file.output_path, &file.filename);
+                    fcg.one_hop_to_petgraph(&file);
                 }
             }
         }
