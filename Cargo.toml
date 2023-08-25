@@ -25,6 +25,7 @@ serde-aux = "4.2.0"
 log = "0.4.19"
 env_logger = "0.10.0"
 thiserror = "1.0.47"
+enum-as-inner = "0.6.0"
 [dependencies.petgraph]
 version = "0.6.2"
 features = ["serde-1"]

@@ -1,14 +1,12 @@
 use crate::bb::{ACFJBlock, FeatureType};
 #[cfg(feature = "inference")]
 use crate::inference::InferenceJob;
+use crate::networkx::{DGISNode, GeminiNode, NetworkxDiGraph, NodeType};
 use crate::utils::get_save_file_path;
 use petgraph::prelude::Graph;
 use petgraph::visit::Dfs;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use serde_json::json;
-use serde_json::{Map, Number, Value};
-use std::collections::HashMap;
 use std::fs::{create_dir_all, File};
 use std::path::Path;
 #[cfg(feature = "inference")]
@@ -217,7 +215,7 @@ impl AGFJFunc {
         feature_type: FeatureType,
         inference_job: &Option<Arc<InferenceJob>>,
     ) {
-        println!("Processing {:?}", self.name);
+        info!("Processing {:?}", self.name);
         let full_output_path = get_save_file_path(path, output_path);
         self.check_or_create_dir(&full_output_path);
 
@@ -249,7 +247,7 @@ impl AGFJFunc {
                         _ => unreachable!("This should be unreachable"),
                     }
                 } else {
-                    println!("Unable to generated embedded CFG as inference job is none!");
+                    info!("Unable to generated embedded CFG as inference job is none!");
                     exit(1)
                 }
             }
@@ -258,7 +256,7 @@ impl AGFJFunc {
                 let mut graph = Graph::<std::string::String, u32>::from_edges(&edge_list);
 
                 Self::str_to_hex_node_idxs(&mut graph, &mut addr_idxs);
-                println!("{:?}", feature_type);
+                info!("Feature Type: {:?}", feature_type);
                 let json_map: Option<Map<String, Value>> = if inference_job.is_some()
                     && feature_type == FeatureType::ModelEmbedded
                 {
@@ -288,7 +286,7 @@ impl AGFJFunc {
                 )
                 .expect("Unable to write JSON");
             } else {
-                println!("Function {} has no edges. Skipping...", self.name)
+                info!("Function {} has no edges. Skipping...", self.name)
             }
         }
     }
@@ -323,7 +321,6 @@ impl AGFJFunc {
                 let mut addr_idxs = Vec::<i64>::new();
                 let mut edge_list = Vec::<(u32, u32, u32)>::new();
                 let mut feature_vecs = Vec::<_>::new();
-                let feature_vec_of_vecs = Vec::<_>::new();
 
                 let min_offset: u64 = self.offset;
                 let max_offset: u64 = self.offset + self.size.unwrap_or(0);
@@ -336,173 +333,45 @@ impl AGFJFunc {
                     let mut graph = Graph::<std::string::String, u32>::from_edges(&edge_list);
 
                     Self::str_to_hex_node_idxs(&mut graph, &mut addr_idxs);
-                    let json_map: Option<serde_json::Map<std::string::String, serde_json::Value>> =
-                        if feature_type == FeatureType::Encoded {
-                            Self::petgraph_to_nx(
-                                &self.name,
-                                &graph,
-                                None,
-                                Some(feature_vec_of_vecs),
-                                None,
-                            )
-                        } else {
-                            Self::petgraph_to_nx(
-                                &self.name,
-                                &graph,
-                                Some(feature_vecs),
-                                None,
-                                Some(feature_type),
-                            )
-                        };
-                    if json_map.is_some() {
+
+                    let networkx_graph: NetworkxDiGraph<NodeType> =
+                        NetworkxDiGraph::<NodeType>::from((&graph, &feature_vecs, feature_type));
+
+                    // Unpack the NodeTypes to the inner Types
+                    if feature_type == FeatureType::Gemini {
+                        let networkx_graph_inners: NetworkxDiGraph<GeminiNode> =
+                            NetworkxDiGraph::<GeminiNode>::from(networkx_graph);
+
+                        info!("Saving to JSON..");
                         serde_json::to_writer(
                             &File::create(fname_string).expect("Failed to create writer"),
-                            &json_map,
+                            &networkx_graph_inners,
+                        )
+                        .expect("Unable to write JSON");
+                    } else if feature_type == FeatureType::DGIS {
+                        let networkx_graph_inners: NetworkxDiGraph<DGISNode> =
+                            NetworkxDiGraph::<DGISNode>::from(networkx_graph);
+                        info!("Saving to JSON..");
+                        serde_json::to_writer(
+                            &File::create(fname_string).expect("Failed to create writer"),
+                            &networkx_graph_inners,
                         )
                         .expect("Unable to write JSON");
                     }
                 } else {
-                    println!("Function {} has no edges. Skipping...", self.name)
+                    info!("Function {} has no edges. Skipping...", self.name)
                 }
             } else {
-                println!(
-                    "Function {} has already been processed. Skipping...",
+                info!(
+                    "Function {} has less than the minimum number of blocks. Skipping..",
                     self.name
-                )
-            }
-        }
-    }
-
-    // This function transforms a petgraph graph
-    // to a valid JSON object that can be loaded in Pythons
-    // Networkx
-    fn petgraph_to_nx(
-        func_name: &String,
-        graph: &Graph<String, u32>,
-        feature_vecs: Option<Vec<Vec<f64>>>,
-        feature_vec_of_vecs: Option<Vec<Vec<Vec<f64>>>>,
-        feature_type: Option<FeatureType>,
-    ) -> Option<serde_json::Map<std::string::String, serde_json::Value>> {
-        // GRAPH TRANSFORMATION TO NETWORKX
-        let mut json_graph = serde_json::to_value(graph).unwrap();
-
-        // Add missing keys into JSON Object
-        json_graph["directed"] = json!("True");
-        json_graph["multigraph"] = json!(false);
-
-        // Transform JSON Graph into a JSON Map to enable removal of keys we don't want anymore
-        let mut json_map: Map<String, Value> =
-            serde_json::from_value(json_graph).expect("failed to read file");
-        json_map.remove("node_holes");
-        json_map.remove("edge_property");
-
-        // Fix the edge format
-        let json_edges = json_map.get("edges").unwrap();
-        let mut parsed_edges = serde_json::from_value::<EdgesList>(json_edges.to_owned()).unwrap();
-        parsed_edges.edge_set.sort_by(|a, b| a.src.cmp(&b.src));
-
-        let mut all_edge_list: Vec<Vec<HashMap<std::string::String, u16>>> = Vec::new();
-        for _n in 0..graph.node_count() {
-            let element: Vec<HashMap<std::string::String, u16>> = Vec::new();
-            all_edge_list.push(element);
-        }
-
-        for (_i, edge_set) in parsed_edges.edge_set.iter().enumerate() {
-            // Remove self loops
-            if edge_set.dest != edge_set.src {
-                all_edge_list[edge_set.src as usize].push(HashMap::new());
-                let size = all_edge_list[edge_set.src as usize].len() - 1;
-                all_edge_list[edge_set.src as usize][size].insert("id".to_string(), edge_set.dest);
-                all_edge_list[edge_set.src as usize][size]
-                    .insert("weight".to_string(), edge_set.wt);
-            }
-        }
-
-        json_map.insert(
-            "adjacency".to_string(),
-            serde_json::to_value(all_edge_list).unwrap(),
-        );
-        json_map.remove("edges");
-
-        // Fix Node Format
-        let mut all_node_list: Vec<HashMap<std::string::String, Value>> = Vec::new();
-        let n_nodes = graph.node_count();
-        let mut equal_nodes_to_feature_vecs = true;
-
-        if let Some(feature_vecs) = feature_vecs {
-            let n_feature_vecs = feature_vecs.len();
-
-            if n_nodes != n_feature_vecs {
-                println!(
-                    "{}: Number of Nodes to Number Feature Vecs is not equal!",
-                    func_name
                 );
-                equal_nodes_to_feature_vecs = false;
-            } else {
-                // PROBLEM AREA!
-                let feature_map: Option<Vec<&str>> =
-                    feature_type.map(|feature_type| feature_type.get_feature_map());
-
-                #[allow(clippy::needless_range_loop)]
-                for n in 0..n_nodes {
-                    let mut node_ele: HashMap<std::string::String, Value> = HashMap::new();
-                    node_ele.insert("id".to_string(), Value::Number(Number::from(n)));
-
-                    // Generate vectors as normal!
-                    if feature_type.is_some() {
-                        for (i, val) in feature_map.as_ref().unwrap().iter().enumerate() {
-                            node_ele.insert(val.to_string(), Value::from(feature_vecs[n][i]));
-                        }
-                        all_node_list.push(node_ele);
-                    } else {
-                        node_ele
-                            .insert("features".to_string(), Value::from(feature_vecs[n].clone()));
-                        all_node_list.push(node_ele);
-                    }
-                }
-            }
-        } else if let Some(feature_vecs_of_vecs) = feature_vec_of_vecs {
-            let n_feature_vecs = feature_vecs_of_vecs.len();
-            assert_eq!(
-                n_nodes, n_feature_vecs,
-                "\nFailed for function: {} had {} nodes and {} feature vectors",
-                func_name, n_nodes, n_feature_vecs
-            );
-            #[allow(clippy::needless_range_loop)]
-            for n in 0..n_nodes {
-                let mut node_ele: HashMap<std::string::String, Value> = HashMap::new();
-                node_ele.insert("id".to_string(), Value::Number(Number::from(n)));
-
-                node_ele.insert(
-                    "features".to_string(),
-                    Value::from(feature_vecs_of_vecs[n].clone()),
-                );
-                all_node_list.push(node_ele);
             }
         } else {
-            for n in 0..n_nodes {
-                let mut node_ele: HashMap<std::string::String, Value> = HashMap::new();
-                node_ele.insert("id".to_string(), Value::Number(Number::from(n)));
-                all_node_list.push(node_ele);
-            }
-        }
-
-        if equal_nodes_to_feature_vecs {
-            json_map.remove("nodes");
-            json_map.insert(
-                "nodes".to_string(),
-                serde_json::to_value(all_node_list).unwrap(),
-            );
-
-            // Adding missing expected key 'graph'
-            let empty_vec = Vec::<i8>::new();
-            json_map.insert(
-                "graph".to_string(),
-                serde_json::to_value(empty_vec).unwrap(),
-            );
-            Some(json_map)
-        } else {
-            None
+            info!(
+                "Function {} has already been processed. Skipping...",
+                self.name
+            )
         }
     }
 
