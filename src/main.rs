@@ -149,9 +149,10 @@ enum Commands {
         #[arg(short, long, value_name = "FILENAME")]
         path: String,
 
-        /// The type of data to be generated - Currently supports ['esil', 'disasm']
-        #[arg(short, long, value_name = "DATA_TYPE")]
-        data_type: String,
+        /// The type of data to be generated
+        #[arg(short, long, value_name = "DATA_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["esil", "disasm"])
+        .map(|s| s.parse::<String>().unwrap()),)]
+        instruction_type: String,
 
         /// The min number of basic blocks. Any CFG's below this number will be skipped
         #[arg(long, default_value = "5")]
@@ -162,8 +163,9 @@ enum Commands {
         output_path: String,
 
         /// The format of the output data
-        #[arg(short, long, value_name = "FORMAT")]
-        format: String,
+        #[arg(short, long, value_name = "FORMAT", value_parser = clap::builder::PossibleValuesParser::new(["single", "funcstring"])
+        .map(|s| s.parse::<String>().unwrap()))]
+        output_format: String,
 
         /// Toggle to determine if blocks are sampled in a random walk nature
         #[arg(long, default_value = "false")]
@@ -434,25 +436,25 @@ fn main() {
         }
         Commands::Nlp {
             path,
-            data_type,
+            instruction_type,
             min_blocks,
             output_path,
-            format,
+            output_format,
             random_walk,
             reg_norm,
         } => {
-            let instruction_type = match data_type.as_str() {
+            let instruction_type = match instruction_type.as_str() {
                 "esil" => InstructionMode::ESIL,
                 "disasm" => InstructionMode::Disasm,
                 _ => InstructionMode::Invalid,
             };
 
             if instruction_type == InstructionMode::Invalid {
-                error!("Invalid instruction mode: {:?}", data_type);
+                error!("Invalid instruction mode: {:?}", instruction_type);
                 exit(1)
             }
 
-            let format_type = match format.as_str() {
+            let format_type = match output_format.as_str() {
                 "single" => FormatMode::SingleInstruction,
                 "funcstring" => FormatMode::FuncAsString,
                 _ => FormatMode::Invalid,
