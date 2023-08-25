@@ -415,6 +415,7 @@ mod tests {
             min_blocks: 5,
             feature_type: Some(crate::bb::FeatureType::Gemini),
             architecture: None,
+            reg_norm: false,
         };
 
         assert!(file.functions.is_none());
@@ -437,6 +438,7 @@ mod tests {
             min_blocks: 5,
             feature_type: Some(crate::bb::FeatureType::Gemini),
             architecture: None,
+            reg_norm: false,
         };
 
         let ret = file.load_and_deserialize();
@@ -515,6 +517,7 @@ mod tests {
             min_blocks: 5,
             feature_type: Some(crate::bb::FeatureType::Gemini),
             architecture: None,
+            reg_norm: false,
         };
 
         file.load_and_deserialize().unwrap();
