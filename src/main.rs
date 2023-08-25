@@ -159,8 +159,8 @@ enum Commands {
         min_blocks: u16,
 
         /// The output path for the processed data
-        #[arg(short, long, value_name = "OUTPUT")]
-        output_path: String,
+        #[arg(short, long, value_name = "OUTPUT_PATH")]
+        data_out_path: String,
 
         /// The format of the output data
         #[arg(short, long, value_name = "FORMAT", value_parser = clap::builder::PossibleValuesParser::new(["single", "funcstring"])
@@ -438,7 +438,7 @@ fn main() {
             path,
             instruction_type,
             min_blocks,
-            output_path,
+            data_out_path,
             output_format,
             random_walk,
             reg_norm,
@@ -470,7 +470,7 @@ fn main() {
                 let file = AGFJFile {
                     functions: None,
                     filename: path.to_owned(),
-                    output_path: output_path.to_string(),
+                    output_path: data_out_path.to_string(),
                     min_blocks: *min_blocks,
                     feature_type: None,
                     architecture: None,
@@ -489,7 +489,7 @@ fn main() {
                     let file = AGFJFile {
                         functions: None,
                         filename: file.to_string(),
-                        output_path: output_path.to_string(),
+                        output_path: data_out_path.to_string(),
                         min_blocks: *min_blocks,
                         feature_type: None,
                         architecture: None,

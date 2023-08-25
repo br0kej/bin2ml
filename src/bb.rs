@@ -435,6 +435,7 @@ impl ACFJBlock {
         for op in &self.ops {
             if op.esil.is_some() && op.esil.as_ref().unwrap().len() > 1 {
                 let esil_single = &op.esil.as_ref().unwrap();
+                debug!("ESIL Single (prior to norm): {:?}", esil_single);
                 let normd = normalise_esil_simple(esil_single, &op.r#type, reg_norm);
                 esil_ins.push((*normd).to_string())
             }

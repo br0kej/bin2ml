@@ -141,10 +141,12 @@ pub fn normalise_esil_simple(input: &str, op_type: &str, reg_norm: bool) -> Stri
         let re = Regex::new(r"([0-9]{4,}?,)").unwrap();
         re.replace_all(&normalised, "DATA,")
     };
-
+    debug!("Reg Norm: {:?}", reg_norm);
+    debug!("Pre-Reg Norm: {:?}", normalised);
     if reg_norm {
         // Split the esil into it's parts
-        let split: Vec<&str> = normalised.split(' ').filter(|e| !e.is_empty()).collect();
+        let split: Vec<&str> = normalised.split(',').filter(|e| !e.is_empty()).collect();
+        debug!("Reg Norm - Post Split: {:?}", split);
         // Match parts of the split instruction with known regs and apply mask
         let split: Vec<String> = split
             .iter()
@@ -158,6 +160,7 @@ pub fn normalise_esil_simple(input: &str, op_type: &str, reg_norm: bool) -> Stri
                 }
             })
             .collect();
+        debug!("Reg Norm - Post Applying Reg Norm: {:?}", split);
         split.join(" ")
     } else {
         normalised.to_string()
@@ -199,9 +202,9 @@ mod tests {
 
     #[test]
     fn test_esil_riscv_reg_masking() {
-        assert_eq!(normalise_esil("a0 4 + [4] a3 = 0 a4 = a0 a5 = 0 ra == $z ! ?{ MEM pc := }  a0 0 + [4] t1 = 0 a4 = 0 a0 = 0 0 <= ?{ MEM pc := }", "not_call", true),
+        assert_eq!(normalise_esil("a0,4,+,[4],a3,=,0,a4,=,a0,a5,=,0,ra,==,$z,,!,?{,MEM,pc,:=,},a0,0,+,[4],t1,=,0,a4,=,0,a0,=,0,0,<=,?{,MEM,pc,:=,}", "not_call", true),
                    "reg32 4 + [4] reg32 = 0 reg32 = reg32 reg32 = 0 ra == $z ! ?{ MEM pc := } reg32 0 + [4] reg32 = 0 reg32 = 0 reg32 = 0 0 <= ?{ MEM pc := }");
-        assert_eq!(normalise_esil("a0 0 == $z ?{ MEM pc := }  sp -16 + sp = s0 sp 8 + =[4] a0 s0 = a0 8 + [4] a0 = ra sp 12 + =[4] a0 0 == $z ?{ MEM pc := } s0 12", "not_call", true),
+        assert_eq!(normalise_esil("a0,0,==,$z,?{,MEM,pc,:=,},sp,-16,+,sp,=,s0,sp,8,+,=[4],a0,s0,=,a0,8,+,[4],a0,=,ra,sp,12,+,=[4],a0,0,==,$z,?{,MEM,pc,:=,},s0,12", "not_call", true),
                    "reg32 0 == $z ?{ MEM pc := } sp -16 + sp = reg32 sp 8 + =[4] reg32 reg32 = reg32 8 + [4] reg32 = ra sp 12 + =[4] reg32 0 == $z ?{ MEM pc := } reg32 12");
     }
 
@@ -265,16 +268,16 @@ mod tests {
 
     #[test]
     fn test_reg_norm_arm32() {
-        assert_eq!(normalise_esil("r4 r5 = DATA pc := IMM fp - IMM & [4] IMM & r0 = r0 sb | IMM & r0 = 0 r8 = 0 1 r0 & == $z zf := 31 $s nf := zf ! ?{ DATA pc := } ip 1 + [1] r0 = ip 1 + ip = 0 r0 == $z zf := 31 $s nf := 32 $b ! cf := 31 $o vf := zf ?{ DATA pc := } IMM fp - IMM & [4] IMM & r0 = r0 0 + [1] r0 = -1 0 ^ IMM & r1 = 0 r0 == $z zf := 31 $s nf := 32 $b ! cf := 31 $o vf := r5 r4 = zf ?{ DATA pc := } DATA pc :=", "no_call", true),
-                   "reg32 reg32 = DATA pc := IMM fp - IMM & [4] IMM & reg32 = reg32 sb | IMM & reg32 = 0 reg32 = 0 1 reg32 & == $z zf := 31 $s nf := zf ! ?{ DATA pc := } ip 1 + [1] reg32 = ip 1 + ip = 0 reg32 == $z zf := 31 $s nf := 32 $b ! cf := 31 $o vf := zf ?{ DATA pc := } IMM fp - IMM & [4] IMM & reg32 = reg32 0 + [1] reg32 = -1 0 ^ IMM & reg32 = 0 reg32 == $z zf := 31 $s nf := 32 $b ! cf := 31 $o vf := reg32 reg32 = zf ?{ DATA pc := } DATA pc :=");
-        assert_eq!(normalise_esil("924 r4 + IMM & [4] IMM & r8 = 0 r4 + IMM & [4] IMM & r5 = r4 r0 = pc lr := FUNC pc := 0 r0 == $z zf := 31 $s nf := 32 $b ! cf := 31 $o vf := zf ?{ DATA pc := } sb r0 = 28 fp", "not_call", true),
-                   "924 reg32 + IMM & [4] IMM & reg32 = 0 reg32 + IMM & [4] IMM & reg32 = reg32 reg32 = pc lr := FUNC pc := 0 reg32 == $z zf := 31 $s nf := 32 $b ! cf := 31 $o vf := zf ?{ DATA pc := } sb reg32 = 28 fp")
+        assert_eq!(normalise_esil("r4,r5,=,DATA,pc,:=,IMM,fp,-,IMM,&,[4],IMM,&,r0,=,r0,sb,|", "no_call", true),
+                   "reg32 reg32 = DATA pc := IMM fp - IMM & [4] IMM & reg32 = reg32 sb |");
+        assert_eq!(normalise_esil("924,r4,+,IMM,&,[4],IMM,&,r8,=,0,r4,+,IMM,&,[4],IMM,&", "not_call", true),
+                   "924 reg32 + IMM & [4] IMM & reg32 = 0 reg32 + IMM & [4] IMM &")
     }
 
     #[test]
     fn test_reg_norm_arm64() {
-        assert_eq!(normalise_esil("0 MEM w8 & == 31 $s nf := $z zf := 0 cf := 0 vf := xzr 16 sp + DUP tmp = =[8] DATA pc := IMM x22 - x22 = 40 sp + DUP tmp = [8] x8 = x20 x1 = IMM w8 & w0 = pc lr := x19 pc := IMM w0 -1 *", "not_call", true),
-                   "0 MEM reg32 & == 31 $s nf := $z zf := 0 cf := 0 vf := xzr 16 sp + DUP tmp = =[8] DATA pc := IMM reg64 - reg64 = 40 sp + DUP tmp = [8] reg64 = reg64 reg64 = IMM reg32 & reg32 = pc lr := reg64 pc := IMM reg32 -1 *")
+        assert_eq!(normalise_esil("0,MEM,w8,&,==,31,$s,nf,:=,$z,zf,:=,0,cf,:=,0,vf,:=,xzr,16,sp,+,DUP,tmp,=,=[8],DATA", "not_call", true),
+                   "0 MEM reg32 & == 31 $s nf := $z zf := 0 cf := 0 vf := xzr 16 sp + DUP tmp = =[8] DATA")
     }
 
     // x86 Disasm Normalisation Tests
@@ -283,6 +286,10 @@ mod tests {
         assert_eq!(
             normalise_disasm("add byte [rax + 0x3d], bh", false),
             "add byte [rax + IMM] bh"
+        );
+        assert_eq!(
+            normalise_disasm("add byte [rax + 0x3d], bh", true),
+            "add byte [reg64 + IMM] bh"
         );
     }
 
