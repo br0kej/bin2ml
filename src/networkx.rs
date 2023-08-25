@@ -25,7 +25,7 @@ pub struct Adjacency {
 pub enum NodeType {
     Gemini(GeminiNode),
     Dgis(DGISNode),
-    Discovere(DiscovreNode)
+    Discovere(DiscovreNode),
 }
 
 #[derive(Default, Copy, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -189,11 +189,15 @@ impl From<(&Graph<String, u32>, &Vec<Vec<f64>>, FeatureType)> for NetworkxDiGrap
                     Some(NodeType::Gemini(GeminiNode::from((i as i64, node_vector))))
                 }
                 FeatureType::DGIS => Some(NodeType::Dgis(DGISNode::from((i as i64, node_vector)))),
-                FeatureType::DiscovRE => Some(NodeType::Discovere(DiscovreNode::from((i as i64, node_vector)))),
+                FeatureType::DiscovRE => Some(NodeType::Discovere(DiscovreNode::from((
+                    i as i64,
+                    node_vector,
+                )))),
                 _ => None,
             };
-            if node.is_some() {
-                nodes.push(node.unwrap());
+
+            if let Some(node) = node {
+                nodes.push(node);
             } else {
                 error!("Failed to create node for input!")
             }
@@ -270,7 +274,7 @@ impl From<NetworkxDiGraph<NodeType>> for NetworkxDiGraph<DiscovreNode> {
             .clone()
             .nodes
             .into_iter()
-            .map(|el| *el.as_dgis().unwrap())
+            .map(|el| *el.as_discovere().unwrap())
             .collect();
 
         NetworkxDiGraph {

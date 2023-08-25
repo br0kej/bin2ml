@@ -2,6 +2,7 @@ use crate::agcj::AGCJFunctionCallGraphs;
 use crate::agfj::AGFJFunc;
 use crate::bb::{FeatureType, InstructionMode};
 use crate::consts::*;
+use crate::errors::FileLoadError;
 #[cfg(feature = "inference")]
 use crate::inference::InferenceJob;
 use crate::utils::get_save_file_path;
@@ -18,7 +19,6 @@ use std::string::String;
 use std::sync::mpsc::channel;
 #[cfg(feature = "inference")]
 use std::sync::Arc;
-use crate::errors::FileLoadError;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AGFJFile {

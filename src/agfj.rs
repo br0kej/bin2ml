@@ -365,7 +365,7 @@ impl AGFJFunc {
                             &File::create(fname_string).expect("Failed to create writer"),
                             &networkx_graph_inners,
                         )
-                            .expect("Unable to write JSON");
+                        .expect("Unable to write JSON");
                     }
                 } else {
                     info!("Function {} has no edges. Skipping...", self.name)

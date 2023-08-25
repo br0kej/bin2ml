@@ -22,6 +22,7 @@ pub mod bb;
 pub mod binnfo;
 pub mod consts;
 pub mod dedup;
+pub mod errors;
 pub mod extract;
 pub mod files;
 #[cfg(feature = "inference")]
@@ -32,7 +33,6 @@ pub mod processors;
 pub mod sample;
 pub mod tokeniser;
 pub mod utils;
-pub mod errors;
 
 use crate::dedup::EsilFuncStringCorpus;
 use crate::extract::ExtractionJobType;
