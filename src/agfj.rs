@@ -2,12 +2,12 @@ use crate::bb::{ACFJBlock, FeatureType};
 #[cfg(feature = "inference")]
 use crate::inference::InferenceJob;
 use crate::networkx::{DGISNode, DiscovreNode, GeminiNode, NetworkxDiGraph, NodeType};
-use crate::utils::get_save_file_path;
+use crate::utils::{get_save_file_path,check_or_create_dir};
 use petgraph::prelude::Graph;
 use petgraph::visit::Dfs;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use std::fs::{create_dir_all, File};
+use std::fs::File;
 use std::path::Path;
 #[cfg(feature = "inference")]
 use std::process::exit;
@@ -200,12 +200,6 @@ impl AGFJFunc {
         }
     }
 
-    fn check_or_create_dir(&self, full_output_path: &String) {
-        if !Path::new(full_output_path).is_dir() {
-            create_dir_all(full_output_path).expect("Unable to create directory!");
-        }
-    }
-
     #[cfg(feature = "inference")]
     pub fn generate_embedded_cfg(
         &self,
@@ -217,7 +211,7 @@ impl AGFJFunc {
     ) {
         info!("Processing {:?}", self.name);
         let full_output_path = get_save_file_path(path, output_path);
-        self.check_or_create_dir(&full_output_path);
+        check_or_create_dir(&full_output_path);
 
         // offset != 1 has been added to skip functions with invalid instructions
         if self.blocks.len() >= (*min_blocks).into() && self.blocks[0].offset != 1 {
@@ -300,7 +294,7 @@ impl AGFJFunc {
         architecture: &String,
     ) {
         let full_output_path = get_save_file_path(path, output_path);
-        self.check_or_create_dir(&full_output_path);
+        check_or_create_dir(&full_output_path);
         let file_name = path.split('/').last().unwrap();
         let binary_name: Vec<_> = file_name.split(".j").collect();
         let mut function_name = self.name.clone();

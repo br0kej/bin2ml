@@ -1,5 +1,6 @@
 use std::path::Path;
 use walkdir::WalkDir;
+use std::fs::create_dir_all;
 
 pub fn get_save_file_path(path: &str, output_path: &String) -> String {
     let file_name = Path::new(path).file_stem().unwrap();
@@ -24,6 +25,12 @@ pub fn get_json_paths_from_dir(path: &String) -> Vec<String> {
         }
     }
     str_vec
+}
+
+pub fn check_or_create_dir(full_output_path: &String) {
+    if !Path::new(full_output_path).is_dir() {
+        create_dir_all(full_output_path).expect("Unable to create directory!");
+    }
 }
 
 #[cfg(test)]
