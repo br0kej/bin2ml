@@ -58,6 +58,7 @@ static GLOBAL: MiMalloc = MiMalloc;
 enum DataType {
     Cfg,
     Cg,
+    OneHopCg,
     Invalid,
 }
 
@@ -107,7 +108,7 @@ enum Commands {
         path: String,
 
         /// The target data type
-        #[arg(short, long, value_name = "DATA_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["cfg", "cg"])
+        #[arg(short, long, value_name = "DATA_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["cfg", "cg", "onehopcg"])
         .map(|s| s.parse::<String>().unwrap()),)]
         data_type: String,
 
@@ -355,6 +356,7 @@ fn main() {
             let graph_type = match graph_type.as_str() {
                 "cfg" => DataType::Cfg,
                 "cg" => DataType::Cg,
+                "onehopcg" => DataType::OneHopCg,
                 _ => DataType::Invalid,
             };
 
@@ -442,6 +444,18 @@ fn main() {
 
                 for fcg in file.function_call_graphs.as_ref().unwrap() {
                     fcg.to_petgraph(&file.output_path, &file.filename);
+                }
+            } else if graph_type == DataType::OneHopCg {
+                info!("Chosen Graph Type: One Hop Call Graph");
+                let mut file = AGCJFile {
+                    filename: path.to_owned(),
+                    function_call_graphs: None,
+                    output_path: output_path.to_owned(),
+                };
+                file.load_and_deserialize()
+                    .expect("Unable to load and desearilize JSON");
+
+                for fcg in file.function_call_graphs.as_ref().unwrap() {
                     fcg.one_hop_to_petgraph(&file);
                 }
             }
