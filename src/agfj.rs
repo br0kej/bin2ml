@@ -210,7 +210,7 @@ impl AGFJFunc {
         inference_job: &Option<Arc<InferenceJob>>,
     ) {
         info!("Processing {:?}", self.name);
-        let full_output_path = get_save_file_path(path, output_path);
+        let full_output_path = get_save_file_path(path, output_path, None);
         check_or_create_dir(&full_output_path);
 
         // offset != 1 has been added to skip functions with invalid instructions
@@ -293,7 +293,7 @@ impl AGFJFunc {
         feature_type: FeatureType,
         architecture: &String,
     ) {
-        let full_output_path = get_save_file_path(path, output_path);
+        let full_output_path = get_save_file_path(path, output_path, None);
         check_or_create_dir(&full_output_path);
         let file_name = path.split('/').last().unwrap();
         let binary_name: Vec<_> = file_name.split(".j").collect();

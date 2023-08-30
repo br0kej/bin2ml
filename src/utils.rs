@@ -2,16 +2,25 @@ use std::path::Path;
 use walkdir::WalkDir;
 use std::fs::create_dir_all;
 
-pub fn get_save_file_path(path: &str, output_path: &String) -> String {
+pub fn get_save_file_path(path: &str, output_path: &String, optional_suffix: Option<String>) -> String {
     let file_name = Path::new(path).file_stem().unwrap();
 
-    let full_output_path = format!(
-        "{}/{}",
-        output_path.strip_suffix('/').unwrap_or(output_path),
-        String::from(file_name.to_str().unwrap())
-    );
-
-    full_output_path
+    if optional_suffix.is_none() {
+        let full_output_path = format!(
+            "{}/{}",
+            output_path.strip_suffix('/').unwrap_or(output_path),
+            String::from(file_name.to_str().unwrap())
+        );
+        full_output_path
+    } else {
+        let full_output_path = format!(
+            "{}/{}-{}",
+            output_path.strip_suffix('/').unwrap_or(output_path),
+            String::from(file_name.to_str().unwrap()),
+            optional_suffix.unwrap()
+        );
+        full_output_path
+    }
 }
 
 pub fn get_json_paths_from_dir(path: &String) -> Vec<String> {

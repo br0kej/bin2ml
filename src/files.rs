@@ -179,7 +179,7 @@ impl AGFJFile {
     /// Generates a single string which contains the ESIL representation of every
     /// instruction within a function
     pub fn generate_esil_func_strings(mut self) {
-        let fname_string: String = get_save_file_path(&self.filename, &self.output_path);
+        let fname_string: String = get_save_file_path(&self.filename, &self.output_path, None);
         let fname_string = format!("{}-efs.json", fname_string);
 
         if !Path::new(&fname_string).exists() {
@@ -219,7 +219,7 @@ impl AGFJFile {
     pub fn generate_disasm_func_strings(mut self) {
         // This needs to be amended so that there is a AGFJFunc function
         // that returns a function as a func string.
-        let fname_string: String = get_save_file_path(&self.filename, &self.output_path);
+        let fname_string: String = get_save_file_path(&self.filename, &self.output_path, None);
         let fname_string = format!("{}-dfs.json", fname_string);
 
         if !Path::new(&fname_string).exists() {
@@ -244,7 +244,7 @@ impl AGFJFile {
                 let map: HashMap<_, _> = fixed.into_iter().collect();
 
                 let json = json!(map);
-                let fname_string: String = get_save_file_path(&self.filename, &self.output_path);
+                let fname_string: String = get_save_file_path(&self.filename, &self.output_path, None);
                 let fname_string = format!("{}-dfs.json", fname_string);
 
                 serde_json::to_writer(

@@ -1,5 +1,6 @@
 use crate::files::AGCJFile;
 use crate::networkx::NetworkxDiGraph;
+use crate::utils::{check_or_create_dir,get_save_file_path};
 use petgraph::prelude::Graph;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -31,7 +32,9 @@ impl AGCJFunctionCallGraphs {
             graph.update_edge(calling_func, callee, 0);
         }
         let networkx_graph = NetworkxDiGraph::from(graph);
-        let filename = format!("{}/{}-{}-cg.json", output_path, binary_name, self.name);
+        let full_output_path = get_save_file_path(binary_name, output_path, None);
+        check_or_create_dir(&full_output_path);
+        let filename = format!("{}/{}-cg.json", full_output_path, self.name);
         serde_json::to_writer(
             &File::create(filename).expect("Failed to create writer"),
             &networkx_graph,
@@ -41,7 +44,7 @@ impl AGCJFunctionCallGraphs {
 
     // Creates a petgraph object of a given function, all of the functions called functions and
     // then their callees.
-    pub fn one_hop_to_petgraph(&self, global_cg: &AGCJFile) {
+    pub fn one_hop_to_petgraph(&self, global_cg: &AGCJFile, output_path: &String, binary_name: &String) {
         let mut graph = Graph::<String, u32>::new();
 
         // Dealing with local call graph
@@ -71,10 +74,10 @@ impl AGCJFunctionCallGraphs {
         }
 
         let networkx_graph = NetworkxDiGraph::from(graph);
-        let filename = format!(
-            "{}/{}-{}-1hop-cg.json",
-            global_cg.output_path, global_cg.filename, self.name
-        );
+        let full_output_path = get_save_file_path(binary_name, output_path, Some("1hop".to_string()));
+        check_or_create_dir(&full_output_path);
+        let filename = format!("{}/{}-1hopcg.json", full_output_path, self.name);
+
         serde_json::to_writer(
             &File::create(filename).expect("Failed to create writer"),
             &networkx_graph,

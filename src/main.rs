@@ -456,7 +456,7 @@ fn main() {
                     .expect("Unable to load and desearilize JSON");
 
                 for fcg in file.function_call_graphs.as_ref().unwrap() {
-                    fcg.one_hop_to_petgraph(&file);
+                    fcg.one_hop_to_petgraph(&file, &file.output_path, &file.filename);
                 }
             }
         }
