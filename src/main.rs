@@ -33,6 +33,7 @@ pub mod processors;
 pub mod sample;
 pub mod tokeniser;
 pub mod utils;
+pub mod afij;
 
 use crate::dedup::EsilFuncStringCorpus;
 use crate::extract::ExtractionJobType;
@@ -87,8 +88,8 @@ enum Commands {
         #[arg(short, long, value_name = "DIR")]
         output_dir: String,
 
-        /// The extraction mode - Currently only supports 'cfg'
-        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["info", "bb", "reg", "cfg", "xrefs","cg"])
+        /// The extraction mode
+        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "reg", "cfg", "xrefs","cg"])
         .map(|s| s.parse::<String>().unwrap()),)]
         mode: String,
 
@@ -306,6 +307,14 @@ fn main() {
                         .par_iter()
                         .progress()
                         .for_each(|path| path.extract_function_call_graphs(debug));
+                } else if job.job_type == ExtractionJobType::FuncInfo {
+                    info!("Extraction Job Type: Function Info");
+                    info!("Starting Parallel generation.");
+                    #[allow(clippy::redundant_closure)]
+                    job.files_to_be_processed
+                        .par_iter()
+                        .progress()
+                        .for_each(|path| path.extract_function_info(debug));
                 }
             } else if job.input_path_type == PathType::File {
                 info!("Single file found");
@@ -321,6 +330,9 @@ fn main() {
                 } else if job.job_type == ExtractionJobType::CallGraphs {
                     info!("Extraction Job type: Function Call Graphs");
                     job.files_to_be_processed[0].extract_function_call_graphs(debug)
+                } else if job.job_type == ExtractionJobType::FuncInfo {
+                    info!("Extraction Job type: Function Info");
+                    job.files_to_be_processed[0].extract_function_info(debug)
                 }
                 info!("Extraction complete for {}", fpath)
             }

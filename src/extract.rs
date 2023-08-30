@@ -1,4 +1,5 @@
 use crate::agcj::AGCJFunctionCallGraphs;
+use crate::afij::AFIJFunctionInfo;
 use anyhow::bail;
 use anyhow::Error;
 use anyhow::Result;
@@ -21,12 +22,14 @@ pub enum PathType {
 }
 #[derive(Debug, PartialEq)]
 pub enum ExtractionJobType {
-    ExInfo, // Extract high level information from the binary (r2 ij)
+    // bininfo is not implemented in anyway
+    BinInfo, // Extract high level information from the binary (r2 ij)
     BasicBlocks,
     RegisterBehaviour,
     FunctionXrefs,
     CFG,
     CallGraphs,
+    FuncInfo,
 }
 
 #[derive(Debug)]
@@ -218,8 +221,9 @@ impl ExtractionJob {
         // This functionality is currently not being used!
         fn extraction_job_matcher(mode: &str) -> Result<ExtractionJobType, Error> {
             match mode {
-                "info" => Ok(ExtractionJobType::ExInfo),
-                "bb" => Ok(ExtractionJobType::BasicBlocks),
+                // These aren't implemented
+                //"bb" => Ok(ExtractionJobType::BasicBlocks),
+                "finfo" => Ok(ExtractionJobType::FuncInfo),
                 "reg" => Ok(ExtractionJobType::RegisterBehaviour),
                 "cfg" => Ok(ExtractionJobType::CFG),
                 "xrefs" => Ok(ExtractionJobType::FunctionXrefs),
@@ -288,7 +292,7 @@ impl FileToBeProcessed {
     pub fn extract_register_behaviour(&self, debug: &bool) {
         info!("Starting register behaviour extraction");
         let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
-        let function_details = self.get_function_details(&mut r2p);
+        let function_details = self.get_function_name_list(&mut r2p);
         let mut register_behaviour_vec: HashMap<String, AEAFJRegisterBehaviour> = HashMap::new();
         info!("Executing aeafj for each function");
         for function in function_details.iter() {
@@ -374,7 +378,7 @@ impl FileToBeProcessed {
 
     pub fn extract_function_xrefs(&self, debug: &bool) {
         let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
-        let function_details = self.get_function_details(&mut r2p);
+        let function_details = self.get_function_name_list(&mut r2p);
         let mut function_xrefs: HashMap<String, Vec<FunctionXrefDetails>> = HashMap::new();
         info!("Extracting xrefs for each function");
         for function in function_details.iter() {
@@ -389,9 +393,29 @@ impl FileToBeProcessed {
         self.write_to_json(&json!(function_xrefs))
     }
 
+    pub fn extract_function_info(&self, debug: &bool) {
+        info!("Starting function information extraction");
+        let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
+        let function_details = self.get_function_name_list(&mut r2p);
+        let mut function_info: HashMap<String, Vec<AFIJFunctionInfo>> = HashMap::new();
+        info!("Extracting xrefs for each function");
+        for function in function_details.iter() {
+            debug!("Processing {}", function.name);
+            let ret = self.get_function_info(function.offset, &mut r2p);
+            function_info.insert(function.name.clone(), ret);
+        }
+        info!("All functions processed");
+        r2p.close();
+        info!("r2p closed");
+
+        info!("Writing extracted data to file");
+        self.write_to_json(&json!(function_info))
+
+    }
+
     // r2 commands to structs
 
-    fn get_function_details(&self, r2p: &mut R2Pipe) -> Vec<AFLJFuncDetails> {
+    fn get_function_name_list(&self, r2p: &mut R2Pipe) -> Vec<AFLJFuncDetails> {
         info!("Getting function information from binary");
         let json = r2p.cmd("aflj").expect("aflj command failed");
         let json_obj: Vec<AFLJFuncDetails> =
@@ -406,8 +430,7 @@ impl FileToBeProcessed {
         r2p: &mut R2Pipe,
     ) -> Vec<FunctionXrefDetails> {
         info!("Getting function xref details");
-        r2p.cmd(format!("s @ {}", function_addr).as_str())
-            .expect("failed to seek addr");
+        Self::go_to_address(r2p, function_addr);
         let json = r2p.cmd("axffj").expect("axffj command failed");
         let mut json_obj: Vec<FunctionXrefDetails> =
             serde_json::from_str(&json).expect("Unable to convert to JSON object!");
@@ -428,6 +451,14 @@ impl FileToBeProcessed {
         json_obj
     }
 
+    fn get_function_info(&self, function_addr: i64, r2p: &mut R2Pipe) -> Vec<AFIJFunctionInfo> {
+        Self::go_to_address(r2p, function_addr);
+        let json = r2p.cmd("afij").expect("afij command failed");
+        let mut json_obj: Vec<AFIJFunctionInfo> =
+            serde_json::from_str(&json).expect("Unable to convert to JSON object!");
+        json_obj
+    }
+
     // Helper Functions
 
     fn write_to_json(&self, json_obj: &Value) {
@@ -444,6 +475,11 @@ impl FileToBeProcessed {
             &json_obj,
         )
         .unwrap_or_else(|_| panic!("the world is ending: {}", f_name));
+    }
+
+    fn go_to_address(r2p: &mut R2Pipe, function_addr: i64) {
+        r2p.cmd(format!("s @ {}", function_addr).as_str())
+            .expect("failed to seek addr");
     }
 
     fn setup_r2_pipe(&self, s: &String, debug: &bool) -> R2Pipe {
