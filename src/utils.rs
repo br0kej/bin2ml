@@ -2,8 +2,20 @@ use std::path::Path;
 use walkdir::WalkDir;
 use std::fs::create_dir_all;
 
-pub fn get_save_file_path(path: &str, output_path: &String, optional_suffix: Option<String>) -> String {
-    let file_name = Path::new(path).file_stem().unwrap();
+/// Formats a save file path
+///
+/// Given an path to a binary, an output path and an optional suffix
+/// this function formats a string which can be used for down stream usage
+///
+/// The reason an optional suffix has been included is to support a case where there
+/// are multiple different types of data which can be generated from a single type
+/// of extracted data. An example of this is the call graph data. This can be processed
+/// to generate normal call graphs (a function + its callees) or a one hop call graph (a function
+/// + its calees + the callees of the callees).
+///
+/// See agcj.rs for an example of this optional suffix being used
+pub fn get_save_file_path(binary_path: &str, output_path: &String, optional_suffix: Option<String>) -> String {
+    let file_name = Path::new(binary_path).file_stem().unwrap();
 
     if optional_suffix.is_none() {
         let full_output_path = format!(
@@ -23,6 +35,12 @@ pub fn get_save_file_path(path: &str, output_path: &String, optional_suffix: Opt
     }
 }
 
+/// Get the JSON paths from a directory
+///
+/// This function takes a path to a directory and traverses all
+/// files present within identifying files ending in .json before
+/// returning a Vec<String> where each string is an absolute path
+/// to a given JSON file
 pub fn get_json_paths_from_dir(path: &String) -> Vec<String> {
     let mut str_vec: Vec<String> = Vec::new();
     for file in WalkDir::new(path).into_iter().filter_map(|file| file.ok()) {
@@ -36,6 +54,7 @@ pub fn get_json_paths_from_dir(path: &String) -> Vec<String> {
     str_vec
 }
 
+/// Checks to see if a directory is prsent, if not creates
 pub fn check_or_create_dir(full_output_path: &String) {
     if !Path::new(full_output_path).is_dir() {
         create_dir_all(full_output_path).expect("Unable to create directory!");
