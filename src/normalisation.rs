@@ -268,10 +268,22 @@ mod tests {
 
     #[test]
     fn test_reg_norm_arm32() {
-        assert_eq!(normalise_esil("r4,r5,=,DATA,pc,:=,IMM,fp,-,IMM,&,[4],IMM,&,r0,=,r0,sb,|", "no_call", true),
-                   "reg32 reg32 = DATA pc := IMM fp - IMM & [4] IMM & reg32 = reg32 sb |");
-        assert_eq!(normalise_esil("924,r4,+,IMM,&,[4],IMM,&,r8,=,0,r4,+,IMM,&,[4],IMM,&", "not_call", true),
-                   "924 reg32 + IMM & [4] IMM & reg32 = 0 reg32 + IMM & [4] IMM &")
+        assert_eq!(
+            normalise_esil(
+                "r4,r5,=,DATA,pc,:=,IMM,fp,-,IMM,&,[4],IMM,&,r0,=,r0,sb,|",
+                "no_call",
+                true
+            ),
+            "reg32 reg32 = DATA pc := IMM fp - IMM & [4] IMM & reg32 = reg32 sb |"
+        );
+        assert_eq!(
+            normalise_esil(
+                "924,r4,+,IMM,&,[4],IMM,&,r8,=,0,r4,+,IMM,&,[4],IMM,&",
+                "not_call",
+                true
+            ),
+            "924 reg32 + IMM & [4] IMM & reg32 = 0 reg32 + IMM & [4] IMM &"
+        )
     }
 
     #[test]

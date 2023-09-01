@@ -2,7 +2,7 @@ use crate::bb::{ACFJBlock, FeatureType};
 #[cfg(feature = "inference")]
 use crate::inference::InferenceJob;
 use crate::networkx::{DGISNode, DiscovreNode, GeminiNode, NetworkxDiGraph, NodeType};
-use crate::utils::{get_save_file_path,check_or_create_dir};
+use crate::utils::{check_or_create_dir, get_save_file_path};
 use petgraph::prelude::Graph;
 use petgraph::visit::Dfs;
 use serde::{Deserialize, Serialize};

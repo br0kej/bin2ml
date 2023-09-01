@@ -15,6 +15,7 @@ use std::path::Path;
 use std::process::exit;
 use walkdir::WalkDir;
 
+pub mod afij;
 pub mod agcj;
 pub mod agfj;
 pub mod bb;
@@ -33,7 +34,6 @@ pub mod processors;
 pub mod sample;
 pub mod tokeniser;
 pub mod utils;
-pub mod afij;
 
 use crate::dedup::EsilFuncStringCorpus;
 use crate::extract::ExtractionJobType;

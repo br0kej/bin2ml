@@ -45,7 +45,7 @@ pub const GENERAL_PURPOSE_32_BIT_REGS: [&str; 165] = [
     "s24", "s25", "s26", "s27", "s29", "s30", "s31", "f0", "f1", "f2", "f3", "f4", "f5", "f6",
     "f7", "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20",
     "f21", "f22", "f23", "f24", "f25", "f26", "f27", "f29", "f30", "f31", "v0", "v1", "a0", "a1",
-    "a2", "a3", "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "s0"
+    "a2", "a3", "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "s0",
 ];
 // MIPS registers are normalised to 32 bit always - This is becuase the name of the registers
 // is always the same regardless of architecture - Different to x86/x64.

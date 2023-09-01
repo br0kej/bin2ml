@@ -1,6 +1,6 @@
+use std::fs::create_dir_all;
 use std::path::Path;
 use walkdir::WalkDir;
-use std::fs::create_dir_all;
 
 /// Formats a save file path
 ///
@@ -14,7 +14,11 @@ use std::fs::create_dir_all;
 /// + its calees + the callees of the callees).
 ///
 /// See agcj.rs for an example of this optional suffix being used
-pub fn get_save_file_path(binary_path: &str, output_path: &String, optional_suffix: Option<String>) -> String {
+pub fn get_save_file_path(
+    binary_path: &str,
+    output_path: &String,
+    optional_suffix: Option<String>,
+) -> String {
     let file_name = Path::new(binary_path).file_stem().unwrap();
 
     if optional_suffix.is_none() {

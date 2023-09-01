@@ -1,5 +1,5 @@
-use crate::agcj::AGCJFunctionCallGraphs;
 use crate::afij::AFIJFunctionInfo;
+use crate::agcj::AGCJFunctionCallGraphs;
 use anyhow::bail;
 use anyhow::Error;
 use anyhow::Result;
@@ -410,7 +410,6 @@ impl FileToBeProcessed {
 
         info!("Writing extracted data to file");
         self.write_to_json(&json!(function_info))
-
     }
 
     // r2 commands to structs
@@ -454,7 +453,7 @@ impl FileToBeProcessed {
     fn get_function_info(&self, function_addr: i64, r2p: &mut R2Pipe) -> Vec<AFIJFunctionInfo> {
         Self::go_to_address(r2p, function_addr);
         let json = r2p.cmd("afij").expect("afij command failed");
-        let mut json_obj: Vec<AFIJFunctionInfo> =
+        let json_obj: Vec<AFIJFunctionInfo> =
             serde_json::from_str(&json).expect("Unable to convert to JSON object!");
         json_obj
     }

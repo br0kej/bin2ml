@@ -1,3 +1,4 @@
+use crate::afij::AFIJFunctionInfo;
 use crate::agcj::AGCJFunctionCallGraphs;
 use crate::agfj::AGFJFunc;
 use crate::bb::{FeatureType, InstructionMode};
@@ -19,7 +20,6 @@ use std::string::String;
 use std::sync::mpsc::channel;
 #[cfg(feature = "inference")]
 use std::sync::Arc;
-use crate::afij::AFIJFunctionInfo;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AGFJFile {
@@ -244,7 +244,8 @@ impl AGFJFile {
                 let map: HashMap<_, _> = fixed.into_iter().collect();
 
                 let json = json!(map);
-                let fname_string: String = get_save_file_path(&self.filename, &self.output_path, None);
+                let fname_string: String =
+                    get_save_file_path(&self.filename, &self.output_path, None);
                 let fname_string = format!("{}-dfs.json", fname_string);
 
                 serde_json::to_writer(
@@ -359,8 +360,8 @@ impl AFIJFile {
         let data = read_to_string(&self.filename)?;
 
         #[allow(clippy::expect_fun_call)]
-            // Kept in to ensure that the JSON decode error message is printed alongside the filename
-            let json: Vec<AFIJFunctionInfo> = serde_json::from_str(&data)?;
+        // Kept in to ensure that the JSON decode error message is printed alongside the filename
+        let json: Vec<AFIJFunctionInfo> = serde_json::from_str(&data)?;
 
         self.function_info = Some(json);
         Ok(())
