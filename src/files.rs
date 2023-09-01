@@ -1,4 +1,4 @@
-use crate::afij::AFIJFunctionInfo;
+use crate::afij::{AFIJFeatureSubset, AFIJFunctionInfo};
 use crate::agcj::AGCJFunctionCallGraphs;
 use crate::agfj::AGFJFunc;
 use crate::bb::{FeatureType, InstructionMode};
@@ -374,5 +374,25 @@ impl AFIJFile {
 
         self.function_info = Some(json);
         Ok(())
+    }
+
+    pub fn subset_and_save(&mut self) {
+        let mut func_info_subsets: Vec<AFIJFeatureSubset> = Vec::new();
+        info!("Starting to process functions");
+        for function in self.function_info.as_ref().unwrap().iter() {
+            let subset = AFIJFeatureSubset::from(function);
+            func_info_subsets.push(subset)
+        }
+        debug!(
+            "Length of Subsetted Function Info: {}",
+            func_info_subsets.len()
+        );
+        let fname_string: String = get_save_file_path(&self.filename, &self.output_path, None);
+        let filename = format!("{}-finfo-subset.json", fname_string);
+        serde_json::to_writer(
+            &File::create(filename).expect("Failed to create writer"),
+            &func_info_subsets,
+        )
+        .expect("Unable to write JSON");
     }
 }

@@ -102,23 +102,17 @@ pub struct AFIJFeatureSubset {
     pub signature: String,
 }
 
-impl From<AFIJFunctionInfo> for AFIJFeatureSubset {
-    fn from(src: AFIJFunctionInfo) -> AFIJFeatureSubset {
+impl From<&AFIJFunctionInfo> for AFIJFeatureSubset {
+    fn from(src: &AFIJFunctionInfo) -> AFIJFeatureSubset {
         AFIJFeatureSubset {
-            name: src.name,
+            name: src.name.clone(),
             ninstrs: src.ninstrs,
             edges: src.edges,
             indegree: src.indegree,
             outdegree: src.outdegree,
             nlocals: src.nlocals,
             nargs: src.nargs,
-            signature: src.signature,
+            signature: src.signature.clone(),
         }
-    }
-}
-
-impl AFIJFunctionInfo {
-    pub fn generate_subset_feature_vectors(self) -> AFIJFeatureSubset {
-        AFIJFeatureSubset::from(self)
     }
 }

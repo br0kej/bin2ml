@@ -35,9 +35,10 @@ pub mod sample;
 pub mod tokeniser;
 pub mod utils;
 
+use crate::afij::AFIJFeatureSubset;
 use crate::dedup::EsilFuncStringCorpus;
 use crate::extract::ExtractionJobType;
-use crate::files::AGCJFile;
+use crate::files::{AFIJFile, AGCJFile};
 use crate::tokeniser::{train_byte_bpe_tokeniser, TokeniserType};
 use bb::{FeatureType, InstructionMode};
 #[cfg(feature = "goblin")]
@@ -148,7 +149,14 @@ enum GenerateSubCommands {
         reg_norm: bool,
     },
     /// Generate metadata/feature subsets from extracted data
-    Metadata,
+    Metadata {
+        /// The path to an afji JSON file extracted using the <EXTRACT> command
+        #[arg(short, long, value_name = "INPUT_PATH")]
+        input_path: String,
+        /// The path for the generated output
+        #[arg(short, long, value_name = "OUTPUT_PATH")]
+        output_path: String,
+    },
     /// Generate tokenisers from extracted data
     Tokeniser {
         #[arg(short, long, value_name = "DATA")]
@@ -390,7 +398,22 @@ fn main() {
                     }
                 }
             }
-            GenerateSubCommands::Metadata => println!("Generating Metadata..."),
+            GenerateSubCommands::Metadata {
+                input_path,
+                output_path,
+            } => {
+                let mut file = AFIJFile {
+                    filename: input_path.to_owned(),
+                    function_info: None,
+                    output_path: output_path.to_owned(),
+                };
+                info!("Generating function metadata subsets");
+                file.load_and_deserialize()
+                    .expect("Unable to load and desearilize JSON");
+                info!("Successfully loaded JSON");
+                file.subset_and_save();
+                info!("Generation complete");
+            }
             GenerateSubCommands::Nlp {
                 path,
                 instruction_type,
