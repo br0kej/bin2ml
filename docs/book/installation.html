@@ -88,11 +88,33 @@
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
         <div id="page-wrapper" class="page-wrapper">
 
             <div class="page">
                                 <div id="menu-bar-hover-placeholder"></div>
-                <div id="menu-bar" class="menu-bar sticky bordered">
+                <div id="menu-bar" class="menu-bar sticky">
                     <div class="left-buttons">
                         <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
                             <i class="fa fa-bars"></i>
@@ -151,6 +173,9 @@ cd bin2ml
 cargo build --release
 </code></pre>
 <p>The <code>bin2ml</code> will be stored within the <code>target/release/</code> directory.</p>
+<h2 id="pre-requisites"><a class="header" href="#pre-requisites">Pre-Requisites</a></h2>
+<p><code>bin2ml</code> relies heavily on Radare2 for the binary analysis tasks and therefore expects that radare2 is installed
+Installed - Info on how to do this can be found <a href="https://github.com/radareorg/radare2">here</a>.</p>
 <h2 id="experimental-features"><a class="header" href="#experimental-features">Experimental Features</a></h2>
 <p><code>bin2ml</code> also has experimental features which are either still in active development or still being tested.</p>
 <p>In order to activate these, the <code>--features</code> flag can be provided to <code>cargo</code> during the build process.</p>

@@ -53,10 +53,10 @@ This command will have created a `test_bin.json` containing the `agfj` output fo
 The following command can be used to create Attributed Control Flow Graphs (ACFG's) with Gemini node features:
 
 ```
-bin2ml graph --path test-files/test_bin.json --output-path . --feature-type gemini
+bin2ml generate graphs -p test_bin_cfg.json -o . -f gemini -d cfg
 ```
 
-This will have created a `test_bin/` folder which contains three JSON files. Each of these JSON files is a `networkx` directed graph with node attributes. Try opening `test_bin-main.json` and it should look like the JSON you can see below.
+This will have created a `test_bin_cfg/` folder which contains three JSON files. Each of these JSON files is a `networkx` directed graph with node attributes. Try opening `test_bin-main.json` and it should look like the JSON you can see below.
 
 ```json
 {
@@ -225,7 +225,7 @@ This will have created a `test_bin/` folder which contains three JSON files. Eac
 This can then be loaded into `networkx` easily using the following commands:
 ```python
 from networkx.readwrite import json_graph
-fd = open("./test_bin/test_bin-main.json")
+fd = open("test_bin_cfg/test_bin-main.json")
 json_data = json.load(fd)
 G = json_graph.adjacency_graph(json_data)
 ```
@@ -263,7 +263,7 @@ This command will have created a `test_bin.json` containing the `agfj` output fo
 ## Creating a training corpus
 
 ```bash
-bin2ml nlp --path test_bin.json --data-type disasm --format single --output-path test_bin_ins_corpus.txt
+bin2ml generate nlp -p test_bin_cfg.json -i disasm -d . -o single 
 ```
 
 This command will load the extracted data and create a text file containing each of the instructions from all functions with the JSON file.
@@ -274,7 +274,7 @@ This command will load the extracted data and create a text file containing each
 by executing the following command.
 
 ```bash
-bin2ml tokeniser --data test_bin_ins_corpus.txt --output-name test_bin_tokeniser.json --vocab-size 1000
+bin2ml generate tokeniser -d test_bin_cfg-dis-singles.txt -o test_bin_tokeniser.json --vocab-size 1000 -t byte-bpe
 ```
 
 > The tokeniser created here is configured specifically for Masked Language Modelling tasks and is Byte-Level Byte Pair Encoding. Further configurations/support is likely to be added in the future.

@@ -89,11 +89,33 @@
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
         <div id="page-wrapper" class="page-wrapper">
 
             <div class="page">
                                 <div id="menu-bar-hover-placeholder"></div>
-                <div id="menu-bar" class="menu-bar sticky bordered">
+                <div id="menu-bar" class="menu-bar sticky">
                     <div class="left-buttons">
                         <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
                             <i class="fa fa-bars"></i>
@@ -164,6 +186,9 @@ cd bin2ml
 cargo build --release
 </code></pre>
 <p>The <code>bin2ml</code> will be stored within the <code>target/release/</code> directory.</p>
+<h2 id="pre-requisites"><a class="header" href="#pre-requisites">Pre-Requisites</a></h2>
+<p><code>bin2ml</code> relies heavily on Radare2 for the binary analysis tasks and therefore expects that radare2 is installed
+Installed - Info on how to do this can be found <a href="https://github.com/radareorg/radare2">here</a>.</p>
 <h2 id="experimental-features"><a class="header" href="#experimental-features">Experimental Features</a></h2>
 <p><code>bin2ml</code> also has experimental features which are either still in active development or still being tested.</p>
 <p>In order to activate these, the <code>--features</code> flag can be provided to <code>cargo</code> during the build process.</p>
@@ -219,9 +244,9 @@ gcc test-files/test_bin.c -o test-files/test_bin
 <h2 id="generating-networkx-compatible-attributed-control-flow-graphs-acfgs"><a class="header" href="#generating-networkx-compatible-attributed-control-flow-graphs-acfgs">Generating <code>networkx</code> compatible Attributed Control Flow Graphs (ACFG's)</a></h2>
 <p><code>bin2ml</code> makes it simple to create Attributed Control Flow Graphs (ACFG's) with a variety of different node features (Supported node features can be found <a href="./supported_node_features.html">here</a>) which are then saved in <code>networkx</code> compatible JSON files.</p>
 <p>The following command can be used to create Attributed Control Flow Graphs (ACFG's) with Gemini node features:</p>
-<pre><code>bin2ml graph --path test-files/test_bin.json --output-path . --feature-type gemini
+<pre><code>bin2ml generate graphs -p test_bin_cfg.json -o . -f gemini -d cfg
 </code></pre>
-<p>This will have created a <code>test_bin/</code> folder which contains three JSON files. Each of these JSON files is a <code>networkx</code> directed graph with node attributes. Try opening <code>test_bin-main.json</code> and it should look like the JSON you can see below.</p>
+<p>This will have created a <code>test_bin_cfg/</code> folder which contains three JSON files. Each of these JSON files is a <code>networkx</code> directed graph with node attributes. Try opening <code>test_bin-main.json</code> and it should look like the JSON you can see below.</p>
 <pre><code class="language-json">{
     &quot;adjacency&quot;: [
         [
@@ -386,7 +411,7 @@ gcc test-files/test_bin.c -o test-files/test_bin
 <h2 id="loading-networkx-graph-and-converting-to-pytorch-geometric-data-objects"><a class="header" href="#loading-networkx-graph-and-converting-to-pytorch-geometric-data-objects">Loading <code>networkx</code> graph and converting to PyTorch Geometric <code>Data</code> Objects</a></h2>
 <p>This can then be loaded into <code>networkx</code> easily using the following commands:</p>
 <pre><code class="language-python">from networkx.readwrite import json_graph
-fd = open(&quot;./test_bin/test_bin-main.json&quot;)
+fd = open(&quot;test_bin_cfg/test_bin-main.json&quot;)
 json_data = json.load(fd)
 G = json_graph.adjacency_graph(json_data)
 </code></pre>
@@ -411,13 +436,13 @@ gcc test-files/test_bin.c -o test-files/test_bin
 </code></pre>
 <p>This command will have created a <code>test_bin.json</code> containing the <code>agfj</code> output for each of the functions within the binary (A sample of this data can be found <a href="agfj_output.html">here</a>). This output is very verbose and contains detailed information at an instruction and basic block level for each functions within the binary - Perfect for further processing!</p>
 <h2 id="creating-a-training-corpus"><a class="header" href="#creating-a-training-corpus">Creating a training corpus</a></h2>
-<pre><code class="language-bash">bin2ml nlp --path test_bin.json --data-type disasm --format single --output-path test_bin_ins_corpus.txt
+<pre><code class="language-bash">bin2ml generate nlp -p test_bin_cfg.json -i disasm -d . -o single 
 </code></pre>
 <p>This command will load the extracted data and create a text file containing each of the instructions from all functions with the JSON file.</p>
 <h2 id="training-a-hugginface-tokeniser"><a class="header" href="#training-a-hugginface-tokeniser">Training a <code>hugginface</code> Tokeniser</a></h2>
 <p><code>bin2ml</code> takes advantage of the rust library that underpins huggingface tokenisers and uses it directly. We can now train a tokeniser using the data we just generated 
 by executing the following command.</p>
-<pre><code class="language-bash">bin2ml tokeniser --data test_bin_ins_corpus.txt --output-name test_bin_tokeniser.json --vocab-size 1000
+<pre><code class="language-bash">bin2ml generate tokeniser -d test_bin_cfg-dis-singles.txt -o test_bin_tokeniser.json --vocab-size 1000 -t byte-bpe
 </code></pre>
 <blockquote>
 <p>The tokeniser created here is configured specifically for Masked Language Modelling tasks and is Byte-Level Byte Pair Encoding. Further configurations/support is likely to be added in the future.</p>
