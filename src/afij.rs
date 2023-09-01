@@ -104,7 +104,6 @@ pub struct AFIJFeatureSubset {
 
 impl From<AFIJFunctionInfo> for AFIJFeatureSubset {
     fn from(src: AFIJFunctionInfo) -> AFIJFeatureSubset {
-
         AFIJFeatureSubset {
             name: src.name,
             ninstrs: src.ninstrs,
@@ -119,9 +118,7 @@ impl From<AFIJFunctionInfo> for AFIJFeatureSubset {
 }
 
 impl AFIJFunctionInfo {
-
     pub fn generate_subset_feature_vectors(self) -> AFIJFeatureSubset {
         AFIJFeatureSubset::from(self)
     }
-
 }
