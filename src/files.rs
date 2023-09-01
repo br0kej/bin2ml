@@ -104,6 +104,7 @@ impl AGFJFile {
         format_type: FormatMode,
         instruction_type: InstructionMode,
         random_walk: &bool,
+        pairs: bool,
     ) {
         if format_type == FormatMode::SingleInstruction {
             if !(*random_walk) {
@@ -113,9 +114,9 @@ impl AGFJFile {
                     self.generate_linear_bb_walk(true);
                 }
             } else if instruction_type == InstructionMode::Disasm {
-                self.generate_random_bb_walk(false);
+                self.generate_random_bb_walk(false, pairs);
             } else if instruction_type == InstructionMode::ESIL {
-                self.generate_random_bb_walk(true);
+                self.generate_random_bb_walk(true, pairs);
             }
         } else if format_type == FormatMode::FuncAsString {
             if instruction_type == InstructionMode::Disasm {
@@ -137,43 +138,52 @@ impl AGFJFile {
     ///
     /// It is *not* suitable for doing any other sort of tasks such as Next Sentence
     /// Prediction (NSP) as there is not indication of where a basic block starts or ends.
-    pub fn generate_random_bb_walk(mut self, esil: bool) {
-        self.load_and_deserialize()
-            .expect("Unable to load and desearilize JSON");
+    pub fn generate_random_bb_walk(mut self, esil: bool, pairs: bool) {
+        let fname_string: String = get_save_file_path(&self.filename, &self.output_path, None);
+        let fname_string = if esil {
+            format!("{}-esil-singles-rwdfs.txt", fname_string)
+        } else {
+            format!("{}-dis-singles-rwdfs.txt", fname_string)
+        };
 
-        let (sender, receiver) = channel();
+        if !Path::new(&fname_string).exists() {
+            self.load_and_deserialize()
+                .expect("Unable to load and desearilize JSON");
 
-        self.functions.unwrap().par_iter_mut().for_each_with(
-            sender,
-            |s, func: &mut Vec<AGFJFunc>| {
-                s.send(func[0].disasm_random_walks(&self.min_blocks, esil, self.reg_norm))
+            let (sender, receiver) = channel();
+
+            self.functions.unwrap().par_iter_mut().for_each_with(
+                sender,
+                |s, func: &mut Vec<AGFJFunc>| {
+                    s.send(func[0].disasm_random_walks(
+                        &self.min_blocks,
+                        esil,
+                        self.reg_norm,
+                        pairs,
+                    ))
                     .unwrap()
-            },
-        );
+                },
+            );
 
-        let res = receiver.iter();
+            let res = receiver.iter();
 
-        let flattened: Vec<String> = res
-            .into_iter()
-            .flatten()
-            .flatten()
-            .flatten()
-            .flatten()
-            .collect();
+            let flattened: Vec<String> = res
+                .into_iter()
+                .flatten()
+                .flatten()
+                .flatten()
+                .collect::<Vec<_>>()
+                .into_iter()
+                .collect();
 
-        // TODO - Turn this into an info level log
-        println!("Total Number of Lines: {:?}", flattened.len());
+            // TODO - Turn this into an info level log
+            info!("Total Number of Lines: {:?}", flattened.len());
 
-        let file_start = Path::new(&self.filename)
-            .file_stem()
-            .unwrap()
-            .to_string_lossy();
-        let full_output_path = format!("{}-{}.txt", self.output_path, file_start);
+            let write_file = File::create(fname_string).unwrap();
+            let mut writer = BufWriter::new(&write_file);
 
-        let write_file = File::create(full_output_path).unwrap();
-        let mut writer = BufWriter::new(&write_file);
-
-        writer.write_all(flattened.join("\n").as_bytes()).expect("");
+            writer.write_all(flattened.join("\n").as_bytes()).expect("");
+        }
     }
 
     /// Generates a single string which contains the ESIL representation of every

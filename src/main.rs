@@ -146,6 +146,10 @@ enum GenerateSubCommands {
         /// Toggle register normalisation
         #[arg(long, default_value = "false")]
         reg_norm: bool,
+
+        /// Toggle to determine if pairs should be generated
+        #[arg(long, default_value = "false")]
+        pairs: bool,
     },
     /// Generate metadata/feature subsets from extracted data
     Metadata {
@@ -427,6 +431,7 @@ fn main() {
                 output_format,
                 random_walk,
                 reg_norm,
+                pairs,
             } => {
                 let instruction_type = match instruction_type.as_str() {
                     "esil" => InstructionMode::ESIL,
@@ -462,7 +467,7 @@ fn main() {
                         reg_norm: *reg_norm,
                     };
 
-                    file.execute_data_generation(format_type, instruction_type, random_walk)
+                    file.execute_data_generation(format_type, instruction_type, random_walk, *pairs)
                 } else {
                     info!("Multiple files found. Will parallel process.");
                     let file_paths_vec = get_json_paths_from_dir(path);
@@ -480,7 +485,12 @@ fn main() {
                             architecture: None,
                             reg_norm: *reg_norm,
                         };
-                        file.execute_data_generation(format_type, instruction_type, random_walk)
+                        file.execute_data_generation(
+                            format_type,
+                            instruction_type,
+                            random_walk,
+                            *pairs,
+                        )
                     }
                 }
             }

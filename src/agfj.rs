@@ -3,6 +3,7 @@ use crate::bb::{ACFJBlock, FeatureType};
 use crate::inference::InferenceJob;
 use crate::networkx::{DGISNode, DiscovreNode, GeminiNode, NetworkxDiGraph, NodeType};
 use crate::utils::{check_or_create_dir, get_save_file_path};
+use itertools::Itertools;
 use petgraph::prelude::Graph;
 use petgraph::visit::Dfs;
 use serde::{Deserialize, Serialize};
@@ -147,13 +148,19 @@ impl AGFJFunc {
     }
     // This function traverses the functions control flow graph and currently
     // calculates the number of instructions per node
-    pub fn dfs_cfg(&self, max_hops: u8, esil: bool, reg_norm: bool) -> Vec<Vec<Vec<String>>> {
+    pub fn dfs_cfg(
+        &self,
+        max_hops: u8,
+        esil: bool,
+        reg_norm: bool,
+        pairs: bool,
+    ) -> Vec<Vec<String>> {
         let graph = self.graph.as_ref().unwrap();
-        let mut disasm_walks = Vec::<Vec<Vec<String>>>::new();
+        let mut disasm_walks = Vec::<Vec<String>>::new();
         let mut hop_counter: u8 = 0;
 
         for start in graph.node_indices() {
-            let mut single_disasm_walk = Vec::<Vec<String>>::new();
+            let mut single_disasm_walk = Vec::new();
             let mut dfs = Dfs::new(&graph, start);
             while let Some(visited) = dfs.next(&graph) {
                 if hop_counter >= max_hops {
@@ -167,7 +174,6 @@ impl AGFJFunc {
                         .filter(|x| x.offset == block_offset)
                         .collect();
 
-                    // IF MATCH FOUND, DO BLOCK PROCESSING STUFF HERE
                     if !basic_block.is_empty() {
                         if esil {
                             let bb_esil = basic_block.first().unwrap().get_esil_bb(reg_norm);
@@ -180,7 +186,35 @@ impl AGFJFunc {
                     hop_counter += 1;
                 }
             }
-            disasm_walks.push(single_disasm_walk);
+            if pairs {
+                let single_disasm_walk: Vec<String> =
+                    single_disasm_walk.into_iter().flatten().collect();
+                let mut pairs_disasm_walk = Vec::<String>::new();
+
+                let len_of_walk = &single_disasm_walk.len();
+                for (i, mut _instruction) in single_disasm_walk.iter().enumerate() {
+                    if (i + 1) < *len_of_walk {
+                        let pair = format!(
+                            "{}      {}",
+                            single_disasm_walk[i].clone(),
+                            single_disasm_walk[i + 1].clone()
+                        )
+                        .to_string();
+
+                        pairs_disasm_walk.push(pair);
+                    };
+                }
+                disasm_walks.push(pairs_disasm_walk)
+            } else {
+                // This is really janky and likely bad for performance. Something to revisit!
+                let single_disasm_walk: Vec<&String> =
+                    single_disasm_walk.iter().flatten().collect();
+                let single_disasm_walk = single_disasm_walk
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect_vec();
+                disasm_walks.push(single_disasm_walk);
+            }
         }
         disasm_walks
     }
@@ -190,10 +224,11 @@ impl AGFJFunc {
         min_blocks: &u16,
         esil: bool,
         reg_norm: bool,
-    ) -> Option<Vec<Vec<Vec<String>>>> {
+        pairs: bool,
+    ) -> Option<Vec<Vec<String>>> {
         if self.blocks.len() > (*min_blocks).into() && self.blocks[0].offset != 1 {
             self.create_graph_struct_members(min_blocks);
-            let disasm_walks = self.dfs_cfg(10, esil, reg_norm);
+            let disasm_walks = self.dfs_cfg(10, esil, reg_norm, pairs);
             Some(disasm_walks)
         } else {
             None
