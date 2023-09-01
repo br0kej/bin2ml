@@ -69,40 +69,10 @@ struct Cli {
     #[command(subcommand)]
     command: Commands,
 }
-
-#[derive(Subcommand)]
-enum Commands {
-    /// Get summary information for a binary
-    #[cfg(feature = "goblin")]
-    Info {
-        /// The path to the target binary
-        #[arg(short, long, value_name = "FILENAME")]
-        path: Option<String>,
-    },
-    /// Extract CFG level data from binaries
-    Extract {
-        /// The path to the dir or binary to be processed
-        #[arg(short, long, value_name = "DIR")]
-        fpath: String,
-
-        /// The path for the output directory
-        #[arg(short, long, value_name = "DIR")]
-        output_dir: String,
-
-        /// The extraction mode
-        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "reg", "cfg", "xrefs","cg"])
-        .map(|s| s.parse::<String>().unwrap()),)]
-        mode: String,
-
-        /// The number of threads Rayon can use when parallel processing
-        #[arg(short, long, value_name = "NUM_THREADS", default_value = "2")]
-        num_threads: usize,
-
-        #[arg(long, default_value = "false")]
-        debug: bool,
-    },
-    /// Generate networkx compatible graphs
-    Graph {
+#[derive(Subcommand, Clone)]
+enum GenerateSubCommands {
+    /// Generate graphs from extracted data
+    Graphs {
         /// The path to a JSON file extracted using the <EXTRACT> command
         #[arg(short, long, value_name = "FILENAME")]
         path: String,
@@ -145,7 +115,7 @@ enum Commands {
         #[arg(short, long, value_name = "EMBED_DIM")]
         embed_dim: Option<i64>,
     },
-    /// Generate NLP-style datasets
+    /// Generate NLP data from extracted data
     Nlp {
         /// The path to a JSON file extracted using the <EXTRACT> command
         #[arg(short, long, value_name = "FILENAME")]
@@ -177,7 +147,9 @@ enum Commands {
         #[arg(long, default_value = "false")]
         reg_norm: bool,
     },
-    /// Generate HuggingFace tokeniser.json files from a corpus (REFACTOR_NEEDED)
+    /// Generate metadata/feature subsets from extracted data
+    Metadata,
+    /// Generate tokenisers from extracted data
     Tokeniser {
         #[arg(short, long, value_name = "DATA")]
         data: String,
@@ -195,6 +167,43 @@ enum Commands {
         /// The type of tokeniser to create
         #[arg(short, long, value_name = "BPE or Byte-BPE", default_value = "BPE")]
         tokeniser_type: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Get summary information for a binary
+    #[cfg(feature = "goblin")]
+    Info {
+        /// The path to the target binary
+        #[arg(short, long, value_name = "FILENAME")]
+        path: Option<String>,
+    },
+    Generate {
+        #[command(subcommand)]
+        subcommands: GenerateSubCommands,
+    },
+    /// Extract CFG level data from binaries
+    Extract {
+        /// The path to the dir or binary to be processed
+        #[arg(short, long, value_name = "DIR")]
+        fpath: String,
+
+        /// The path for the output directory
+        #[arg(short, long, value_name = "DIR")]
+        output_dir: String,
+
+        /// The extraction mode
+        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "reg", "cfg", "xrefs","cg"])
+        .map(|s| s.parse::<String>().unwrap()),)]
+        mode: String,
+
+        /// The number of threads Rayon can use when parallel processing
+        #[arg(short, long, value_name = "NUM_THREADS", default_value = "2")]
+        num_threads: usize,
+
+        #[arg(long, default_value = "false")]
+        debug: bool,
     },
     /// Generate single embeddings on the fly
     ///
@@ -257,6 +266,217 @@ fn main() {
                 goblin_info(fpath).expect("Failed to get info!");
             }
         }
+        Commands::Generate { subcommands } => match subcommands {
+            GenerateSubCommands::Graphs {
+                path,
+                data_type: graph_type,
+                min_blocks,
+                output_path,
+                feature_type,
+                #[cfg(feature = "inference")]
+                tokeniser_fp,
+                #[cfg(feature = "inference")]
+                model_fp,
+                #[cfg(feature = "inference")]
+                mean_pool,
+                #[cfg(feature = "inference")]
+                embed_dim,
+            } => {
+                let graph_type = match graph_type.as_str() {
+                    "cfg" => DataType::Cfg,
+                    "cg" => DataType::Cg,
+                    "onehopcg" => DataType::OneHopCg,
+                    _ => DataType::Invalid,
+                };
+
+                if graph_type == DataType::Cfg {
+                    info!("Chosen Graph Type: Control Flow Graph");
+                    if feature_type.is_some() {
+                        let feature_vec_type = match feature_type.as_ref().unwrap().as_str() {
+                            "gemini" => FeatureType::Gemini,
+                            "discovre" => FeatureType::DiscovRE,
+                            "dgis" => FeatureType::DGIS,
+                            "encode" => FeatureType::Encoded,
+                            #[cfg(feature = "inference")]
+                            "embed" => FeatureType::ModelEmbedded,
+                            _ => FeatureType::Invalid,
+                        };
+
+                        if feature_vec_type == FeatureType::Invalid {
+                            warn!("Invalid feature type: {}", feature_type.as_ref().unwrap());
+                            exit(1)
+                        } else if feature_vec_type == FeatureType::Gemini
+                            || feature_vec_type == FeatureType::DiscovRE
+                            || feature_vec_type == FeatureType::DGIS
+                        {
+                            info!(
+                                "Creating graphs with {:?} feature vectors.",
+                                feature_vec_type
+                            );
+
+                            if Path::new(path).is_file() {
+                                info!("Single file found");
+                                agfj_graph_statistical_features(
+                                    path,
+                                    &min_blocks.unwrap(),
+                                    output_path,
+                                    feature_vec_type,
+                                )
+                            } else {
+                                info!("Multiple files found. Will parallel process.");
+                                for file in
+                                    WalkDir::new(path).into_iter().filter_map(|file| file.ok())
+                                {
+                                    if file.path().to_string_lossy().ends_with(".json") {
+                                        agfj_graph_statistical_features(
+                                            file.path().to_str().unwrap(),
+                                            &min_blocks.unwrap(),
+                                            output_path,
+                                            feature_vec_type,
+                                        )
+                                    }
+                                }
+                            }
+                        } else if feature_vec_type == FeatureType::Encoded {
+                            todo!("Need to implement Encoded FeatureTypes!")
+                        } else if cfg!(inference) {
+                            #[cfg(feature = "inference")]
+                            if feature_vec_type == FeatureType::ModelEmbedded {
+                                if tokeniser_fp.is_none() || model_fp.is_none() {
+                                    println!("Both Tokeniser and Model filespaths are needed");
+                                    exit(100)
+                                } else {
+                                    agfj_graph_embedded_feats(
+                                        path,
+                                        &min_blocks.unwrap(),
+                                        output_path,
+                                        feature_vec_type,
+                                        tokeniser_fp,
+                                        model_fp,
+                                        mean_pool,
+                                        embed_dim,
+                                    );
+                                }
+                            }
+                        }
+                    } else {
+                        error!("--feature-type/-f is required for creating CFG's")
+                    }
+                } else if graph_type == DataType::Cg {
+                    info!("Chosen Graph Type: Call Graph");
+                    let mut file = AGCJFile {
+                        filename: path.to_owned(),
+                        function_call_graphs: None,
+                        output_path: output_path.to_owned(),
+                    };
+                    file.load_and_deserialize()
+                        .expect("Unable to load and desearilize JSON");
+
+                    for fcg in file.function_call_graphs.as_ref().unwrap() {
+                        fcg.to_petgraph(&file.output_path, &file.filename);
+                    }
+                } else if graph_type == DataType::OneHopCg {
+                    info!("Chosen Graph Type: One Hop Call Graph");
+                    let mut file = AGCJFile {
+                        filename: path.to_owned(),
+                        function_call_graphs: None,
+                        output_path: output_path.to_owned(),
+                    };
+                    file.load_and_deserialize()
+                        .expect("Unable to load and desearilize JSON");
+
+                    for fcg in file.function_call_graphs.as_ref().unwrap() {
+                        fcg.one_hop_to_petgraph(&file, &file.output_path, &file.filename);
+                    }
+                }
+            }
+            GenerateSubCommands::Metadata => println!("Generating Metadata..."),
+            GenerateSubCommands::Nlp {
+                path,
+                instruction_type,
+                min_blocks,
+                data_out_path,
+                output_format,
+                random_walk,
+                reg_norm,
+            } => {
+                let instruction_type = match instruction_type.as_str() {
+                    "esil" => InstructionMode::ESIL,
+                    "disasm" => InstructionMode::Disasm,
+                    _ => InstructionMode::Invalid,
+                };
+
+                if instruction_type == InstructionMode::Invalid {
+                    error!("Invalid instruction mode: {:?}", instruction_type);
+                    exit(1)
+                }
+
+                let format_type = match output_format.as_str() {
+                    "single" => FormatMode::SingleInstruction,
+                    "funcstring" => FormatMode::FuncAsString,
+                    _ => FormatMode::Invalid,
+                };
+
+                if format_type == FormatMode::Invalid {
+                    error!("Invalid format type: {:?}", format_type);
+                    exit(1)
+                }
+
+                if Path::new(path).is_file() {
+                    info!("Single file found");
+                    let file = AGFJFile {
+                        functions: None,
+                        filename: path.to_owned(),
+                        output_path: data_out_path.to_string(),
+                        min_blocks: *min_blocks,
+                        feature_type: None,
+                        architecture: None,
+                        reg_norm: *reg_norm,
+                    };
+
+                    file.execute_data_generation(format_type, instruction_type, random_walk)
+                } else {
+                    info!("Multiple files found. Will parallel process.");
+                    let file_paths_vec = get_json_paths_from_dir(path);
+                    info!(
+                        "{} files found. Beginning Processing.",
+                        file_paths_vec.len()
+                    );
+                    for file in file_paths_vec.iter().progress() {
+                        let file = AGFJFile {
+                            functions: None,
+                            filename: file.to_string(),
+                            output_path: data_out_path.to_string(),
+                            min_blocks: *min_blocks,
+                            feature_type: None,
+                            architecture: None,
+                            reg_norm: *reg_norm,
+                        };
+                        file.execute_data_generation(format_type, instruction_type, random_walk)
+                    }
+                }
+            }
+            GenerateSubCommands::Tokeniser {
+                data,
+                output_name,
+                vocab_size,
+                tokeniser_type,
+            } => {
+                let t_type = match tokeniser_type.as_str() {
+                    "bpe" => TokeniserType::CommaBPE,
+                    "byte-bpe" => TokeniserType::ByteBPE,
+                    _ => TokeniserType::Invalid,
+                };
+                if t_type == TokeniserType::CommaBPE {
+                    todo!("not implemented")
+                } else if t_type == TokeniserType::ByteBPE {
+                    train_byte_bpe_tokeniser(data, output_name, *vocab_size).unwrap();
+                } else {
+                    println!("Invalid tokeniser type - Please choose either bpe or byte-bpe");
+                    exit(1)
+                }
+            }
+        },
         Commands::Extract {
             fpath,
             output_dir,
@@ -338,213 +558,7 @@ fn main() {
                 info!("Extraction complete for {}", fpath)
             }
         }
-        Commands::Graph {
-            path,
-            data_type: graph_type,
-            min_blocks,
-            output_path,
-            feature_type,
-            #[cfg(feature = "inference")]
-            tokeniser_fp,
-            #[cfg(feature = "inference")]
-            model_fp,
-            #[cfg(feature = "inference")]
-            mean_pool,
-            #[cfg(feature = "inference")]
-            embed_dim,
-        } => {
-            let graph_type = match graph_type.as_str() {
-                "cfg" => DataType::Cfg,
-                "cg" => DataType::Cg,
-                "onehopcg" => DataType::OneHopCg,
-                _ => DataType::Invalid,
-            };
 
-            if graph_type == DataType::Cfg {
-                info!("Chosen Graph Type: Control Flow Graph");
-                if feature_type.is_some() {
-                    let feature_vec_type = match feature_type.as_ref().unwrap().as_str() {
-                        "gemini" => FeatureType::Gemini,
-                        "discovre" => FeatureType::DiscovRE,
-                        "dgis" => FeatureType::DGIS,
-                        "encode" => FeatureType::Encoded,
-                        #[cfg(feature = "inference")]
-                        "embed" => FeatureType::ModelEmbedded,
-                        _ => FeatureType::Invalid,
-                    };
-
-                    if feature_vec_type == FeatureType::Invalid {
-                        warn!("Invalid feature type: {}", feature_type.as_ref().unwrap());
-                        exit(1)
-                    } else if feature_vec_type == FeatureType::Gemini
-                        || feature_vec_type == FeatureType::DiscovRE
-                        || feature_vec_type == FeatureType::DGIS
-                    {
-                        info!(
-                            "Creating graphs with {:?} feature vectors.",
-                            feature_vec_type
-                        );
-
-                        if Path::new(path).is_file() {
-                            info!("Single file found");
-                            agfj_graph_statistical_features(
-                                path,
-                                &min_blocks.unwrap(),
-                                output_path,
-                                feature_vec_type,
-                            )
-                        } else {
-                            info!("Multiple files found. Will parallel process.");
-                            for file in WalkDir::new(path).into_iter().filter_map(|file| file.ok())
-                            {
-                                if file.path().to_string_lossy().ends_with(".json") {
-                                    agfj_graph_statistical_features(
-                                        file.path().to_str().unwrap(),
-                                        &min_blocks.unwrap(),
-                                        output_path,
-                                        feature_vec_type,
-                                    )
-                                }
-                            }
-                        }
-                    } else if feature_vec_type == FeatureType::Encoded {
-                        todo!("Need to implement Encoded FeatureTypes!")
-                    } else if cfg!(inference) {
-                        #[cfg(feature = "inference")]
-                        if feature_vec_type == FeatureType::ModelEmbedded {
-                            if tokeniser_fp.is_none() || model_fp.is_none() {
-                                println!("Both Tokeniser and Model filespaths are needed");
-                                exit(100)
-                            } else {
-                                agfj_graph_embedded_feats(
-                                    path,
-                                    &min_blocks.unwrap(),
-                                    output_path,
-                                    feature_vec_type,
-                                    tokeniser_fp,
-                                    model_fp,
-                                    mean_pool,
-                                    embed_dim,
-                                );
-                            }
-                        }
-                    }
-                } else {
-                    error!("--feature-type/-f is required for creating CFG's")
-                }
-            } else if graph_type == DataType::Cg {
-                info!("Chosen Graph Type: Call Graph");
-                let mut file = AGCJFile {
-                    filename: path.to_owned(),
-                    function_call_graphs: None,
-                    output_path: output_path.to_owned(),
-                };
-                file.load_and_deserialize()
-                    .expect("Unable to load and desearilize JSON");
-
-                for fcg in file.function_call_graphs.as_ref().unwrap() {
-                    fcg.to_petgraph(&file.output_path, &file.filename);
-                }
-            } else if graph_type == DataType::OneHopCg {
-                info!("Chosen Graph Type: One Hop Call Graph");
-                let mut file = AGCJFile {
-                    filename: path.to_owned(),
-                    function_call_graphs: None,
-                    output_path: output_path.to_owned(),
-                };
-                file.load_and_deserialize()
-                    .expect("Unable to load and desearilize JSON");
-
-                for fcg in file.function_call_graphs.as_ref().unwrap() {
-                    fcg.one_hop_to_petgraph(&file, &file.output_path, &file.filename);
-                }
-            }
-        }
-        Commands::Nlp {
-            path,
-            instruction_type,
-            min_blocks,
-            data_out_path,
-            output_format,
-            random_walk,
-            reg_norm,
-        } => {
-            let instruction_type = match instruction_type.as_str() {
-                "esil" => InstructionMode::ESIL,
-                "disasm" => InstructionMode::Disasm,
-                _ => InstructionMode::Invalid,
-            };
-
-            if instruction_type == InstructionMode::Invalid {
-                error!("Invalid instruction mode: {:?}", instruction_type);
-                exit(1)
-            }
-
-            let format_type = match output_format.as_str() {
-                "single" => FormatMode::SingleInstruction,
-                "funcstring" => FormatMode::FuncAsString,
-                _ => FormatMode::Invalid,
-            };
-
-            if format_type == FormatMode::Invalid {
-                error!("Invalid format type: {:?}", format_type);
-                exit(1)
-            }
-
-            if Path::new(path).is_file() {
-                info!("Single file found");
-                let file = AGFJFile {
-                    functions: None,
-                    filename: path.to_owned(),
-                    output_path: data_out_path.to_string(),
-                    min_blocks: *min_blocks,
-                    feature_type: None,
-                    architecture: None,
-                    reg_norm: *reg_norm,
-                };
-
-                file.execute_data_generation(format_type, instruction_type, random_walk)
-            } else {
-                info!("Multiple files found. Will parallel process.");
-                let file_paths_vec = get_json_paths_from_dir(path);
-                info!(
-                    "{} files found. Beginning Processing.",
-                    file_paths_vec.len()
-                );
-                for file in file_paths_vec.iter().progress() {
-                    let file = AGFJFile {
-                        functions: None,
-                        filename: file.to_string(),
-                        output_path: data_out_path.to_string(),
-                        min_blocks: *min_blocks,
-                        feature_type: None,
-                        architecture: None,
-                        reg_norm: *reg_norm,
-                    };
-                    file.execute_data_generation(format_type, instruction_type, random_walk)
-                }
-            }
-        }
-        Commands::Tokeniser {
-            data,
-            output_name,
-            vocab_size,
-            tokeniser_type,
-        } => {
-            let t_type = match tokeniser_type.as_str() {
-                "bpe" => TokeniserType::CommaBPE,
-                "byte-bpe" => TokeniserType::ByteBPE,
-                _ => TokeniserType::Invalid,
-            };
-            if t_type == TokeniserType::CommaBPE {
-                todo!("not implemented")
-            } else if t_type == TokeniserType::ByteBPE {
-                train_byte_bpe_tokeniser(data, output_name, *vocab_size).unwrap();
-            } else {
-                println!("Invalid tokeniser type - Please choose either bpe or byte-bpe");
-                exit(1)
-            }
-        }
         #[cfg(feature = "inference")]
         Commands::Inference {
             sequence,
