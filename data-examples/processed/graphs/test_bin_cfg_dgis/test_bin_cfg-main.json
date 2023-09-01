@@ -1,0 +1,169 @@
+{
+  "adjacency": [
+    [
+      {
+        "id": 2,
+        "weight": 2
+      },
+      {
+        "id": 1,
+        "weight": 1
+      }
+    ],
+    [
+      {
+        "id": 3,
+        "weight": 1
+      }
+    ],
+    [
+      {
+        "id": 3,
+        "weight": 1
+      }
+    ],
+    [
+      {
+        "id": 8,
+        "weight": 2
+      },
+      {
+        "id": 4,
+        "weight": 1
+      }
+    ],
+    [
+      {
+        "id": 6,
+        "weight": 2
+      },
+      {
+        "id": 5,
+        "weight": 1
+      }
+    ],
+    [
+      {
+        "id": 7,
+        "weight": 1
+      }
+    ],
+    [
+      {
+        "id": 7,
+        "weight": 1
+      }
+    ],
+    [],
+    [
+      {
+        "id": 7,
+        "weight": 1
+      }
+    ]
+  ],
+  "directed": "True",
+  "graph": [],
+  "multigraph": false,
+  "nodes": [
+    {
+      "id": 0,
+      "num stack ops": 1.0,
+      "num arith ops": 1.0,
+      "num logic ops": 0.0,
+      "num cmp ops": 1.0,
+      "num lib calls": 1.0,
+      "num uncon jumps": 0.0,
+      "num con jumps": 1.0,
+      "num generic ins": 5.0
+    },
+    {
+      "id": 1,
+      "num stack ops": 0.0,
+      "num arith ops": 0.0,
+      "num logic ops": 0.0,
+      "num cmp ops": 0.0,
+      "num lib calls": 1.0,
+      "num uncon jumps": 0.0,
+      "num con jumps": 0.0,
+      "num generic ins": 2.0
+    },
+    {
+      "id": 2,
+      "num stack ops": 0.0,
+      "num arith ops": 0.0,
+      "num logic ops": 0.0,
+      "num cmp ops": 1.0,
+      "num lib calls": 0.0,
+      "num uncon jumps": 0.0,
+      "num con jumps": 1.0,
+      "num generic ins": 0.0
+    },
+    {
+      "id": 3,
+      "num stack ops": 0.0,
+      "num arith ops": 0.0,
+      "num logic ops": 0.0,
+      "num cmp ops": 0.0,
+      "num lib calls": 1.0,
+      "num uncon jumps": 0.0,
+      "num con jumps": 0.0,
+      "num generic ins": 2.0
+    },
+    {
+      "id": 4,
+      "num stack ops": 0.0,
+      "num arith ops": 0.0,
+      "num logic ops": 0.0,
+      "num cmp ops": 0.0,
+      "num lib calls": 1.0,
+      "num uncon jumps": 1.0,
+      "num con jumps": 0.0,
+      "num generic ins": 2.0
+    },
+    {
+      "id": 5,
+      "num stack ops": 0.0,
+      "num arith ops": 0.0,
+      "num logic ops": 0.0,
+      "num cmp ops": 0.0,
+      "num lib calls": 0.0,
+      "num uncon jumps": 2.0,
+      "num con jumps": 0.0,
+      "num generic ins": 1.0
+    },
+    {
+      "id": 6,
+      "num stack ops": 0.0,
+      "num arith ops": 0.0,
+      "num logic ops": 0.0,
+      "num cmp ops": 0.0,
+      "num lib calls": 1.0,
+      "num uncon jumps": 1.0,
+      "num con jumps": 0.0,
+      "num generic ins": 2.0
+    },
+    {
+      "id": 7,
+      "num stack ops": 0.0,
+      "num arith ops": 0.0,
+      "num logic ops": 0.0,
+      "num cmp ops": 0.0,
+      "num lib calls": 1.0,
+      "num uncon jumps": 1.0,
+      "num con jumps": 0.0,
+      "num generic ins": 2.0
+    },
+    {
+      "id": 8,
+      "num stack ops": 0.0,
+      "num arith ops": 1.0,
+      "num logic ops": 0.0,
+      "num cmp ops": 1.0,
+      "num lib calls": 0.0,
+      "num uncon jumps": 0.0,
+      "num con jumps": 1.0,
+      "num generic ins": 2.0
+    }
+  ]
+}
