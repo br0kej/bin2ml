@@ -1,0 +1,132 @@
+[
+  {
+    "name": "entry0",
+    "ninstrs": 13,
+    "edges": 0,
+    "indegree": 0,
+    "outdegree": 1,
+    "nlocals": 0,
+    "nargs": 1,
+    "signature": "entry0 (int64_t arg3);"
+  },
+  {
+    "name": "sym.deregister_tm_clones",
+    "ninstrs": 9,
+    "edges": 4,
+    "indegree": 1,
+    "outdegree": 0,
+    "nlocals": 0,
+    "nargs": 0,
+    "signature": "sym.deregister_tm_clones ();"
+  },
+  {
+    "name": "sym.register_tm_clones",
+    "ninstrs": 14,
+    "edges": 4,
+    "indegree": 1,
+    "outdegree": 0,
+    "nlocals": 0,
+    "nargs": 0,
+    "signature": "sym.register_tm_clones ();"
+  },
+  {
+    "name": "sym.__do_global_dtors_aux",
+    "ninstrs": 14,
+    "edges": 5,
+    "indegree": 0,
+    "outdegree": 2,
+    "nlocals": 0,
+    "nargs": 0,
+    "signature": "sym.__do_global_dtors_aux ();"
+  },
+  {
+    "name": "sym..plt.got",
+    "ninstrs": 2,
+    "edges": 0,
+    "indegree": 1,
+    "outdegree": 0,
+    "nlocals": 0,
+    "nargs": 0,
+    "signature": "sym..plt.got ();"
+  },
+  {
+    "name": "entry.init0",
+    "ninstrs": 2,
+    "edges": 1,
+    "indegree": 0,
+    "outdegree": 0,
+    "nlocals": 0,
+    "nargs": 0,
+    "signature": "entry.init0 ();"
+  },
+  {
+    "name": "sym._init",
+    "ninstrs": 8,
+    "edges": 3,
+    "indegree": 1,
+    "outdegree": 1,
+    "nlocals": 0,
+    "nargs": 0,
+    "signature": "sym._init ();"
+  },
+  {
+    "name": "sym.__libc_csu_fini",
+    "ninstrs": 2,
+    "edges": 0,
+    "indegree": 0,
+    "outdegree": 0,
+    "nlocals": 0,
+    "nargs": 0,
+    "signature": "sym.__libc_csu_fini ();"
+  },
+  {
+    "name": "sym._fini",
+    "ninstrs": 4,
+    "edges": 0,
+    "indegree": 0,
+    "outdegree": 0,
+    "nlocals": 0,
+    "nargs": 0,
+    "signature": "sym._fini ();"
+  },
+  {
+    "name": "sym.__libc_csu_init",
+    "ninstrs": 34,
+    "edges": 5,
+    "indegree": 0,
+    "outdegree": 2,
+    "nlocals": 0,
+    "nargs": 3,
+    "signature": "sym.__libc_csu_init (int64_t arg1, int64_t arg2, int64_t arg3);"
+  },
+  {
+    "name": "main",
+    "ninstrs": 38,
+    "edges": 11,
+    "indegree": 3,
+    "outdegree": 6,
+    "nlocals": 2,
+    "nargs": 0,
+    "signature": "int main (int argc, char **argv, char **envp);"
+  },
+  {
+    "name": "sym.imp.printf",
+    "ninstrs": 2,
+    "edges": 0,
+    "indegree": 6,
+    "outdegree": 0,
+    "nlocals": 0,
+    "nargs": 0,
+    "signature": "int sym.imp.printf (const char *format);"
+  },
+  {
+    "name": "loc.imp._ITM_deregisterTMCloneTable",
+    "ninstrs": 197,
+    "edges": 7,
+    "indegree": 1,
+    "outdegree": 0,
+    "nlocals": 0,
+    "nargs": 4,
+    "signature": "loc.imp._ITM_deregisterTMCloneTable (int64_t arg2, int64_t arg3, int64_t arg4, int64_t arg_2h);"
+  }
+]

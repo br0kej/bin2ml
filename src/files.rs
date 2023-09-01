@@ -1,7 +1,9 @@
+use crate::afij::{AFIJFeatureSubset, AFIJFunctionInfo};
 use crate::agcj::AGCJFunctionCallGraphs;
 use crate::agfj::AGFJFunc;
 use crate::bb::{FeatureType, InstructionMode};
 use crate::consts::*;
+use crate::errors::FileLoadError;
 #[cfg(feature = "inference")]
 use crate::inference::InferenceJob;
 use crate::utils::get_save_file_path;
@@ -18,7 +20,6 @@ use std::string::String;
 use std::sync::mpsc::channel;
 #[cfg(feature = "inference")]
 use std::sync::Arc;
-use crate::errors::FileLoadError;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AGFJFile {
@@ -178,7 +179,7 @@ impl AGFJFile {
     /// Generates a single string which contains the ESIL representation of every
     /// instruction within a function
     pub fn generate_esil_func_strings(mut self) {
-        let fname_string: String = get_save_file_path(&self.filename, &self.output_path);
+        let fname_string: String = get_save_file_path(&self.filename, &self.output_path, None);
         let fname_string = format!("{}-efs.json", fname_string);
 
         if !Path::new(&fname_string).exists() {
@@ -218,7 +219,7 @@ impl AGFJFile {
     pub fn generate_disasm_func_strings(mut self) {
         // This needs to be amended so that there is a AGFJFunc function
         // that returns a function as a func string.
-        let fname_string: String = get_save_file_path(&self.filename, &self.output_path);
+        let fname_string: String = get_save_file_path(&self.filename, &self.output_path, None);
         let fname_string = format!("{}-dfs.json", fname_string);
 
         if !Path::new(&fname_string).exists() {
@@ -243,7 +244,8 @@ impl AGFJFile {
                 let map: HashMap<_, _> = fixed.into_iter().collect();
 
                 let json = json!(map);
-                let fname_string: String = get_save_file_path(&self.filename, &self.output_path);
+                let fname_string: String =
+                    get_save_file_path(&self.filename, &self.output_path, None);
                 let fname_string = format!("{}-dfs.json", fname_string);
 
                 serde_json::to_writer(
@@ -261,30 +263,39 @@ impl AGFJFile {
     /// This ignores control flow and simple iterates the JSON objects from the top to
     /// the bottom.
     pub fn generate_linear_bb_walk(mut self, esil: bool) {
-        self.load_and_deserialize()
-            .expect("Unable to load and desearlize JSON");
+        let fname_string: String = get_save_file_path(&self.filename, &self.output_path, None);
+        let fname_string = if esil {
+            format!("{}-esil-singles.txt", fname_string)
+        } else {
+            format!("{}-dis-singles.txt", fname_string)
+        };
 
-        let (sender, receiver) = channel();
+        if !Path::new(&fname_string).exists() {
+            self.load_and_deserialize()
+                .expect("Unable to load and desearlize JSON");
 
-        self.functions.unwrap().par_iter_mut().for_each_with(
-            sender,
-            |s, func: &mut Vec<AGFJFunc>| {
-                s.send(func[0].get_function_instructions(esil, &self.min_blocks, self.reg_norm))
-                    .unwrap()
-            },
-        );
+            let (sender, receiver) = channel();
 
-        let res: Vec<Vec<String>> = receiver.iter().filter(|x| x.is_some()).flatten().collect();
+            self.functions.unwrap().par_iter_mut().for_each_with(
+                sender,
+                |s, func: &mut Vec<AGFJFunc>| {
+                    s.send(func[0].get_function_instructions(esil, &self.min_blocks, self.reg_norm))
+                        .unwrap()
+                },
+            );
 
-        let write_file = File::create(self.output_path).unwrap();
-        let mut writer = BufWriter::new(&write_file);
+            let res: Vec<Vec<String>> = receiver.iter().filter(|x| x.is_some()).flatten().collect();
 
-        for func in res {
-            for bb in func {
-                writer
-                    .write_all(bb.as_bytes())
-                    .expect("Unable to write bytes.");
-                writer.write_all(b"\n").expect("Unable to write bytes.");
+            let write_file = File::create(fname_string).unwrap();
+            let mut writer = BufWriter::new(&write_file);
+
+            for func in res {
+                for bb in func {
+                    writer
+                        .write_all(bb.as_bytes())
+                        .expect("Unable to write bytes.");
+                    writer.write_all(b"\n").expect("Unable to write bytes.");
+                }
             }
         }
     }
@@ -343,5 +354,45 @@ impl AGCJFile {
 
         self.function_call_graphs = Some(json);
         Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AFIJFile {
+    pub filename: String,
+    pub function_info: Option<Vec<AFIJFunctionInfo>>,
+    pub output_path: String,
+}
+
+impl AFIJFile {
+    pub fn load_and_deserialize(&mut self) -> Result<(), FileLoadError> {
+        let data = read_to_string(&self.filename)?;
+
+        #[allow(clippy::expect_fun_call)]
+        // Kept in to ensure that the JSON decode error message is printed alongside the filename
+        let json: Vec<AFIJFunctionInfo> = serde_json::from_str(&data)?;
+
+        self.function_info = Some(json);
+        Ok(())
+    }
+
+    pub fn subset_and_save(&mut self) {
+        let mut func_info_subsets: Vec<AFIJFeatureSubset> = Vec::new();
+        info!("Starting to process functions");
+        for function in self.function_info.as_ref().unwrap().iter() {
+            let subset = AFIJFeatureSubset::from(function);
+            func_info_subsets.push(subset)
+        }
+        debug!(
+            "Length of Subsetted Function Info: {}",
+            func_info_subsets.len()
+        );
+        let fname_string: String = get_save_file_path(&self.filename, &self.output_path, None);
+        let filename = format!("{}-finfo-subset.json", fname_string);
+        serde_json::to_writer(
+            &File::create(filename).expect("Failed to create writer"),
+            &func_info_subsets,
+        )
+        .expect("Unable to write JSON");
     }
 }

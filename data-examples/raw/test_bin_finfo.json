@@ -1,0 +1,784 @@
+[
+  {
+    "bits": 64,
+    "bpvars": [],
+    "callrefs": [
+      {
+        "addr": 4704,
+        "at": 4211,
+        "type": "DATA"
+      },
+      {
+        "addr": 4592,
+        "at": 4218,
+        "type": "DATA"
+      },
+      {
+        "addr": 4425,
+        "at": 4225,
+        "type": "DATA"
+      }
+    ],
+    "calltype": "amd64",
+    "cc": 1,
+    "codexrefs": null,
+    "cost": 16,
+    "datarefs": [
+      4704,
+      4592,
+      4425
+    ],
+    "dataxrefs": null,
+    "difftype": "new",
+    "ebbs": 1,
+    "edges": 0,
+    "indegree": 0,
+    "is-lineal": true,
+    "is-pure": "false",
+    "maxbound": 4239,
+    "minbound": 4192,
+    "name": "entry0",
+    "nargs": 1,
+    "nbbs": 1,
+    "ninstrs": 13,
+    "nlocals": 0,
+    "noreturn": false,
+    "offset": 4192,
+    "outdegree": 1,
+    "realsz": 47,
+    "regvars": [
+      {
+        "kind": "reg",
+        "name": "arg3",
+        "ref": "rdx",
+        "type": "int64_t"
+      }
+    ],
+    "signature": "entry0 (int64_t arg3);",
+    "size": 47,
+    "spvars": [],
+    "stackframe": 8,
+    "type": "fcn"
+  },
+  {
+    "bits": 64,
+    "bpvars": [],
+    "callrefs": [
+      {
+        "addr": 16400,
+        "at": 4240,
+        "type": "DATA"
+      },
+      {
+        "addr": 16400,
+        "at": 4247,
+        "type": "DATA"
+      },
+      {
+        "addr": 16344,
+        "at": 4259,
+        "type": "DATA"
+      }
+    ],
+    "calltype": "amd64",
+    "cc": 4,
+    "codexrefs": [
+      {
+        "addr": 4391,
+        "at": 4240,
+        "type": "CALL"
+      }
+    ],
+    "cost": 14,
+    "datarefs": [
+      16400,
+      16400,
+      16344
+    ],
+    "dataxrefs": [],
+    "difftype": "new",
+    "ebbs": 2,
+    "edges": 4,
+    "indegree": 1,
+    "is-lineal": false,
+    "is-pure": "false",
+    "maxbound": 4281,
+    "minbound": 4240,
+    "name": "sym.deregister_tm_clones",
+    "nargs": 0,
+    "nbbs": 4,
+    "ninstrs": 9,
+    "nlocals": 0,
+    "noreturn": false,
+    "offset": 4240,
+    "outdegree": 0,
+    "realsz": 34,
+    "regvars": [],
+    "signature": "sym.deregister_tm_clones ();",
+    "size": 41,
+    "spvars": [],
+    "stackframe": 0,
+    "type": "sym"
+  },
+  {
+    "bits": 64,
+    "bpvars": [],
+    "callrefs": [
+      {
+        "addr": 16400,
+        "at": 4288,
+        "type": "DATA"
+      },
+      {
+        "addr": 16400,
+        "at": 4295,
+        "type": "DATA"
+      },
+      {
+        "addr": 16368,
+        "at": 4324,
+        "type": "DATA"
+      }
+    ],
+    "calltype": "amd64",
+    "cc": 4,
+    "codexrefs": [
+      {
+        "addr": 4420,
+        "at": 4288,
+        "type": "CODE"
+      }
+    ],
+    "cost": 19,
+    "datarefs": [
+      16400,
+      16400,
+      16368
+    ],
+    "dataxrefs": [],
+    "difftype": "new",
+    "ebbs": 2,
+    "edges": 4,
+    "indegree": 1,
+    "is-lineal": false,
+    "is-pure": "false",
+    "maxbound": 4345,
+    "minbound": 4288,
+    "name": "sym.register_tm_clones",
+    "nargs": 0,
+    "nbbs": 4,
+    "ninstrs": 14,
+    "nlocals": 0,
+    "noreturn": false,
+    "offset": 4288,
+    "outdegree": 0,
+    "realsz": 51,
+    "regvars": [],
+    "signature": "sym.register_tm_clones ();",
+    "size": 57,
+    "spvars": [],
+    "stackframe": 0,
+    "type": "sym"
+  },
+  {
+    "bits": 64,
+    "bpvars": [],
+    "callrefs": [
+      {
+        "addr": 16400,
+        "at": 4356,
+        "type": "DATA"
+      },
+      {
+        "addr": 16376,
+        "at": 4366,
+        "type": "DATA"
+      },
+      {
+        "addr": 16392,
+        "at": 4379,
+        "type": "DATA"
+      },
+      {
+        "addr": 16400,
+        "at": 4396,
+        "type": "DATA"
+      }
+    ],
+    "calltype": "amd64",
+    "cc": 4,
+    "codexrefs": null,
+    "cost": 24,
+    "datarefs": [
+      16400,
+      16376,
+      16392,
+      16400
+    ],
+    "dataxrefs": null,
+    "difftype": "new",
+    "ebbs": 2,
+    "edges": 5,
+    "indegree": 0,
+    "is-lineal": false,
+    "is-pure": "false",
+    "maxbound": 4409,
+    "minbound": 4352,
+    "name": "sym.__do_global_dtors_aux",
+    "nargs": 0,
+    "nbbs": 5,
+    "ninstrs": 14,
+    "nlocals": 0,
+    "noreturn": false,
+    "offset": 4352,
+    "outdegree": 2,
+    "realsz": 54,
+    "regvars": [],
+    "signature": "sym.__do_global_dtors_aux ();",
+    "size": 57,
+    "spvars": [],
+    "stackframe": 8,
+    "type": "sym"
+  },
+  {
+    "bits": 64,
+    "bpvars": [],
+    "callrefs": [
+      {
+        "addr": 16376,
+        "at": 4164,
+        "type": "DATA"
+      }
+    ],
+    "calltype": "amd64",
+    "cc": 1,
+    "codexrefs": [
+      {
+        "addr": 4386,
+        "at": 4160,
+        "type": "CALL"
+      }
+    ],
+    "cost": 4,
+    "datarefs": [
+      16376
+    ],
+    "dataxrefs": [],
+    "difftype": "new",
+    "ebbs": 1,
+    "edges": 0,
+    "indegree": 1,
+    "is-lineal": true,
+    "is-pure": "false",
+    "maxbound": 4171,
+    "minbound": 4160,
+    "name": "sym..plt.got",
+    "nargs": 0,
+    "nbbs": 1,
+    "ninstrs": 2,
+    "nlocals": 0,
+    "noreturn": false,
+    "offset": 4160,
+    "outdegree": 0,
+    "realsz": 11,
+    "regvars": [],
+    "signature": "sym..plt.got ();",
+    "size": 11,
+    "spvars": [],
+    "stackframe": 0,
+    "type": "sym"
+  },
+  {
+    "bits": 64,
+    "bpvars": [],
+    "callrefs": [
+      {
+        "addr": 4288,
+        "at": 4420,
+        "type": "CODE"
+      }
+    ],
+    "calltype": "amd64",
+    "cc": 0,
+    "codexrefs": null,
+    "cost": 3,
+    "datarefs": [],
+    "dataxrefs": null,
+    "difftype": "new",
+    "ebbs": 0,
+    "edges": 1,
+    "indegree": 0,
+    "is-lineal": true,
+    "is-pure": "false",
+    "maxbound": 4425,
+    "minbound": 4416,
+    "name": "entry.init0",
+    "nargs": 0,
+    "nbbs": 1,
+    "ninstrs": 2,
+    "nlocals": 0,
+    "noreturn": false,
+    "offset": 4416,
+    "outdegree": 0,
+    "realsz": 9,
+    "regvars": [],
+    "signature": "entry.init0 ();",
+    "size": 9,
+    "spvars": [],
+    "stackframe": 0,
+    "type": "fcn"
+  },
+  {
+    "bits": 64,
+    "bpvars": [],
+    "callrefs": [
+      {
+        "addr": 16360,
+        "at": 4104,
+        "type": "DATA"
+      }
+    ],
+    "calltype": "amd64",
+    "cc": 2,
+    "codexrefs": [
+      {
+        "addr": 4636,
+        "at": 4096,
+        "type": "CALL"
+      }
+    ],
+    "cost": 13,
+    "datarefs": [
+      16360
+    ],
+    "dataxrefs": [],
+    "difftype": "new",
+    "ebbs": 1,
+    "edges": 3,
+    "indegree": 1,
+    "is-lineal": true,
+    "is-pure": "false",
+    "maxbound": 4123,
+    "minbound": 4096,
+    "name": "sym._init",
+    "nargs": 0,
+    "nbbs": 3,
+    "ninstrs": 8,
+    "nlocals": 0,
+    "noreturn": false,
+    "offset": 4096,
+    "outdegree": 1,
+    "realsz": 27,
+    "regvars": [],
+    "signature": "sym._init ();",
+    "size": 27,
+    "spvars": [],
+    "stackframe": 8,
+    "type": "sym"
+  },
+  {
+    "bits": 64,
+    "bpvars": [],
+    "callrefs": null,
+    "calltype": "amd64",
+    "cc": 1,
+    "codexrefs": [],
+    "cost": 4,
+    "datarefs": null,
+    "dataxrefs": [
+      4211
+    ],
+    "difftype": "new",
+    "ebbs": 1,
+    "edges": 0,
+    "indegree": 0,
+    "is-lineal": true,
+    "is-pure": "true",
+    "maxbound": 4709,
+    "minbound": 4704,
+    "name": "sym.__libc_csu_fini",
+    "nargs": 0,
+    "nbbs": 1,
+    "ninstrs": 2,
+    "nlocals": 0,
+    "noreturn": false,
+    "offset": 4704,
+    "outdegree": 0,
+    "realsz": 5,
+    "regvars": [],
+    "signature": "sym.__libc_csu_fini ();",
+    "size": 5,
+    "spvars": [],
+    "stackframe": 0,
+    "type": "sym"
+  },
+  {
+    "bits": 64,
+    "bpvars": [],
+    "callrefs": null,
+    "calltype": "amd64",
+    "cc": 1,
+    "codexrefs": null,
+    "cost": 6,
+    "datarefs": null,
+    "dataxrefs": null,
+    "difftype": "new",
+    "ebbs": 1,
+    "edges": 0,
+    "indegree": 0,
+    "is-lineal": true,
+    "is-pure": "true",
+    "maxbound": 4725,
+    "minbound": 4712,
+    "name": "sym._fini",
+    "nargs": 0,
+    "nbbs": 1,
+    "ninstrs": 4,
+    "nlocals": 0,
+    "noreturn": false,
+    "offset": 4712,
+    "outdegree": 0,
+    "realsz": 13,
+    "regvars": [],
+    "signature": "sym._fini ();",
+    "size": 13,
+    "spvars": [],
+    "stackframe": 8,
+    "type": "sym"
+  },
+  {
+    "bits": 64,
+    "bpvars": [],
+    "callrefs": [
+      {
+        "addr": 15800,
+        "at": 4598,
+        "type": "DATA"
+      },
+      {
+        "addr": 15808,
+        "at": 4621,
+        "type": "DATA"
+      }
+    ],
+    "calltype": "amd64",
+    "cc": 3,
+    "codexrefs": [],
+    "cost": 43,
+    "datarefs": [
+      15800,
+      15808
+    ],
+    "dataxrefs": [
+      4218
+    ],
+    "difftype": "new",
+    "ebbs": 1,
+    "edges": 5,
+    "indegree": 0,
+    "is-lineal": true,
+    "is-pure": "false",
+    "maxbound": 4693,
+    "minbound": 4592,
+    "name": "sym.__libc_csu_init",
+    "nargs": 3,
+    "nbbs": 4,
+    "ninstrs": 34,
+    "nlocals": 0,
+    "noreturn": false,
+    "offset": 4592,
+    "outdegree": 2,
+    "realsz": 101,
+    "regvars": [
+      {
+        "kind": "reg",
+        "name": "arg1",
+        "ref": "rdi",
+        "type": "int64_t"
+      },
+      {
+        "kind": "reg",
+        "name": "arg2",
+        "ref": "rsi",
+        "type": "int64_t"
+      },
+      {
+        "kind": "reg",
+        "name": "arg3",
+        "ref": "rdx",
+        "type": "int64_t"
+      }
+    ],
+    "signature": "sym.__libc_csu_init (int64_t arg1, int64_t arg2, int64_t arg3);",
+    "size": 101,
+    "spvars": [],
+    "stackframe": 56,
+    "type": "sym"
+  },
+  {
+    "bits": 64,
+    "bpvars": [
+      {
+        "kind": "var",
+        "name": "var_4h",
+        "ref": {
+          "base": "rbp",
+          "offset": -4
+        },
+        "type": "int64_t"
+      },
+      {
+        "kind": "var",
+        "name": "var_8h",
+        "ref": {
+          "base": "rbp",
+          "offset": -8
+        },
+        "type": "int64_t"
+      }
+    ],
+    "callrefs": [
+      {
+        "addr": 8196,
+        "at": 4437,
+        "type": "DATA"
+      },
+      {
+        "addr": 8226,
+        "at": 4467,
+        "type": "DATA"
+      },
+      {
+        "addr": 4503,
+        "at": 4484,
+        "type": "CODE"
+      },
+      {
+        "addr": 8235,
+        "at": 4486,
+        "type": "DATA"
+      },
+      {
+        "addr": 8249,
+        "at": 4518,
+        "type": "DATA"
+      },
+      {
+        "addr": 4579,
+        "at": 4535,
+        "type": "CODE"
+      },
+      {
+        "addr": 8259,
+        "at": 4543,
+        "type": "DATA"
+      },
+      {
+        "addr": 4579,
+        "at": 4560,
+        "type": "CODE"
+      },
+      {
+        "addr": 8277,
+        "at": 4562,
+        "type": "DATA"
+      }
+    ],
+    "calltype": "amd64",
+    "cc": 4,
+    "codexrefs": [
+      {
+        "addr": 4484,
+        "at": 4503,
+        "type": "CODE"
+      },
+      {
+        "addr": 4535,
+        "at": 4579,
+        "type": "CODE"
+      },
+      {
+        "addr": 4560,
+        "at": 4579,
+        "type": "CODE"
+      }
+    ],
+    "cost": 58,
+    "datarefs": [
+      8196,
+      8226,
+      8235,
+      8249,
+      8259,
+      8277
+    ],
+    "dataxrefs": [
+      4225
+    ],
+    "difftype": "new",
+    "ebbs": 1,
+    "edges": 11,
+    "indegree": 3,
+    "is-lineal": true,
+    "is-pure": "false",
+    "maxbound": 4586,
+    "minbound": 4425,
+    "name": "main",
+    "nargs": 0,
+    "nbbs": 9,
+    "ninstrs": 38,
+    "nlocals": 2,
+    "noreturn": false,
+    "offset": 4425,
+    "outdegree": 6,
+    "realsz": 161,
+    "regvars": [],
+    "signature": "int main (int argc, char **argv, char **envp);",
+    "size": 161,
+    "spvars": [],
+    "stackframe": 24,
+    "type": "sym"
+  },
+  {
+    "bits": 64,
+    "bpvars": [],
+    "callrefs": [
+      {
+        "addr": 16336,
+        "at": 4180,
+        "type": "DATA"
+      }
+    ],
+    "calltype": "amd64",
+    "cc": 1,
+    "codexrefs": [
+      {
+        "addr": 4449,
+        "at": 4176,
+        "type": "CALL"
+      },
+      {
+        "addr": 4479,
+        "at": 4176,
+        "type": "CALL"
+      },
+      {
+        "addr": 4498,
+        "at": 4176,
+        "type": "CALL"
+      },
+      {
+        "addr": 4530,
+        "at": 4176,
+        "type": "CALL"
+      },
+      {
+        "addr": 4555,
+        "at": 4176,
+        "type": "CALL"
+      },
+      {
+        "addr": 4574,
+        "at": 4176,
+        "type": "CALL"
+      }
+    ],
+    "cost": 4,
+    "datarefs": [
+      16336
+    ],
+    "dataxrefs": [],
+    "difftype": "new",
+    "ebbs": 1,
+    "edges": 0,
+    "indegree": 6,
+    "is-lineal": true,
+    "is-pure": "false",
+    "maxbound": 4187,
+    "minbound": 4176,
+    "name": "sym.imp.printf",
+    "nargs": 0,
+    "nbbs": 1,
+    "ninstrs": 2,
+    "nlocals": 0,
+    "noreturn": false,
+    "offset": 4176,
+    "outdegree": 0,
+    "realsz": 11,
+    "regvars": [],
+    "signature": "int sym.imp.printf (const char *format);",
+    "size": 11,
+    "spvars": [],
+    "stackframe": 0,
+    "type": "sym"
+  },
+  {
+    "bits": 64,
+    "bpvars": [
+      {
+        "kind": "arg",
+        "name": "arg_2h",
+        "ref": {
+          "base": "rbp",
+          "offset": 2
+        },
+        "type": "int64_t"
+      }
+    ],
+    "callrefs": null,
+    "calltype": "amd64",
+    "cc": 3,
+    "codexrefs": [
+      {
+        "addr": 4665,
+        "at": 0,
+        "type": "CALL"
+      }
+    ],
+    "cost": 199,
+    "datarefs": null,
+    "dataxrefs": [],
+    "difftype": "new",
+    "ebbs": 1,
+    "edges": 7,
+    "indegree": 1,
+    "is-lineal": false,
+    "is-pure": "true",
+    "maxbound": 384,
+    "minbound": 0,
+    "name": "loc.imp._ITM_deregisterTMCloneTable",
+    "nargs": 4,
+    "nbbs": 6,
+    "ninstrs": 197,
+    "nlocals": 0,
+    "noreturn": false,
+    "offset": 0,
+    "outdegree": 0,
+    "realsz": 439,
+    "regvars": [
+      {
+        "kind": "reg",
+        "name": "arg2",
+        "ref": "rsi",
+        "type": "int64_t"
+      },
+      {
+        "kind": "reg",
+        "name": "arg3",
+        "ref": "rdx",
+        "type": "int64_t"
+      },
+      {
+        "kind": "reg",
+        "name": "arg4",
+        "ref": "rcx",
+        "type": "int64_t"
+      }
+    ],
+    "signature": "loc.imp._ITM_deregisterTMCloneTable (int64_t arg2, int64_t arg3, int64_t arg4, int64_t arg_2h);",
+    "size": 384,
+    "spvars": [],
+    "stackframe": 0,
+    "type": "fcn"
+  }
+]

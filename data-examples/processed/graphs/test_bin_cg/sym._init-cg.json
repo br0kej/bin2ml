@@ -1,0 +1,24 @@
+{
+  "adjacency": [
+    [
+      {
+        "id": 1,
+        "weight": 0
+      }
+    ],
+    []
+  ],
+  "directed": "True",
+  "graph": [],
+  "multigraph": false,
+  "nodes": [
+    {
+      "id": 0,
+      "funcName": "sym._init"
+    },
+    {
+      "id": 1,
+      "funcName": "unk.0xffffffffffffffff"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+[
+  {
+    "imports": [
+      "unk.0x3fe0"
+    ],
+    "name": "entry0",
+    "size": 47
+  },
+  {
+    "imports": [
+      "sym..plt.got",
+      "sym.deregister_tm_clones"
+    ],
+    "name": "sym.__do_global_dtors_aux",
+    "size": 57
+  },
+  {
+    "imports": [
+      "unk.0xffffffffffffffff"
+    ],
+    "name": "sym._init",
+    "size": 27
+  },
+  {
+    "imports": [
+      "sym._init",
+      "rsp"
+    ],
+    "name": "sym.__libc_csu_init",
+    "size": 101
+  },
+  {
+    "imports": [
+      "sym.imp.printf"
+    ],
+    "name": "main",
+    "size": 161
+  }
+]

@@ -209,7 +209,7 @@ impl ACFJBlock {
                     } else if ARM_TRANSFER.contains(&opcode) {
                         feature_vector[1] += 1. // Number of Transfer Instructions
                     } else if ARM_ARITHMETIC.contains(&opcode) {
-                        feature_vector[3] += 1. // No. of Arithmetic Instructions
+                        feature_vector[2] += 1. // No. of Arithmetic Instructions
                     }
                 } else if architecture == "X86" {
                     if X86_CALL.contains(&opcode) {
@@ -217,7 +217,7 @@ impl ACFJBlock {
                     } else if X86_TRANSFER.contains(&opcode) {
                         feature_vector[1] += 1. // Number of Transfer Instructions
                     } else if X86_ARITHMETIC.contains(&opcode) {
-                        feature_vector[3] += 1. // No. of Arithmetic Instructions
+                        feature_vector[2] += 1. // No. of Arithmetic Instructions
                     }
                 } else if architecture == "MIPS" {
                     if MIPS_CALL.contains(&opcode) {
@@ -225,7 +225,7 @@ impl ACFJBlock {
                     } else if MIPS_TRANSFER.contains(&opcode) {
                         feature_vector[1] += 1. // Number of Transfer Instructions
                     } else if MIPS_ARITHMETIC.contains(&opcode) {
-                        feature_vector[3] += 1. // No. of Arithmetic Instructions
+                        feature_vector[2] += 1. // No. of Arithmetic Instructions
                     }
                 } else {
                     unreachable!(
@@ -234,7 +234,7 @@ impl ACFJBlock {
                     )
                 }
 
-                feature_vector[2] += 1.; // No. of Insutrctions
+                feature_vector[3] += 1.; // No. of Insutrctions
 
                 if ins.disasm.as_ref().unwrap().contains(", 0x") {
                     feature_vector[4] += 1. // Numeric Constants
@@ -435,6 +435,7 @@ impl ACFJBlock {
         for op in &self.ops {
             if op.esil.is_some() && op.esil.as_ref().unwrap().len() > 1 {
                 let esil_single = &op.esil.as_ref().unwrap();
+                debug!("ESIL Single (prior to norm): {:?}", esil_single);
                 let normd = normalise_esil_simple(esil_single, &op.r#type, reg_norm);
                 esil_ins.push((*normd).to_string())
             }

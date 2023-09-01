@@ -1,0 +1,33 @@
+{
+  "adjacency": [
+    [
+      {
+        "id": 2,
+        "weight": 0
+      },
+      {
+        "id": 1,
+        "weight": 0
+      }
+    ],
+    [],
+    []
+  ],
+  "directed": "True",
+  "graph": [],
+  "multigraph": false,
+  "nodes": [
+    {
+      "id": 0,
+      "funcName": "sym.__libc_csu_init"
+    },
+    {
+      "id": 1,
+      "funcName": "sym._init"
+    },
+    {
+      "id": 2,
+      "funcName": "rsp"
+    }
+  ]
+}
