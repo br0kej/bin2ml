@@ -135,7 +135,7 @@ impl AGFJFunc {
                     let bb_ins = bb.get_esil_bb(reg_norm);
                     function_instructions.push(bb_ins)
                 } else {
-                    let bb_ins = bb.get_ins();
+                    let bb_ins = bb.get_ins(reg_norm);
                     function_instructions.push(bb_ins)
                 }
             }
@@ -173,7 +173,7 @@ impl AGFJFunc {
                             let bb_esil = basic_block.first().unwrap().get_esil_bb(reg_norm);
                             single_disasm_walk.push(bb_esil)
                         } else {
-                            let bb_ins = basic_block.first().unwrap().get_ins();
+                            let bb_ins = basic_block.first().unwrap().get_ins(reg_norm);
                             single_disasm_walk.push(bb_ins)
                         }
                     }

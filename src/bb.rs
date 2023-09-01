@@ -456,12 +456,13 @@ impl ACFJBlock {
         disasm_ins
     }
 
-    pub fn get_ins(&self) -> Vec<String> {
+    pub fn get_ins(&self, reg_norm: bool) -> Vec<String> {
         let mut disasm_ins: Vec<String> = Vec::new();
         for op in &self.ops {
             if op.disasm.is_some() {
-                let diasm_single = &op.disasm.as_ref().unwrap();
-                disasm_ins.push((*diasm_single).to_string())
+                let disasm_single = &op.disasm.as_ref().unwrap();
+                let normd = normalise_disasm_simple(disasm_single, reg_norm);
+                disasm_ins.push((*normd).to_string())
             }
         }
         disasm_ins
