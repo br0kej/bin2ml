@@ -263,30 +263,39 @@ impl AGFJFile {
     /// This ignores control flow and simple iterates the JSON objects from the top to
     /// the bottom.
     pub fn generate_linear_bb_walk(mut self, esil: bool) {
-        self.load_and_deserialize()
-            .expect("Unable to load and desearlize JSON");
+        let fname_string: String = get_save_file_path(&self.filename, &self.output_path, None);
+        let fname_string = if esil {
+            format!("{}-esil-singles.txt", fname_string)
+        } else {
+            format!("{}-dis-singles.txt", fname_string)
+        };
 
-        let (sender, receiver) = channel();
+        if !Path::new(&fname_string).exists() {
+            self.load_and_deserialize()
+                .expect("Unable to load and desearlize JSON");
 
-        self.functions.unwrap().par_iter_mut().for_each_with(
-            sender,
-            |s, func: &mut Vec<AGFJFunc>| {
-                s.send(func[0].get_function_instructions(esil, &self.min_blocks, self.reg_norm))
-                    .unwrap()
-            },
-        );
+            let (sender, receiver) = channel();
 
-        let res: Vec<Vec<String>> = receiver.iter().filter(|x| x.is_some()).flatten().collect();
+            self.functions.unwrap().par_iter_mut().for_each_with(
+                sender,
+                |s, func: &mut Vec<AGFJFunc>| {
+                    s.send(func[0].get_function_instructions(esil, &self.min_blocks, self.reg_norm))
+                        .unwrap()
+                },
+            );
 
-        let write_file = File::create(self.output_path).unwrap();
-        let mut writer = BufWriter::new(&write_file);
+            let res: Vec<Vec<String>> = receiver.iter().filter(|x| x.is_some()).flatten().collect();
 
-        for func in res {
-            for bb in func {
-                writer
-                    .write_all(bb.as_bytes())
-                    .expect("Unable to write bytes.");
-                writer.write_all(b"\n").expect("Unable to write bytes.");
+            let write_file = File::create(fname_string).unwrap();
+            let mut writer = BufWriter::new(&write_file);
+
+            for func in res {
+                for bb in func {
+                    writer
+                        .write_all(bb.as_bytes())
+                        .expect("Unable to write bytes.");
+                    writer.write_all(b"\n").expect("Unable to write bytes.");
+                }
             }
         }
     }
