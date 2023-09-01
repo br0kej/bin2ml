@@ -35,7 +35,6 @@ pub mod sample;
 pub mod tokeniser;
 pub mod utils;
 
-use crate::afij::AFIJFeatureSubset;
 use crate::dedup::EsilFuncStringCorpus;
 use crate::extract::ExtractionJobType;
 use crate::files::{AFIJFile, AGCJFile};
