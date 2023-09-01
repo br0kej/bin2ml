@@ -296,6 +296,11 @@ fn main() {
                     _ => DataType::Invalid,
                 };
 
+                if !Path::new(path).exists() {
+                    error!("{} does not exist!", path);
+                    exit(1)
+                }
+
                 if graph_type == DataType::Cfg {
                     info!("Chosen Graph Type: Control Flow Graph");
                     if feature_type.is_some() {
