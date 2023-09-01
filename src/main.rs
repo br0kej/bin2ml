@@ -186,11 +186,12 @@ enum Commands {
         #[arg(short, long, value_name = "FILENAME")]
         path: Option<String>,
     },
+    /// Generate processed data from extracted raw data
     Generate {
         #[command(subcommand)]
         subcommands: GenerateSubCommands,
     },
-    /// Extract CFG level data from binaries
+    /// Extract raw data from input binaries
     Extract {
         /// The path to the dir or binary to be processed
         #[arg(short, long, value_name = "DIR")]
@@ -254,7 +255,7 @@ enum Commands {
 
         /// Toggle whether to dedup based on hashing only the value (and ignoring the key)
         #[arg(short, long, default_value = "false")]
-        hash_just_value: bool,
+        just_hash_value: bool,
     },
 }
 
@@ -605,16 +606,16 @@ fn main() {
             print_stats,
             just_stats,
             num_threads,
-            hash_just_value,
+            just_hash_value,
         } => {
-            eprintln!("THIS ONLY SUPPORTS FILES WITH THE FOLLOWING NAMING CONVENTION: <arch>-<compiler-name>-<verion>-<opt-level>_<binary_name>-<datatype>.json");
+            warn!("THIS ONLY SUPPORTS FILES WITH THE FOLLOWING NAMING CONVENTION: <arch>-<compiler-name>-<verion>-<opt-level>_<binary_name>-<datatype>.json");
             rayon::ThreadPoolBuilder::new()
                 .num_threads(*num_threads)
                 .build_global()
                 .unwrap();
             let corpus = EsilFuncStringCorpus::new(filename).unwrap();
             corpus.uniq_binaries.par_iter().progress().for_each(|name| {
-                corpus.dedup_subset(name, *print_stats, *just_stats, *hash_just_value)
+                corpus.dedup_subset(name, *print_stats, *just_stats, *just_hash_value)
             });
         }
     }
