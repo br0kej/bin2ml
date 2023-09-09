@@ -34,7 +34,16 @@ impl AGCJFunctionCallGraphs {
         let networkx_graph = NetworkxDiGraph::from(graph);
         let full_output_path = get_save_file_path(binary_name, output_path, None);
         check_or_create_dir(&full_output_path);
-        let filename = format!("{}/{}-cg.json", full_output_path, self.name);
+
+        let mut function_name = self.name.clone();
+
+        // This is a pretty dirty fix and may break things
+        if function_name.chars().count() > 100 {
+            function_name = self.name[..75].to_string();
+        }
+
+        let filename = format!("{}/{}-cg.json", full_output_path, function_name);
+
         serde_json::to_writer(
             &File::create(filename).expect("Failed to create writer"),
             &networkx_graph,
@@ -82,7 +91,15 @@ impl AGCJFunctionCallGraphs {
         let full_output_path =
             get_save_file_path(binary_name, output_path, Some("1hop".to_string()));
         check_or_create_dir(&full_output_path);
-        let filename = format!("{}/{}-1hopcg.json", full_output_path, self.name);
+
+        let mut function_name = self.name.clone();
+
+        // This is a pretty dirty fix and may break things
+        if function_name.chars().count() > 100 {
+            function_name = self.name[..75].to_string();
+        }
+
+        let filename = format!("{}/{}-1hopcg.json", full_output_path, function_name);
 
         serde_json::to_writer(
             &File::create(filename).expect("Failed to create writer"),

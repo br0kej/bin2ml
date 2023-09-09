@@ -19,20 +19,20 @@ pub fn get_save_file_path(
     output_path: &String,
     optional_suffix: Option<String>,
 ) -> String {
-    let file_name = Path::new(binary_path).file_stem().unwrap();
+    let file_name = Path::new(binary_path).file_stem().unwrap().to_string_lossy().to_string();
 
     if optional_suffix.is_none() {
         let full_output_path = format!(
             "{}/{}",
             output_path.strip_suffix('/').unwrap_or(output_path),
-            String::from(file_name.to_str().unwrap())
+           file_name
         );
         full_output_path
     } else {
         let full_output_path = format!(
             "{}/{}-{}",
             output_path.strip_suffix('/').unwrap_or(output_path),
-            String::from(file_name.to_str().unwrap()),
+            file_name,
             optional_suffix.unwrap()
         );
         full_output_path
