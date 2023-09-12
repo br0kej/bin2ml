@@ -31,7 +31,6 @@ pub mod inference;
 pub mod networkx;
 pub mod normalisation;
 pub mod processors;
-pub mod sample;
 pub mod tokeniser;
 pub mod utils;
 
