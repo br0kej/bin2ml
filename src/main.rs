@@ -504,28 +504,28 @@ fn main() {
                                 &file.filename,
                             );
                         }
-                    }
-                } else {
-                    let file_paths_vec = get_json_paths_from_dir(path);
-                    info!(
-                        "{} files found. Beginning Processing.",
-                        file_paths_vec.len()
-                    );
-                    for path in file_paths_vec.iter() {
-                        let mut file = AGCJFile {
-                            filename: path.to_owned(),
-                            function_call_graphs: None,
-                            output_path: output_path.to_owned(),
-                        };
-                        file.load_and_deserialize()
-                            .expect("Unable to load and desearilize JSON");
+                    } else {
+                        let file_paths_vec = get_json_paths_from_dir(path);
+                        info!(
+                            "{} files found. Beginning Processing.",
+                            file_paths_vec.len()
+                        );
+                        for path in file_paths_vec.iter() {
+                            let mut file = AGCJFile {
+                                filename: path.to_owned(),
+                                function_call_graphs: None,
+                                output_path: output_path.to_owned(),
+                            };
+                            file.load_and_deserialize()
+                                .expect("Unable to load and desearilize JSON");
 
-                        for fcg in file.function_call_graphs.as_ref().unwrap() {
-                            fcg.one_hop_to_petgraph_with_callers(
-                                &file,
-                                &file.output_path,
-                                &file.filename,
-                            );
+                            for fcg in file.function_call_graphs.as_ref().unwrap() {
+                                fcg.one_hop_to_petgraph_with_callers(
+                                    &file,
+                                    &file.output_path,
+                                    &file.filename,
+                                );
+                            }
                         }
                     }
                 }
