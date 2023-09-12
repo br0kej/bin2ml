@@ -51,7 +51,7 @@ impl AGCJFunctionCallGraphs {
             function_name = self.name[..75].to_string();
         }
 
-        let filename = format!("{}/{}-{}.json", full_output_path, self.name, type_suffix);
+        let filename = format!("{}/{}-{}.json", full_output_path, function_name, type_suffix);
 
         serde_json::to_writer(
             &File::create(filename).expect("Failed to create writer"),
