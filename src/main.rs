@@ -59,6 +59,8 @@ enum DataType {
     Cfg,
     Cg,
     OneHopCg,
+    CgWithCallers,
+    OneHopCgWithcallers,
     Invalid,
 }
 
@@ -78,7 +80,7 @@ enum GenerateSubCommands {
         path: String,
 
         /// The target data type
-        #[arg(short, long, value_name = "DATA_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["cfg", "cg", "onehopcg"])
+        #[arg(short, long, value_name = "DATA_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["cfg", "cg", "onehopcg", "cgcallers", "onehopcgcallers"])
         .map(|s| s.parse::<String>().unwrap()),)]
         data_type: String,
 
@@ -298,6 +300,8 @@ fn main() {
                     "cfg" => DataType::Cfg,
                     "cg" => DataType::Cg,
                     "onehopcg" => DataType::OneHopCg,
+                    "cgcallers" => DataType::CgWithCallers,
+                    "onehopcgcallers" => DataType::OneHopCgWithcallers,
                     _ => DataType::Invalid,
                 };
 
@@ -404,6 +408,30 @@ fn main() {
 
                     for fcg in file.function_call_graphs.as_ref().unwrap() {
                         fcg.one_hop_to_petgraph(&file, &file.output_path, &file.filename);
+                    }
+                } else if graph_type == DataType::CgWithCallers {
+                    let mut file = AGCJFile {
+                        filename: path.to_owned(),
+                        function_call_graphs: None,
+                        output_path: output_path.to_owned(),
+                    };
+                    file.load_and_deserialize()
+                        .expect("Unable to load and desearilize JSON");
+
+                    for fcg in file.function_call_graphs.as_ref().unwrap() {
+                        fcg.to_petgraph_with_callers(&file, &file.output_path, &file.filename);
+                    }
+                } else if graph_type == DataType::OneHopCgWithcallers {
+                    let mut file = AGCJFile {
+                        filename: path.to_owned(),
+                        function_call_graphs: None,
+                        output_path: output_path.to_owned(),
+                    };
+                    file.load_and_deserialize()
+                        .expect("Unable to load and desearilize JSON");
+
+                    for fcg in file.function_call_graphs.as_ref().unwrap() {
+                        fcg.one_hop_to_petgraph_with_callers(&file, &file.output_path, &file.filename);
                     }
                 }
             }
