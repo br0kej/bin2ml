@@ -94,7 +94,7 @@ impl AGCJFunctionCallGraphs {
 
         for cg in callers.iter() {
             let caller = graph.add_node(cg.name.clone());
-            let func_target_index = graph.node_indices().find(|i| &graph[*i] == &self.name);
+            let func_target_index = graph.node_indices().find(|i| graph[*i] == self.name);
             graph.update_edge(caller, func_target_index.unwrap(), 0);
         }
     }
