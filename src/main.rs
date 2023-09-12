@@ -385,29 +385,71 @@ fn main() {
                     }
                 } else if graph_type == DataType::Cg {
                     info!("Chosen Graph Type: Call Graph");
-                    let mut file = AGCJFile {
-                        filename: path.to_owned(),
-                        function_call_graphs: None,
-                        output_path: output_path.to_owned(),
-                    };
-                    file.load_and_deserialize()
-                        .expect("Unable to load and desearilize JSON");
+                    if Path::new(path).is_file() {
+                        let mut file = AGCJFile {
+                            filename: path.to_owned(),
+                            function_call_graphs: None,
+                            output_path: output_path.to_owned(),
+                        };
+                        file.load_and_deserialize()
+                            .expect("Unable to load and desearilize JSON");
 
-                    for fcg in file.function_call_graphs.as_ref().unwrap() {
-                        fcg.to_petgraph(&file.output_path, &file.filename);
+                        for fcg in file.function_call_graphs.as_ref().unwrap() {
+                            fcg.to_petgraph(&file.output_path, &file.filename);
+                        }
+                    } else {
+                        let file_paths_vec = get_json_paths_from_dir(path);
+                        info!(
+                            "{} files found. Beginning Processing.",
+                            file_paths_vec.len()
+                        );
+                        for path in file_paths_vec.iter() {
+                            let mut file = AGCJFile {
+                                filename: path.to_owned(),
+                                function_call_graphs: None,
+                                output_path: output_path.to_owned(),
+                            };
+                            file.load_and_deserialize()
+                                .expect("Unable to load and desearilize JSON");
+
+                            for fcg in file.function_call_graphs.as_ref().unwrap() {
+                                fcg.to_petgraph(&file.output_path, &file.filename);
+                            }
+                        }
                     }
                 } else if graph_type == DataType::OneHopCg {
                     info!("Chosen Graph Type: One Hop Call Graph");
-                    let mut file = AGCJFile {
-                        filename: path.to_owned(),
-                        function_call_graphs: None,
-                        output_path: output_path.to_owned(),
-                    };
-                    file.load_and_deserialize()
-                        .expect("Unable to load and desearilize JSON");
+                    if Path::new(path).is_file() {
+                        let mut file = AGCJFile {
+                            filename: path.to_owned(),
+                            function_call_graphs: None,
+                            output_path: output_path.to_owned(),
+                        };
+                        file.load_and_deserialize()
+                            .expect("Unable to load and desearilize JSON");
 
-                    for fcg in file.function_call_graphs.as_ref().unwrap() {
-                        fcg.one_hop_to_petgraph(&file, &file.output_path, &file.filename);
+                        for fcg in file.function_call_graphs.as_ref().unwrap() {
+                            fcg.one_hop_to_petgraph(&file, &file.output_path, &file.filename);
+                        }
+                    } else {
+                        let file_paths_vec = get_json_paths_from_dir(path);
+                        info!(
+                            "{} files found. Beginning Processing.",
+                            file_paths_vec.len()
+                        );
+                        for path in file_paths_vec.iter() {
+                            let mut file = AGCJFile {
+                                filename: path.to_owned(),
+                                function_call_graphs: None,
+                                output_path: output_path.to_owned(),
+                            };
+                            file.load_and_deserialize()
+                                .expect("Unable to load and desearilize JSON");
+
+                            for fcg in file.function_call_graphs.as_ref().unwrap() {
+                                fcg.one_hop_to_petgraph(&file, &file.output_path, &file.filename);
+                            }
+                        }
                     }
                 } else if graph_type == DataType::CgWithCallers {
                     let mut file = AGCJFile {

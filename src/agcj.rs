@@ -43,7 +43,16 @@ impl AGCJFunctionCallGraphs {
         let full_output_path =
             get_save_file_path(binary_name, output_path, Some(type_suffix.to_string()));
         check_or_create_dir(&full_output_path);
+
+        let mut function_name = self.name.clone();
+
+        // This is a pretty dirty fix and may break things
+        if function_name.chars().count() > 100 {
+            function_name = self.name[..75].to_string();
+        }
+
         let filename = format!("{}/{}-{}.json", full_output_path, self.name, type_suffix);
+
         serde_json::to_writer(
             &File::create(filename).expect("Failed to create writer"),
             &networkx_graph,
