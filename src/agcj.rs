@@ -28,7 +28,7 @@ impl AGCJFunctionCallGraphs {
         let calling_func = graph.add_node(self.name.clone());
         for ele in self.imports.iter() {
             let callee = graph.add_node(ele.clone());
-            graph.update_edge(calling_func, callee, 0);
+            graph.update_edge(calling_func.clone(), callee, 0);
         }
         graph
     }
@@ -51,7 +51,10 @@ impl AGCJFunctionCallGraphs {
             function_name = self.name[..75].to_string();
         }
 
-        let filename = format!("{}/{}-{}.json", full_output_path, function_name, type_suffix);
+        let filename = format!(
+            "{}/{}-{}.json",
+            full_output_path, function_name, type_suffix
+        );
 
         serde_json::to_writer(
             &File::create(filename).expect("Failed to create writer"),
