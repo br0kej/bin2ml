@@ -78,21 +78,21 @@ mod tests {
     fn test_get_save_file_path_1() {
         let path: &str = "test_bin/hello.json";
         let output_path: String = String::from("processed_data/");
-        let output_path = get_save_file_path(path, &output_path);
-        assert_eq!(output_path, String::from("processed_data/hello"))
+        let output_path = get_save_file_path(path, &output_path, Some("cg".to_string()));
+        assert_eq!(output_path, String::from("processed_data/hello-cg"))
     }
     #[test]
     fn test_get_save_file_path_2() {
         let path: &str = "test_bin/extra_dir/hello.json";
         let output_path: String = String::from("with_more/processed_data/");
-        let output = get_save_file_path(path, &output_path);
+        let output = get_save_file_path(path, &output_path, None);
         assert_eq!(output, String::from("with_more/processed_data/hello"))
     }
     #[test]
     fn test_get_save_file_path_3() {
         let path: &str = "hello.json";
         let output_path: String = String::from("processed_data");
-        let output = get_save_file_path(path, &output_path);
+        let output = get_save_file_path(path, &output_path, None);
         assert_eq!(output, String::from("processed_data/hello"))
     }
 }

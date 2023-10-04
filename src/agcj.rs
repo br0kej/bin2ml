@@ -1,4 +1,3 @@
-use crate::afij::AFIJFunctionInfo;
 use crate::files::AGCJFile;
 use crate::networkx::{CallGraphFuncNameNode, CallGraphFuncWithMetadata, NetworkxDiGraph};
 use crate::utils::{check_or_create_dir, get_save_file_path};

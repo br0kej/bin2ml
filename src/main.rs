@@ -577,7 +577,6 @@ fn main() {
                                 &file.filename,
                             );
                         }
-<<<<<<< HEAD
                     }
                 } else {
                     let file_paths_vec = get_json_paths_from_dir(path);
@@ -594,13 +593,12 @@ fn main() {
                         };
                         file.load_and_deserialize()
                             .expect("Unable to load and desearilize JSON");
-                            for fcg in file.function_call_graphs.as_ref().unwrap() {
-                                fcg.one_hop_to_petgraph_with_callers(
-                                    &file,
-                                    &file.output_path,
-                                    &file.filename,
-                                );
-                            }
+                        for fcg in file.function_call_graphs.as_ref().unwrap() {
+                            fcg.one_hop_to_petgraph_with_callers(
+                                &file,
+                                &file.output_path,
+                                &file.filename,
+                            );
                         }
                     }
                 }
