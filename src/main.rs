@@ -409,7 +409,9 @@ fn main() {
                                 function_info: None,
                                 output_path: "".to_string(),
                             };
-                            metadata.load_and_deserialize();
+                            let _ = metadata
+                                .load_and_deserialize()
+                                .expect("Unable to load file");
                             let metadata_subset = metadata.subset();
                             AGCJFile {
                                 filename: path.to_owned(),
@@ -443,33 +445,11 @@ fn main() {
                             file_paths_vec.len()
                         );
                         for path in file_paths_vec.iter() {
-                            let mut file = if *with_features {
-                                if metadata_path.is_none() {
-                                    error!(
-                                        "with features active - require --metadata-path argument"
-                                    );
-                                    exit(1)
-                                };
-                                let mut metadata = AFIJFile {
-                                    filename: metadata_path.clone().unwrap(),
-                                    function_info: None,
-                                    output_path: "".to_string(),
-                                };
-                                metadata.load_and_deserialize();
-                                let metadata_subset = metadata.subset();
-                                AGCJFile {
-                                    filename: path.to_owned(),
-                                    function_call_graphs: None,
-                                    output_path: output_path.to_owned(),
-                                    function_metadata: Some(metadata_subset),
-                                }
-                            } else {
-                                AGCJFile {
-                                    filename: path.to_owned(),
-                                    function_call_graphs: None,
-                                    output_path: output_path.to_owned(),
-                                    function_metadata: None,
-                                }
+                            let mut file = AGCJFile {
+                                filename: path.to_owned(),
+                                function_call_graphs: None,
+                                output_path: output_path.to_owned(),
+                                function_metadata: None,
                             };
                             file.load_and_deserialize()
                                 .expect("Unable to load and desearilize JSON");
