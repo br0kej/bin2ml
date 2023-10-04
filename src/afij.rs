@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_aux::prelude::*;
 use serde_json::Value;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -45,7 +46,8 @@ pub struct AFIJFunctionInfo {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Callref {
-    pub addr: i64,
+    #[serde(deserialize_with = "deserialize_string_from_number")]
+    pub addr: String,
     #[serde(rename = "type")]
     pub type_field: String,
     pub at: i64,
