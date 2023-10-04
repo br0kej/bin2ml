@@ -115,6 +115,14 @@ enum GenerateSubCommands {
         #[cfg(feature = "inference")]
         #[arg(short, long, value_name = "EMBED_DIM")]
         embed_dim: Option<i64>,
+
+        /// Toggle for call graphs to include AFIJ feature subsets
+        #[arg(long)]
+        with_features: bool,
+
+        /// Filepath to the AFIJ function metadata
+        #[arg(long)]
+        metadata_path: Option<String>,
     },
     /// Generate NLP data from extracted data
     Nlp {
@@ -294,6 +302,8 @@ fn main() {
                 mean_pool,
                 #[cfg(feature = "inference")]
                 embed_dim,
+                with_features,
+                metadata_path,
             } => {
                 let graph_type = match graph_type.as_str() {
                     "cfg" => DataType::Cfg,
@@ -302,6 +312,10 @@ fn main() {
                     "cgcallers" => DataType::CgWithCallers,
                     "onehopcgcallers" => DataType::OneHopCgWithcallers,
                     _ => DataType::Invalid,
+                };
+
+                if graph_type == DataType::Cfg && *with_features == true {
+                    warn!("The 'with_features' toggle is set but is not support for CFG generation. Will ignore.")
                 };
 
                 if !Path::new(path).exists() {
@@ -385,16 +399,42 @@ fn main() {
                 } else if graph_type == DataType::Cg {
                     info!("Chosen Graph Type: Call Graph");
                     if Path::new(path).is_file() {
-                        let mut file = AGCJFile {
-                            filename: path.to_owned(),
-                            function_call_graphs: None,
-                            output_path: output_path.to_owned(),
+                        let mut file = if *with_features {
+                            if metadata_path.is_none() {
+                                error!("with features active - require --metadata-path argument");
+                                exit(1)
+                            };
+                            let mut metadata = AFIJFile {
+                                filename: metadata_path.clone().unwrap(),
+                                function_info: None,
+                                output_path: "".to_string(),
+                            };
+                            metadata.load_and_deserialize();
+                            let metadata_subset = metadata.subset();
+                            AGCJFile {
+                                filename: path.to_owned(),
+                                function_call_graphs: None,
+                                output_path: output_path.to_owned(),
+                                function_metadata: Some(metadata_subset),
+                            }
+                        } else {
+                            AGCJFile {
+                                filename: path.to_owned(),
+                                function_call_graphs: None,
+                                output_path: output_path.to_owned(),
+                                function_metadata: None,
+                            }
                         };
                         file.load_and_deserialize()
                             .expect("Unable to load and desearilize JSON");
 
                         for fcg in file.function_call_graphs.as_ref().unwrap() {
-                            fcg.to_petgraph(&file.output_path, &file.filename);
+                            fcg.to_petgraph(
+                                &file,
+                                &file.output_path,
+                                &file.filename,
+                                with_features,
+                            );
                         }
                     } else {
                         let file_paths_vec = get_json_paths_from_dir(path);
@@ -403,16 +443,44 @@ fn main() {
                             file_paths_vec.len()
                         );
                         for path in file_paths_vec.iter() {
-                            let mut file = AGCJFile {
-                                filename: path.to_owned(),
-                                function_call_graphs: None,
-                                output_path: output_path.to_owned(),
+                            let mut file = if *with_features {
+                                if metadata_path.is_none() {
+                                    error!(
+                                        "with features active - require --metadata-path argument"
+                                    );
+                                    exit(1)
+                                };
+                                let mut metadata = AFIJFile {
+                                    filename: metadata_path.clone().unwrap(),
+                                    function_info: None,
+                                    output_path: "".to_string(),
+                                };
+                                metadata.load_and_deserialize();
+                                let metadata_subset = metadata.subset();
+                                AGCJFile {
+                                    filename: path.to_owned(),
+                                    function_call_graphs: None,
+                                    output_path: output_path.to_owned(),
+                                    function_metadata: Some(metadata_subset),
+                                }
+                            } else {
+                                AGCJFile {
+                                    filename: path.to_owned(),
+                                    function_call_graphs: None,
+                                    output_path: output_path.to_owned(),
+                                    function_metadata: None,
+                                }
                             };
                             file.load_and_deserialize()
                                 .expect("Unable to load and desearilize JSON");
 
                             for fcg in file.function_call_graphs.as_ref().unwrap() {
-                                fcg.to_petgraph(&file.output_path, &file.filename);
+                                fcg.to_petgraph(
+                                    &file,
+                                    &file.output_path,
+                                    &file.filename,
+                                    with_features,
+                                );
                             }
                         }
                     }
@@ -423,6 +491,7 @@ fn main() {
                             filename: path.to_owned(),
                             function_call_graphs: None,
                             output_path: output_path.to_owned(),
+                            function_metadata: None,
                         };
                         file.load_and_deserialize()
                             .expect("Unable to load and desearilize JSON");
@@ -441,6 +510,7 @@ fn main() {
                                 filename: path.to_owned(),
                                 function_call_graphs: None,
                                 output_path: output_path.to_owned(),
+                                function_metadata: None,
                             };
                             file.load_and_deserialize()
                                 .expect("Unable to load and desearilize JSON");
@@ -456,6 +526,7 @@ fn main() {
                             filename: path.to_owned(),
                             function_call_graphs: None,
                             output_path: output_path.to_owned(),
+                            function_metadata: None,
                         };
                         file.load_and_deserialize()
                             .expect("Unable to load and desearilize JSON");
@@ -474,6 +545,7 @@ fn main() {
                                 filename: path.to_owned(),
                                 function_call_graphs: None,
                                 output_path: output_path.to_owned(),
+                                function_metadata: None,
                             };
                             file.load_and_deserialize()
                                 .expect("Unable to load and desearilize JSON");
@@ -493,6 +565,7 @@ fn main() {
                             filename: path.to_owned(),
                             function_call_graphs: None,
                             output_path: output_path.to_owned(),
+                            function_metadata: None,
                         };
                         file.load_and_deserialize()
                             .expect("Unable to load and desearilize JSON");
@@ -516,6 +589,7 @@ fn main() {
                             filename: path.to_owned(),
                             function_call_graphs: None,
                             output_path: output_path.to_owned(),
+                            function_metadata: None,
                         };
                         file.load_and_deserialize()
                             .expect("Unable to load and desearilize JSON");

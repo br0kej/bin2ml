@@ -1,3 +1,4 @@
+use crate::afij::AFIJFeatureSubset;
 use crate::bb::FeatureType;
 use enum_as_inner::EnumAsInner;
 use petgraph::prelude::Graph;
@@ -140,6 +141,13 @@ pub struct CallGraphFuncNameNode {
     pub func_name: String,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CallGraphFuncWithMetadata {
+    pub id: i64,
+    pub func_name: String,
+    pub function_feature_subset: AFIJFeatureSubset,
+}
 impl From<Graph<String, u32>> for NetworkxDiGraph<CallGraphFuncNameNode> {
     fn from(src_graph: Graph<String, u32>) -> NetworkxDiGraph<CallGraphFuncNameNode> {
         let node_weights = src_graph.node_weights();
@@ -156,6 +164,56 @@ impl From<Graph<String, u32>> for NetworkxDiGraph<CallGraphFuncNameNode> {
         for node in node_indices {
             let mut node_adjacency_vec = vec![];
             let node_edges = src_graph.edges(node);
+            for edge in node_edges {
+                let edge_entry = Adjacency {
+                    id: edge.target().index(),
+                    weight: edge.weight().to_owned(),
+                };
+                node_adjacency_vec.push(edge_entry)
+            }
+            adjacency.push(node_adjacency_vec)
+        }
+
+        NetworkxDiGraph {
+            adjacency,
+            directed: "True".to_string(),
+            graph: vec![],
+            multigraph: false,
+            nodes,
+        }
+    }
+}
+
+impl From<(Graph<String, u32>, &Vec<AFIJFeatureSubset>)>
+    for NetworkxDiGraph<CallGraphFuncWithMetadata>
+{
+    fn from(
+        src_graph: (Graph<String, u32>, &Vec<AFIJFeatureSubset>),
+    ) -> NetworkxDiGraph<CallGraphFuncWithMetadata> {
+        let node_weights = src_graph.0.node_weights();
+        let mut nodes: Vec<CallGraphFuncWithMetadata> = vec![];
+        for (i, node_weight) in node_weights.enumerate() {
+            let subset_object = src_graph.1.iter().find(|ele| &ele.name == node_weight);
+            if subset_object.is_some() {
+                nodes.push(CallGraphFuncWithMetadata {
+                    id: i as i64,
+                    func_name: node_weight.to_owned(),
+                    function_feature_subset: subset_object.unwrap().clone(),
+                })
+            } else {
+                nodes.push(CallGraphFuncWithMetadata {
+                    id: i as i64,
+                    func_name: node_weight.to_owned(),
+                    function_feature_subset: Default::default(),
+                })
+            }
+        }
+        let mut adjacency: Vec<Vec<Adjacency>> = vec![];
+        let node_indices = src_graph.0.node_indices();
+
+        for node in node_indices {
+            let mut node_adjacency_vec = vec![];
+            let node_edges = src_graph.0.edges(node);
             for edge in node_edges {
                 let edge_entry = Adjacency {
                     id: edge.target().index(),

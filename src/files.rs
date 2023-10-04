@@ -352,6 +352,7 @@ pub struct AGCJFile {
     pub filename: String,
     pub function_call_graphs: Option<Vec<AGCJFunctionCallGraphs>>,
     pub output_path: String,
+    pub function_metadata: Option<Vec<AFIJFeatureSubset>>,
 }
 
 impl AGCJFile {
@@ -386,17 +387,17 @@ impl AFIJFile {
         Ok(())
     }
 
-    pub fn subset_and_save(&mut self) {
+    pub fn subset(&mut self) -> Vec<AFIJFeatureSubset> {
         let mut func_info_subsets: Vec<AFIJFeatureSubset> = Vec::new();
         info!("Starting to process functions");
         for function in self.function_info.as_ref().unwrap().iter() {
             let subset = AFIJFeatureSubset::from(function);
             func_info_subsets.push(subset)
         }
-        debug!(
-            "Length of Subsetted Function Info: {}",
-            func_info_subsets.len()
-        );
+        func_info_subsets
+    }
+    pub fn subset_and_save(&mut self) {
+        let func_info_subsets = self.subset();
         let fname_string: String = get_save_file_path(&self.filename, &self.output_path, None);
         let filename = format!("{}-finfo-subset.json", fname_string);
         serde_json::to_writer(

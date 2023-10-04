@@ -1,5 +1,6 @@
+use crate::afij::AFIJFunctionInfo;
 use crate::files::AGCJFile;
-use crate::networkx::{CallGraphFuncNameNode, NetworkxDiGraph};
+use crate::networkx::{CallGraphFuncNameNode, CallGraphFuncWithMetadata, NetworkxDiGraph};
 use crate::utils::{check_or_create_dir, get_save_file_path};
 use itertools::Itertools;
 use petgraph::prelude::Graph;
@@ -33,11 +34,41 @@ impl AGCJFunctionCallGraphs {
         graph
     }
 
-    fn graph_to_json(
+    fn graph_to_json_func_node(
         &self,
         binary_name: &str,
         output_path: &String,
         networkx_graph: NetworkxDiGraph<CallGraphFuncNameNode>,
+        type_suffix: &str,
+    ) {
+        let full_output_path =
+            get_save_file_path(binary_name, output_path, Some(type_suffix.to_string()));
+        check_or_create_dir(&full_output_path);
+
+        let mut function_name = self.name.clone();
+
+        // This is a pretty dirty fix and may break things
+        if function_name.chars().count() > 100 {
+            function_name = self.name[..75].to_string();
+        }
+
+        let filename = format!(
+            "{}/{}-{}.json",
+            full_output_path, function_name, type_suffix
+        );
+
+        serde_json::to_writer(
+            &File::create(filename).expect("Failed to create writer"),
+            &networkx_graph,
+        )
+        .expect("Unable to write JSON");
+    }
+
+    fn graph_to_json_func_metadata(
+        &self,
+        binary_name: &str,
+        output_path: &String,
+        networkx_graph: NetworkxDiGraph<CallGraphFuncWithMetadata>,
         type_suffix: &str,
     ) {
         let full_output_path =
@@ -103,10 +134,23 @@ impl AGCJFunctionCallGraphs {
     }
 
     // Creates a petgraph object of a given function and all functions called as part of it's execution
-    pub fn to_petgraph(&self, output_path: &String, binary_name: &str) {
+    pub fn to_petgraph(
+        &self,
+        global_cg: &AGCJFile,
+        output_path: &String,
+        binary_name: &str,
+        with_metadata: &bool,
+    ) {
         let graph = self.build_local_call_graph();
-        let networkx_graph = NetworkxDiGraph::from(graph);
-        self.graph_to_json(binary_name, output_path, networkx_graph, "cg")
+
+        if *with_metadata {
+            let networkx_graph =
+                NetworkxDiGraph::from((graph, global_cg.function_metadata.as_ref().unwrap()));
+            self.graph_to_json_func_metadata(binary_name, output_path, networkx_graph, "cg")
+        } else {
+            let networkx_graph = NetworkxDiGraph::from(graph);
+            self.graph_to_json_func_node(binary_name, output_path, networkx_graph, "cg")
+        };
     }
 
     // Creates a petgraph object of a given function, all of the functions called functions and
@@ -122,7 +166,7 @@ impl AGCJFunctionCallGraphs {
         self.get_callees_of_callees(global_cg, &mut graph);
 
         let networkx_graph = NetworkxDiGraph::from(graph);
-        self.graph_to_json(binary_name, output_path, networkx_graph, "1hop")
+        self.graph_to_json_func_node(binary_name, output_path, networkx_graph, "1hop")
     }
 
     pub fn to_petgraph_with_callers(
@@ -134,7 +178,7 @@ impl AGCJFunctionCallGraphs {
         let mut graph = self.build_local_call_graph();
         self.get_target_func_callers(global_cg, &mut graph);
         let networkx_graph = NetworkxDiGraph::from(graph);
-        self.graph_to_json(binary_name, output_path, networkx_graph, "cg-callers")
+        self.graph_to_json_func_node(binary_name, output_path, networkx_graph, "cg-callers")
     }
 
     pub fn one_hop_to_petgraph_with_callers(
@@ -149,7 +193,7 @@ impl AGCJFunctionCallGraphs {
         self.get_callees_of_callees(global_cg, &mut graph);
 
         let networkx_graph = NetworkxDiGraph::from(graph);
-        self.graph_to_json(binary_name, output_path, networkx_graph, "1hop-callers")
+        self.graph_to_json_func_node(binary_name, output_path, networkx_graph, "1hop-callers")
     }
 
     pub fn print_callees(&self) {
