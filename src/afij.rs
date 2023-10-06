@@ -29,18 +29,19 @@ pub struct AFIJFunctionInfo {
     pub minbound: i64,
     pub maxbound: i64,
     pub callrefs: Option<Vec<Callref>>,
-    pub datarefs: Option<Vec<i64>>,
+    // TODO: Need to fix this and change to string instead of i64 to get round large random numbers
+    pub datarefs: Option<Vec<Dataref>>,
     pub codexrefs: Option<Vec<Codexref>>,
     pub dataxrefs: Option<Vec<i64>>,
-    pub indegree: i64,
-    pub outdegree: i64,
-    pub nlocals: i64,
-    pub nargs: i64,
-    pub bpvars: Vec<Bpvar>,
+    pub indegree: Option<i64>,
+    pub outdegree: Option<i64>,
+    pub nlocals: Option<i64>,
+    pub nargs: Option<i64>,
+    pub bpvars: Option<Vec<Bpvar>>,
     // Cannot find a good example of an spvars yet
-    pub spvars: Vec<Value>,
-    pub regvars: Vec<Regvar>,
-    pub difftype: String,
+    pub spvars: Option<Vec<Value>>,
+    pub regvars: Option<Vec<Regvar>>,
+    pub difftype: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -53,6 +54,12 @@ pub struct Callref {
     pub at: i64,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", transparent)]
+pub struct Dataref {
+    #[serde(deserialize_with = "deserialize_string_from_number")]
+    value: String,
+}
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Codexref {
@@ -108,12 +115,12 @@ impl From<&AFIJFunctionInfo> for AFIJFeatureSubset {
     fn from(src: &AFIJFunctionInfo) -> AFIJFeatureSubset {
         AFIJFeatureSubset {
             name: src.name.clone(),
-            ninstrs: src.ninstrs,
-            edges: src.edges,
-            indegree: src.indegree,
-            outdegree: src.outdegree,
-            nlocals: src.nlocals,
-            nargs: src.nargs,
+            ninstrs: src.ninstrs.clone(),
+            edges: src.edges.clone(),
+            indegree: src.indegree.unwrap_or(0),
+            outdegree: src.outdegree.unwrap_or(0),
+            nlocals: src.nlocals.unwrap_or(0),
+            nargs: src.nargs.unwrap_or(0),
             signature: src.signature.clone(),
         }
     }
