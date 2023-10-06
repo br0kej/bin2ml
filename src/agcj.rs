@@ -11,7 +11,7 @@ use std::fs::File;
 pub struct AGCJFunctionCallGraphs {
     pub name: String,
     pub size: i64,
-    pub imports: Vec<String>,
+    pub imports: Option<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -26,11 +26,15 @@ impl AGCJFunctionCallGraphs {
     fn build_local_call_graph(&self) -> Graph<String, u32> {
         let mut graph = Graph::<String, u32>::new();
         let calling_func = graph.add_node(self.name.clone());
-        for ele in self.imports.iter() {
-            let callee = graph.add_node(ele.clone());
-            graph.update_edge(calling_func.clone(), callee, 0);
+        if self.imports.is_some() {
+            for ele in self.imports.as_ref().unwrap().iter() {
+                let callee = graph.add_node(ele.clone());
+                graph.update_edge(calling_func.clone(), callee, 0);
+            }
+            graph
+        } else {
+            graph
         }
-        graph
     }
 
     fn graph_to_json_func_node(
@@ -94,22 +98,24 @@ impl AGCJFunctionCallGraphs {
     }
 
     fn get_callees_of_callees(&self, global_cg: &AGCJFile, graph: &mut Graph<String, u32>) {
-        for import in self.imports.iter() {
-            let import_object: &Vec<&AGCJFunctionCallGraphs> = &global_cg
-                .function_call_graphs
-                .as_ref()
-                .unwrap()
-                .iter()
-                .filter(|cg| cg.name == *import)
-                .collect_vec();
-            if !import_object.is_empty() {
-                for entry in import_object {
-                    for ele in entry.imports.iter() {
-                        let callee = graph.add_node(ele.clone());
-                        let import_node_index =
-                            graph.node_indices().find(|i| &graph[*i] == import).unwrap();
-                        debug!("{} -> {}", import, ele);
-                        graph.update_edge(import_node_index, callee, 0);
+        if self.imports.is_some() {
+            for import in self.imports.as_ref().unwrap().iter() {
+                let import_object: &Vec<&AGCJFunctionCallGraphs> = &global_cg
+                    .function_call_graphs
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .filter(|cg| cg.name == *import)
+                    .collect_vec();
+                if !import_object.is_empty() {
+                    for entry in import_object {
+                        for ele in entry.imports.as_ref().unwrap().iter() {
+                            let callee = graph.add_node(ele.clone());
+                            let import_node_index =
+                                graph.node_indices().find(|i| &graph[*i] == import).unwrap();
+                            debug!("{:?} -> {:?}", import, ele);
+                            graph.update_edge(import_node_index, callee, 0);
+                        }
                     }
                 }
             }
@@ -122,7 +128,7 @@ impl AGCJFunctionCallGraphs {
             .as_ref()
             .unwrap()
             .iter()
-            .filter(|cg| cg.imports.contains(&self.name))
+            .filter(|cg| cg.imports.as_ref().unwrap().contains(&self.name))
             .collect_vec();
 
         for cg in callers.iter() {

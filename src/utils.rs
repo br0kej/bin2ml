@@ -49,11 +49,16 @@ pub fn get_save_file_path(
 /// files present within identifying files ending in .json before
 /// returning a Vec<String> where each string is an absolute path
 /// to a given JSON file
-pub fn get_json_paths_from_dir(path: &String) -> Vec<String> {
+pub fn get_json_paths_from_dir(path: &String, identifier: Option<String>) -> Vec<String> {
     let mut str_vec: Vec<String> = Vec::new();
+    let pattern = if identifier.is_none() {
+        ".json".to_string()
+    } else {
+        format!("{}.json", identifier.unwrap())
+    };
     for file in WalkDir::new(path).into_iter().filter_map(|file| file.ok()) {
         if file.metadata().unwrap().is_file()
-            && file.file_name().to_string_lossy().ends_with(".json")
+            && file.file_name().to_string_lossy().ends_with(&pattern)
         {
             let f_string = String::from(<&std::path::Path>::clone(&file.path()).to_str().unwrap());
             str_vec.push(f_string.clone());

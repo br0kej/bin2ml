@@ -439,7 +439,7 @@ fn main() {
                             );
                         }
                     } else {
-                        let file_paths_vec = get_json_paths_from_dir(path);
+                        let file_paths_vec = get_json_paths_from_dir(path, Some("cg".to_string()));
                         info!(
                             "{} files found. Beginning Processing.",
                             file_paths_vec.len()
@@ -451,6 +451,7 @@ fn main() {
                                 output_path: output_path.to_owned(),
                                 function_metadata: None,
                             };
+                            debug!("Proceissing {}", file.filename);
                             file.load_and_deserialize()
                                 .expect("Unable to load and desearilize JSON");
 
@@ -480,7 +481,7 @@ fn main() {
                             fcg.one_hop_to_petgraph(&file, &file.output_path, &file.filename);
                         }
                     } else {
-                        let file_paths_vec = get_json_paths_from_dir(path);
+                        let file_paths_vec = get_json_paths_from_dir(path, Some("cg".to_string()));
                         info!(
                             "{} files found. Beginning Processing.",
                             file_paths_vec.len()
@@ -515,7 +516,7 @@ fn main() {
                             fcg.to_petgraph_with_callers(&file, &file.output_path, &file.filename);
                         }
                     } else {
-                        let file_paths_vec = get_json_paths_from_dir(path);
+                        let file_paths_vec = get_json_paths_from_dir(path, Some("cg".to_string()));
                         info!(
                             "{} files found. Beginning Processing.",
                             file_paths_vec.len()
@@ -559,7 +560,7 @@ fn main() {
                         }
                     }
                 } else {
-                    let file_paths_vec = get_json_paths_from_dir(path);
+                    let file_paths_vec = get_json_paths_from_dir(path, Some("cg".to_string()));
                     info!(
                         "{} files found. Beginning Processing.",
                         file_paths_vec.len()
@@ -646,7 +647,7 @@ fn main() {
                     file.execute_data_generation(format_type, instruction_type, random_walk, *pairs)
                 } else {
                     info!("Multiple files found. Will parallel process.");
-                    let file_paths_vec = get_json_paths_from_dir(path);
+                    let file_paths_vec = get_json_paths_from_dir(path, None);
                     info!(
                         "{} files found. Beginning Processing.",
                         file_paths_vec.len()
