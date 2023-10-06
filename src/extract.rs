@@ -6,8 +6,10 @@ use anyhow::Result;
 use r2pipe::R2Pipe;
 use r2pipe::R2PipeSpawnOptions;
 use serde::{Deserialize, Serialize};
+use serde_aux::prelude::*;
 use serde_json;
 use serde_json::{json, Value};
+use serde_with::serde_as;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
@@ -88,21 +90,27 @@ pub struct AFLJFuncDetails {
     #[serde(default)]
     pub callrefs: Vec<Callref>,
     #[serde(default)]
-    pub datarefs: Vec<i64>,
-    pub indegree: i64,
-    pub outdegree: i64,
-    pub nlocals: i64,
-    pub nargs: i64,
-    pub bpvars: Vec<Bpvar>,
-    pub spvars: Vec<Value>,
-    pub regvars: Vec<Regvar>,
-    pub difftype: String,
+    pub datarefs: Vec<DataRef>,
+    pub indegree: Option<i64>,
+    pub outdegree: Option<i64>,
+    pub nlocals: Option<i64>,
+    pub nargs: Option<i64>,
+    pub bpvars: Option<Vec<Bpvar>>,
+    pub spvars: Option<Vec<Value>>,
+    pub regvars: Option<Vec<Regvar>>,
+    pub difftype: Option<String>,
     #[serde(default)]
-    pub codexrefs: Vec<Codexref>,
+    pub codexrefs: Option<Vec<Codexref>>,
     #[serde(default)]
-    pub dataxrefs: Vec<i64>,
+    pub dataxrefs: Option<Vec<i64>>,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", transparent)]
+pub struct DataRef {
+    #[serde(deserialize_with = "deserialize_string_from_number")]
+    value: String,
+}
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Callref {
