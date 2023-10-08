@@ -199,10 +199,10 @@ impl AGCJFunctionCallGraphs {
 
     fn convert_graph_to_networkx(&self, graph: Graph<String, u32>, global_cg: &AGCJFile, binary_name: &str, output_path: &String, with_metadata: &bool, type_suffix: &str) {
         if *with_metadata {
-            let type_suffix = format!("{}-{}", type_suffix, "meta").as_str();
+            let type_suffix = type_suffix.to_owned() + "-meta";
             let networkx_graph =
                 NetworkxDiGraph::from((graph, global_cg.function_metadata.as_ref().unwrap()));
-            self.graph_to_json_func_metadata(binary_name, output_path, networkx_graph, type_suffix)
+            self.graph_to_json_func_metadata(binary_name, output_path, networkx_graph, type_suffix.as_str())
         } else {
             let networkx_graph = NetworkxDiGraph::from(graph);
             self.graph_to_json_func_node(binary_name, output_path, networkx_graph, type_suffix)

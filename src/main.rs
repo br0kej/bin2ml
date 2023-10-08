@@ -476,11 +476,6 @@ fn main() {
                             }
                         }
                     } else {
-                        // its more than one file
-                        if metadata_path.is_none() {
-                            error!("with features active - require --metadata-path argument");
-                            exit(1)
-                        };
                         let mut file_paths_vec =
                             get_json_paths_from_dir(path, Some("_cg".to_string()));
                         info!(
@@ -534,6 +529,12 @@ fn main() {
                                 }
                             }
                         } else {
+                            // its more than one file
+                            if metadata_path.is_none() {
+                                error!("with features active - require --metadata-path argument");
+                                exit(1)
+                            };
+
                             let mut metadata_paths_vec = get_json_paths_from_dir(
                                 &metadata_path.as_ref().unwrap(),
                                 Some("finfo".to_string()),
