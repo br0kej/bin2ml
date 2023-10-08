@@ -165,13 +165,20 @@ impl AGCJFunctionCallGraphs {
         global_cg: &AGCJFile,
         output_path: &String,
         binary_name: &str,
+        with_metadata: &bool,
     ) {
         let mut graph = self.build_local_call_graph();
 
         self.get_callees_of_callees(global_cg, &mut graph);
 
-        let networkx_graph = NetworkxDiGraph::from(graph);
-        self.graph_to_json_func_node(binary_name, output_path, networkx_graph, "1hop")
+        if *with_metadata {
+            let networkx_graph =
+                NetworkxDiGraph::from((graph, global_cg.function_metadata.as_ref().unwrap()));
+            self.graph_to_json_func_metadata(binary_name, output_path, networkx_graph, "1hop")
+        } else {
+            let networkx_graph = NetworkxDiGraph::from(graph);
+            self.graph_to_json_func_node(binary_name, output_path, networkx_graph, "1hop")
+        };
     }
 
     pub fn to_petgraph_with_callers(
@@ -179,11 +186,19 @@ impl AGCJFunctionCallGraphs {
         global_cg: &AGCJFile,
         output_path: &String,
         binary_name: &str,
+        with_metadata: &bool
     ) {
         let mut graph = self.build_local_call_graph();
         self.get_target_func_callers(global_cg, &mut graph);
-        let networkx_graph = NetworkxDiGraph::from(graph);
-        self.graph_to_json_func_node(binary_name, output_path, networkx_graph, "cg-callers")
+
+        if *with_metadata {
+            let networkx_graph =
+                NetworkxDiGraph::from((graph, global_cg.function_metadata.as_ref().unwrap()));
+            self.graph_to_json_func_metadata(binary_name, output_path, networkx_graph, "cg-callers")
+        } else {
+            let networkx_graph = NetworkxDiGraph::from(graph);
+            self.graph_to_json_func_node(binary_name, output_path, networkx_graph, "cg-callers")
+        };
     }
 
     pub fn one_hop_to_petgraph_with_callers(
@@ -191,14 +206,21 @@ impl AGCJFunctionCallGraphs {
         global_cg: &AGCJFile,
         output_path: &String,
         binary_name: &str,
+        with_metadata: &bool,
     ) {
         let mut graph = self.build_local_call_graph();
 
         self.get_target_func_callers(global_cg, &mut graph);
         self.get_callees_of_callees(global_cg, &mut graph);
 
-        let networkx_graph = NetworkxDiGraph::from(graph);
-        self.graph_to_json_func_node(binary_name, output_path, networkx_graph, "1hop-callers")
+        if *with_metadata {
+            let networkx_graph =
+                NetworkxDiGraph::from((graph, global_cg.function_metadata.as_ref().unwrap()));
+            self.graph_to_json_func_metadata(binary_name, output_path, networkx_graph, "1hop-callers")
+        } else {
+            let networkx_graph = NetworkxDiGraph::from(graph);
+            self.graph_to_json_func_node(binary_name, output_path, networkx_graph, "1hop-callers")
+        };
     }
 
     pub fn print_callees(&self) {
