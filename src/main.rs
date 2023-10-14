@@ -439,6 +439,8 @@ fn main() {
                             );
                         }
                     } else {
+                        debug!("Multiple files found");
+
                         if metadata_path.is_none() {
                             error!("with features active - require --metadata-path argument");
                             exit(1)
@@ -453,6 +455,7 @@ fn main() {
                         // if without metadata
 
                         if !with_features {
+                            debug!("Creating call graphs without any node features");
                             for path in file_paths_vec.iter() {
                                 let mut file = AGCJFile {
                                     filename: path.to_owned(),
@@ -474,6 +477,8 @@ fn main() {
                                 }
                             }
                         } else {
+                            debug!("Creating call graphs with node features");
+                            debug!("Getting metadata file paths");
                             let mut metadata_paths_vec = get_json_paths_from_dir(
                                 &metadata_path.as_ref().unwrap(),
                                 Some("finfo".to_string()),
@@ -492,9 +497,10 @@ fn main() {
                                         function_info: None,
                                         output_path: "".to_string(),
                                     };
+                                    debug!("Attempting to load metadata file: {}", metadata_path);
                                     let _ = metadata
                                         .load_and_deserialize()
-                                        .expect("Unable to load file");
+                                        .expect("Unable to load assocaited metadata file");
                                     let metadata_subset = metadata.subset();
                                     AGCJFile {
                                         filename: path.to_owned(),
@@ -503,10 +509,11 @@ fn main() {
                                         function_metadata: Some(metadata_subset),
                                     }
                                 };
-                                debug!("Proceissing {}", file.filename);
+                                debug!("Attempting to load {}", file.filename);
                                 file.load_and_deserialize()
                                     .expect("Unable to load and desearilize JSON");
 
+                                debug!("Generating call graphs using loaded cgs + metadata");
                                 for fcg in file.function_call_graphs.as_ref().unwrap() {
                                     fcg.to_petgraph(
                                         &file,
@@ -515,6 +522,7 @@ fn main() {
                                         with_features,
                                     );
                                 }
+                                debug!("Finished generating cgs + metadata for {}", file.filename);
                             }
                         }
                     }

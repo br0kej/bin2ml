@@ -403,25 +403,35 @@ impl FileToBeProcessed {
 
     pub fn extract_function_info(&self, debug: &bool) {
         info!("Starting function metdata extraction");
-        let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
-        let function_details = self.get_function_name_list(&mut r2p);
-        let mut function_info: Vec<Vec<AFIJFunctionInfo>> = Vec::new();
-        info!("Extracting function metadata");
-        for function in function_details.iter() {
-            debug!("Processing {}", function.name);
-            let ret = self.get_function_info(function.offset, &mut r2p);
-            debug!("Metadata Collected: {:?}", ret);
-            function_info.push(ret);
-        }
-        info!("All functions processed");
-        r2p.close();
-        info!("r2p closed");
+        let mut fp_filename = Path::new(self.file_path.as_str())
+            .file_name()
+            .expect("Unable to get filename")
+            .to_string_lossy()
+            .to_string();
 
-        info!("Writing extracted data to file");
-        self.write_to_json(&json!(function_info
-            .into_iter()
-            .flatten()
-            .collect::<Vec<AFIJFunctionInfo>>()))
+        fp_filename = fp_filename + "_" + &self.job_type_suffix.clone();
+        let f_name = format!("{}/{}.json", self.output_path, fp_filename);
+        if !Path::new(&f_name).exists() {
+            let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
+            let function_details = self.get_function_name_list(&mut r2p);
+            let mut function_info: Vec<Vec<AFIJFunctionInfo>> = Vec::new();
+            info!("Extracting function metadata");
+            for function in function_details.iter() {
+                debug!("Processing {}", function.name);
+                let ret = self.get_function_info(function.offset, &mut r2p);
+                debug!("Metadata Collected: {:?}", ret);
+                function_info.push(ret);
+            }
+            info!("All functions processed");
+            r2p.close();
+            info!("r2p closed");
+
+            info!("Writing extracted data to file");
+            self.write_to_json(&json!(function_info
+                .into_iter()
+                .flatten()
+                .collect::<Vec<AFIJFunctionInfo>>()))
+        }
     }
 
     // r2 commands to structs
