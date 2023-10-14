@@ -4,7 +4,6 @@
 
 use clap::{Parser, Subcommand};
 use std::fmt;
-use std::fmt::write;
 #[macro_use]
 extern crate log;
 use clap::builder::TypedValueParser;
@@ -330,7 +329,7 @@ fn main() {
                     _ => DataType::Invalid,
                 };
 
-                if graph_data_type == DataType::Cfg && *with_features == true {
+                if graph_data_type == DataType::Cfg && *with_features {
                     warn!("The 'with_features' toggle is set but is not support for CFG generation. Will ignore.")
                 };
 
@@ -424,7 +423,7 @@ fn main() {
                                 function_info: None,
                                 output_path: "".to_string(),
                             };
-                            let _ = metadata
+                            metadata
                                 .load_and_deserialize()
                                 .expect("Unable to load file");
                             let metadata_subset = metadata.subset();
@@ -500,7 +499,7 @@ fn main() {
                             debug!("Creating call graphs without any node features");
                             //for path in file_paths_vec.iter() {
                             file_paths_vec.par_iter().for_each(|path| {
-                                let suffix = format!("{}", graph_type.to_owned());
+                                let suffix = graph_type.to_owned().to_string();
                                 let full_output_path = PathBuf::from(get_save_file_path(
                                     path,
                                     output_path,
@@ -571,7 +570,7 @@ fn main() {
                             };
 
                             let mut metadata_paths_vec = get_json_paths_from_dir(
-                                &metadata_path.as_ref().unwrap(),
+                                metadata_path.as_ref().unwrap(),
                                 Some("finfo".to_string()),
                             );
 
@@ -596,7 +595,7 @@ fn main() {
                                             output_path: "".to_string(),
                                         };
                                         debug!("Attempting to load metadata file: {}", tup.1);
-                                        let _ = metadata
+                                        metadata
                                             .load_and_deserialize()
                                             .expect("Unable to load assocaited metadata file");
                                         let metadata_subset = metadata.subset();

@@ -194,11 +194,11 @@ impl From<(Graph<String, u32>, &Vec<AFIJFeatureSubset>)>
         let mut nodes: Vec<CallGraphFuncWithMetadata> = vec![];
         for (i, node_weight) in node_weights.enumerate() {
             let subset_object = src_graph.1.iter().find(|ele| &ele.name == node_weight);
-            if subset_object.is_some() {
+            if let Some(subset_object) = subset_object {
                 nodes.push(CallGraphFuncWithMetadata {
                     id: i as i64,
                     func_name: node_weight.to_owned(),
-                    function_feature_subset: subset_object.unwrap().clone(),
+                    function_feature_subset: subset_object.clone(),
                 })
             } else {
                 nodes.push(CallGraphFuncWithMetadata {

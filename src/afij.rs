@@ -115,8 +115,8 @@ impl From<&AFIJFunctionInfo> for AFIJFeatureSubset {
     fn from(src: &AFIJFunctionInfo) -> AFIJFeatureSubset {
         AFIJFeatureSubset {
             name: src.name.clone(),
-            ninstrs: src.ninstrs.clone(),
-            edges: src.edges.clone(),
+            ninstrs: src.ninstrs,
+            edges: src.edges,
             indegree: src.indegree.unwrap_or(0),
             outdegree: src.outdegree.unwrap_or(0),
             nlocals: src.nlocals.unwrap_or(0),

@@ -4,7 +4,6 @@ use crate::utils::{check_or_create_dir, get_save_file_path};
 use itertools::Itertools;
 use petgraph::prelude::Graph;
 use serde::{Deserialize, Serialize};
-use std::fmt::format;
 use std::fs::File;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -30,7 +29,7 @@ impl AGCJFunctionCallGraphs {
         if self.imports.is_some() {
             for ele in self.imports.as_ref().unwrap().iter() {
                 let callee = graph.add_node(ele.clone());
-                graph.update_edge(calling_func.clone(), callee, 0);
+                graph.update_edge(calling_func, callee, 0);
             }
             graph
         } else {
