@@ -488,22 +488,25 @@ fn main() {
                             metadata_paths_vec.sort();
 
                             assert_eq!(file_paths_vec.len(), metadata_paths_vec.len());
-                            for (path, metadata_path) in
-                                file_paths_vec.iter().zip(metadata_paths_vec)
-                            {
+                            let combined_cgs_metadata = file_paths_vec
+                                .into_iter()
+                                .zip(metadata_paths_vec)
+                                .collect::<Vec<_>>();
+
+                            combined_cgs_metadata.par_iter().for_each(|tup| {
                                 let mut file = {
                                     let mut metadata = AFIJFile {
-                                        filename: metadata_path.clone(),
+                                        filename: tup.1.clone(),
                                         function_info: None,
                                         output_path: "".to_string(),
                                     };
-                                    debug!("Attempting to load metadata file: {}", metadata_path);
+                                    debug!("Attempting to load metadata file: {}", tup.1);
                                     let _ = metadata
                                         .load_and_deserialize()
                                         .expect("Unable to load assocaited metadata file");
                                     let metadata_subset = metadata.subset();
                                     AGCJFile {
-                                        filename: path.to_owned(),
+                                        filename: tup.0.to_owned(),
                                         function_call_graphs: None,
                                         output_path: output_path.to_owned(),
                                         function_metadata: Some(metadata_subset),
@@ -523,7 +526,7 @@ fn main() {
                                     );
                                 }
                                 debug!("Finished generating cgs + metadata for {}", file.filename);
-                            }
+                            });
                         }
                     }
                 } else if graph_type == DataType::OneHopCg {
