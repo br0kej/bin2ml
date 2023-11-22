@@ -35,7 +35,7 @@ pub mod processors;
 pub mod tokeniser;
 pub mod utils;
 
-use crate::dedup::EsilFuncStringCorpus;
+use crate::dedup::{EsilFuncStringCorpus, OneHopCGCorpus};
 use crate::extract::ExtractionJobType;
 use crate::files::{AFIJFile, AGCJFile};
 use crate::tokeniser::{train_byte_bpe_tokeniser, TokeniserType};
@@ -269,6 +269,15 @@ enum Commands {
         #[arg(short, long, value_name = "FILENAME")]
         filename: String,
 
+        /// Type of dedup
+        #[arg(short, long, value_name = "TYPE", value_parser = clap::builder::PossibleValuesParser::new(["esilfstr", "onehopcgs"])
+        .map(|s| s.parse::<String>().unwrap()))]
+        datatype: String,
+
+        /// Output path to save dedup corpus - Only works for onehopcgs atm
+        #[arg(short, long, value_name = "OUTPUT_PATH")]
+        output_path: String,
+
         /// Toggle to print statistics of number of functions before and after dedup
         #[arg(long, default_value = "false")]
         print_stats: bool,
@@ -497,7 +506,7 @@ fn main() {
                         // if without metadata
                         if !with_features {
                             debug!("Creating call graphs without any node features");
-                            //for path in file_paths_vec.iter() {
+
                             file_paths_vec.par_iter().for_each(|path| {
                                 let suffix = graph_type.to_owned().to_string();
                                 let full_output_path = PathBuf::from(get_save_file_path(
@@ -860,20 +869,38 @@ fn main() {
         }
         Commands::Dedup {
             filename,
+            datatype,
+            output_path,
             print_stats,
             just_stats,
             num_threads,
             just_hash_value,
         } => {
-            warn!("THIS ONLY SUPPORTS FILES WITH THE FOLLOWING NAMING CONVENTION: <arch>-<compiler-name>-<verion>-<opt-level>_<binary_name>-<datatype>.json");
-            rayon::ThreadPoolBuilder::new()
-                .num_threads(*num_threads)
-                .build_global()
-                .unwrap();
-            let corpus = EsilFuncStringCorpus::new(filename).unwrap();
-            corpus.uniq_binaries.par_iter().progress().for_each(|name| {
-                corpus.dedup_subset(name, *print_stats, *just_stats, *just_hash_value)
-            });
+            if datatype == "esilfstr" {
+                warn!("THIS ONLY SUPPORTS FILES WITH THE FOLLOWING NAMING CONVENTION: <arch>-<compiler-name>-<verion>-<opt-level>_<binary_name>-<datatype>.json");
+                rayon::ThreadPoolBuilder::new()
+                    .num_threads(*num_threads)
+                    .build_global()
+                    .unwrap();
+                let corpus = EsilFuncStringCorpus::new(filename).unwrap();
+                corpus.uniq_binaries.par_iter().progress().for_each(|name| {
+                    corpus.dedup_subset(name, *print_stats, *just_stats, *just_hash_value)
+                });
+            } else if datatype == "onehopcgs" {
+                println!("Onehopcgs - {}!", filename);
+                if Path::new(filename).exists() {
+                    info!("Starting decuplication process for One Hop Call Graphs");
+                    let corpus = OneHopCGCorpus::new(filename, output_path).unwrap();
+                    println!(
+                        "{:?} - {:?}",
+                        &corpus.filepaths.len(),
+                        &corpus.loaded_data.len()
+                    );
+                    corpus.save_corpus()
+                } else {
+                    error!("Filename provided does not exist! - {}", filename)
+                }
+            }
         }
     }
 }

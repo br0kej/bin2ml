@@ -1,15 +1,18 @@
+use crate::networkx::{CallGraphFuncWithMetadata, NetworkxDiGraph};
 use anyhow::Result;
+use indicatif::ProgressIterator;
 use itertools::Itertools;
 use prettytable::row;
 use prettytable::Table;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::{read_to_string, File};
 use std::hash::{Hash, Hasher};
+use std::path::Path;
 use std::string::String;
-use std::vec;
+use std::{fs, vec};
 use walkdir::{DirEntry, WalkDir};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -268,6 +271,131 @@ impl EsilFuncStringCorpus {
             serde_json::to_writer(
                 &File::create(fname_string).expect("Failed to create writer"),
                 &uniques_to_drop,
+            )
+            .expect("Unable to write JSON");
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct OneHopCGCorpus {
+    pub loaded_data: Vec<NetworkxDiGraph<CallGraphFuncWithMetadata>>,
+    pub filepaths: Vec<String>,
+    pub output_path: String,
+}
+
+impl OneHopCGCorpus {
+    pub fn new(directory: &String, output_path: &String) -> Result<OneHopCGCorpus> {
+        if !Path::new(output_path).exists() {
+            fs::create_dir(output_path).expect("Failed to create output directory!");
+            info!("Output path not found - Creating {}", output_path)
+        }
+
+        let mut filepaths = Vec::new();
+        let mut loaded_data = Vec::new();
+
+        for file in WalkDir::new(directory)
+            .into_iter()
+            .filter_map(|file| file.ok())
+        {
+            if file.path().to_string_lossy().ends_with(".json") {
+                filepaths.push(file.clone().path().to_string_lossy().to_string());
+            }
+        }
+        info!("Loading the filepaths");
+        for ele in filepaths.iter().progress() {
+            let data = read_to_string(&ele).expect(&format!("Unable to read file - {:?}", ele));
+
+            let json: NetworkxDiGraph<CallGraphFuncWithMetadata> = serde_json::from_str(&data)
+                .expect(&format!("Unable to load function data from {}", ele));
+
+            if !json.nodes.is_empty() {
+                loaded_data.push(Some(json))
+            } else {
+                loaded_data.push(None)
+            }
+            //info!("Load complete - {}", loaded_data.len())
+        }
+        info!("Len Pre Filtering: {}", filepaths.len());
+        info!("Removing any None loads");
+        loaded_data.retain(|c| c.is_some());
+
+        info!("Starting to deduplicate the corpus");
+        let (loaded_data, filepaths) = Self::dedup_corpus(loaded_data, filepaths);
+        let loaded_data = loaded_data.into_iter().flatten().collect();
+
+        Ok(OneHopCGCorpus {
+            loaded_data,
+            filepaths,
+            output_path: output_path.to_string(),
+        })
+    }
+
+    fn calculate_hash<T: Hash>(t: &T) -> u64 {
+        let mut s = DefaultHasher::new();
+        t.hash(&mut s);
+        s.finish()
+    }
+
+    // This is very slow O(N)^2
+    fn dedup_corpus(
+        mut data: Vec<Option<NetworkxDiGraph<CallGraphFuncWithMetadata>>>,
+        mut filepaths: Vec<String>,
+    ) -> (
+        Vec<Option<NetworkxDiGraph<CallGraphFuncWithMetadata>>>,
+        Vec<String>,
+    ) {
+        info!("Creating the removal index");
+
+        let mut seen = HashSet::new();
+        let mut indices_to_remove = Vec::new();
+        for (i, data_ele) in data.iter_mut().enumerate().progress() {
+            let hash_value = Self::calculate_hash(&data_ele);
+
+            if seen.contains(&hash_value) {
+                indices_to_remove.push(i)
+            } else {
+                seen.insert(hash_value);
+            }
+        }
+        info!("Starting the duplicate removal!");
+        for ele in indices_to_remove.iter().rev().progress() {
+            data.remove(*ele);
+            filepaths.remove(ele.clone());
+        }
+        return (data, filepaths);
+    }
+
+    pub fn save_corpus(self) {
+        info!("Saving Deduplicated files...");
+        for (data_ele, filepath) in self
+            .loaded_data
+            .iter()
+            .zip(self.filepaths.iter())
+            .progress()
+        {
+            // need last two bits
+
+            let fixed_path: Vec<_> = Path::new(filepath)
+                .components()
+                .rev()
+                .take(2)
+                .collect::<Vec<_>>();
+
+            let fixed_path = fixed_path
+                .iter()
+                .map(|c| c.as_os_str().to_string_lossy().to_string())
+                .rev()
+                .collect::<Vec<String>>();
+
+            let dirs = format!("{}{}", self.output_path, fixed_path[0]);
+            fs::create_dir_all(&dirs).expect("Failed to create output directory!");
+
+            let fixed_path = format!("{}/{}", dirs, fixed_path[1]);
+            debug!("Path: {:?}", fixed_path);
+            serde_json::to_writer(
+                &File::create(fixed_path).expect("Failed to create writer"),
+                &data_ele,
             )
             .expect("Unable to write JSON");
         }

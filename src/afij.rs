@@ -98,7 +98,7 @@ pub struct Regvar {
     pub ref_field: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Hash, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AFIJFeatureSubset {
     pub name: String,

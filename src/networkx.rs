@@ -5,7 +5,7 @@ use petgraph::prelude::Graph;
 use petgraph::visit::EdgeRef;
 use serde::{Deserialize, Serialize};
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkxDiGraph<N> {
     pub adjacency: Vec<Vec<Adjacency>>,
@@ -15,7 +15,7 @@ pub struct NetworkxDiGraph<N> {
     pub nodes: Vec<N>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Adjacency {
     pub id: usize,
@@ -141,7 +141,7 @@ pub struct CallGraphFuncNameNode {
     pub func_name: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CallGraphFuncWithMetadata {
     pub id: i64,
