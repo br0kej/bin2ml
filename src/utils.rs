@@ -19,6 +19,10 @@ pub fn get_save_file_path(
     output_path: &String,
     optional_suffix: Option<String>,
 ) -> String {
+    debug!(
+        "Building Filepath - Binary Path: {:?} Output Path: {:?}",
+        binary_path, output_path
+    );
     let file_name = Path::new(binary_path)
         .file_stem()
         .unwrap()
