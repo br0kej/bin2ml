@@ -887,9 +887,8 @@ fn main() {
                     corpus.dedup_subset(name, *print_stats, *just_stats, *just_hash_value)
                 });
             } else if datatype == "onehopcgs" {
-                println!("Onehopcgs - {}!", filename);
                 if Path::new(filename).exists() {
-                    info!("Starting decuplication process for One Hop Call Graphs");
+                    info!("Starting duplication process for One Hop Call Graphs");
                     let corpus = OneHopCGCorpus::new(filename, output_path).unwrap();
                     println!(
                         "{:?} - {:?}",
