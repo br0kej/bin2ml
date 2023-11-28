@@ -282,7 +282,6 @@ impl EsilFuncStringCorpus {
 
 #[derive(Debug)]
 pub struct OneHopCGCorpus {
-    pub loaded_data: Vec<NetworkxDiGraph<CallGraphFuncWithMetadata>>,
     pub filepaths: Vec<String>,
     pub output_path: String,
 }
@@ -295,7 +294,6 @@ impl OneHopCGCorpus {
         }
 
         let mut filepaths = Vec::new();
-        let mut fp_binaries = Vec::new();
 
         // Load all JSON filepaths
         for file in WalkDir::new(directory)
@@ -307,87 +305,9 @@ impl OneHopCGCorpus {
             }
         }
 
-        // Process the file paths to get the associated binary of each path
-        for file in &filepaths {
-            let binary_intermediate = Path::new(file).parent().unwrap().file_name().unwrap();
-            let binary = binary_intermediate
-                .to_string_lossy()
-                .split("_")
-                .nth(1)
-                .unwrap()
-                .to_string();
-
-            fp_binaries.push(binary)
-        }
-
-        // Generate binary specific filepath vectors
-        let unqiue_binaries: Vec<_> = fp_binaries.iter().unique().collect();
-        let mut unique_binaries_fps: Vec<Vec<String>> = vec![Vec::new(); unqiue_binaries.len()];
-
-        for (file, binary) in filepaths.iter().zip(fp_binaries.iter()) {
-            unique_binaries_fps
-                [unqiue_binaries.iter().position(|&x| x == binary).unwrap() as usize]
-                .push(file.clone());
-        }
-
-        // Create a Vec of Vec<String> where each vec is a unique binary
-        let deduped_data = Arc::new(Mutex::new(vec![Vec::new(); unqiue_binaries.len()]));
-        let deduped_paths = Arc::new(Mutex::new(vec![Vec::new(); unqiue_binaries.len()]));
-
-        info!("Loading the filepaths");
-        unique_binaries_fps
-            .par_iter()
-            .progress()
-            .enumerate()
-            .for_each(|(idx, fp_subset)| {
-                let mut subset_loaded_data = Vec::new();
-
-                for ele in fp_subset.iter() {
-                    let data =
-                        read_to_string(&ele).expect(&format!("Unable to read file - {:?}", ele));
-
-                    let json: NetworkxDiGraph<CallGraphFuncWithMetadata> =
-                        serde_json::from_str(&data)
-                            .expect(&format!("Unable to load function data from {}", ele));
-
-                    if !json.nodes.is_empty() {
-                        subset_loaded_data.push(Some(json))
-                    } else {
-                        subset_loaded_data.push(None)
-                    }
-                }
-
-                //info!("Len Pre Filtering: {:?}", fp_subset.len());
-                //info!("Removing any None loads");
-                subset_loaded_data.retain(|c| c.is_some());
-
-                //info!("Starting to deduplicate the corpus");
-                let (subset_loaded_data, fp_subset) =
-                    Self::dedup_corpus(&mut subset_loaded_data, fp_subset.to_vec());
-                let subset_loaded_data: Vec<NetworkxDiGraph<_>> =
-                    subset_loaded_data.into_iter().filter_map(|x| x).collect();
-
-                deduped_data
-                    .lock()
-                    .unwrap()
-                    .insert(idx, subset_loaded_data.clone());
-                deduped_paths.lock().unwrap().insert(idx, fp_subset);
-            });
-        info!("File loading complete");
-        let deduped_data = Arc::try_unwrap(deduped_data).unwrap().into_inner().unwrap();
-        let deduped_paths = Arc::try_unwrap(deduped_paths)
-            .unwrap()
-            .into_inner()
-            .unwrap();
-
-        let loaded_data = deduped_data.into_iter().flatten().collect();
-        let filepaths: Vec<String> = deduped_paths.into_iter().flatten().collect();
-        let filepaths = filepaths.iter().map(|x| x.to_string()).collect();
-
         info!("Returning One Hop CG Corpus Struct");
 
         Ok(OneHopCGCorpus {
-            loaded_data,
             filepaths,
             output_path: output_path.to_string(),
         })
@@ -428,14 +348,79 @@ impl OneHopCGCorpus {
         return (data.to_vec(), filepaths);
     }
 
-    pub fn save_corpus(self) {
-        info!("Saving Deduplicated files...");
-        //for (data_ele, filepath) in self.loaded_data.par_iter().zip(self.filepaths.par_iter()) {
-        // need last two bits
-        self.loaded_data
+    pub fn process_corpus(self) {
+        let mut fp_binaries = Vec::new();
+        // Process the file paths to get the associated binary of each path
+        info!("Processing Filepaths to get binaries");
+        for file in &self.filepaths {
+            let binary_intermediate = Path::new(file).parent().unwrap().file_name().unwrap();
+            let binary = binary_intermediate
+                .to_string_lossy()
+                .split("_")
+                .nth(1)
+                .unwrap()
+                .to_string();
+
+            fp_binaries.push(binary)
+        }
+
+        // Generate binary specific filepath vectors
+        let unqiue_binaries: Vec<_> = fp_binaries.iter().unique().collect();
+        let mut unique_binaries_fps: Vec<Vec<String>> = vec![Vec::new(); unqiue_binaries.len()];
+
+        for (file, binary) in self.filepaths.iter().zip(fp_binaries.iter()) {
+            unique_binaries_fps
+                [unqiue_binaries.iter().position(|&x| x == binary).unwrap() as usize]
+                .push(file.clone());
+        }
+
+        // Create a Vec of Vec<String> where each vec is a unique binary
+        //let deduped_data = Arc::new(Mutex::new(vec![Vec::new(); unqiue_binaries.len()]));
+        //let deduped_paths = Arc::new(Mutex::new(vec![Vec::new(); unqiue_binaries.len()]));
+
+        info!("Loading the filepaths");
+        unique_binaries_fps
             .par_iter()
-            .zip(self.filepaths.par_iter())
             .progress()
+            .enumerate()
+            .for_each(|(idx, fp_subset)| {
+                let mut subset_loaded_data = Vec::new();
+
+                for ele in fp_subset.iter() {
+                    let data =
+                        read_to_string(&ele).expect(&format!("Unable to read file - {:?}", ele));
+
+                    let json: NetworkxDiGraph<CallGraphFuncWithMetadata> =
+                        serde_json::from_str(&data)
+                            .expect(&format!("Unable to load function data from {}", ele));
+
+                    if !json.nodes.is_empty() {
+                        subset_loaded_data.push(Some(json))
+                    } else {
+                        subset_loaded_data.push(None)
+                    }
+                }
+
+                subset_loaded_data.retain(|c| c.is_some());
+
+                info!("Starting to deduplicate the corpus - {}", idx);
+                let (subset_loaded_data, fp_subset) =
+                    Self::dedup_corpus(&mut subset_loaded_data, fp_subset.to_vec());
+                let subset_loaded_data: Vec<NetworkxDiGraph<_>> =
+                    subset_loaded_data.into_iter().filter_map(|x| x).collect();
+                info!("Starting to save - {}", idx);
+                self.save_corpus(subset_loaded_data, fp_subset);
+                info!("File processing complete - {}", idx);
+            });
+    }
+    pub fn save_corpus(
+        &self,
+        subset_loaded_data: Vec<NetworkxDiGraph<CallGraphFuncWithMetadata>>,
+        fp_subset: Vec<String>,
+    ) {
+        subset_loaded_data
+            .iter()
+            .zip(fp_subset.iter())
             .for_each(|(data_ele, filepath)| {
                 let fixed_path: Vec<_> = Path::new(filepath)
                     .components()
@@ -453,13 +438,11 @@ impl OneHopCGCorpus {
                 fs::create_dir_all(&dirs).expect("Failed to create output directory!");
 
                 let fixed_path = format!("{}/{}", dirs, fixed_path[1]);
-                debug!("Path: {:?}", fixed_path);
                 serde_json::to_writer(
                     &File::create(fixed_path).expect("Failed to create writer"),
                     &data_ele,
                 )
                 .expect("Unable to write JSON");
             });
-        info!("All files saved!");
     }
 }

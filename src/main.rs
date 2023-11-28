@@ -890,12 +890,7 @@ fn main() {
                 if Path::new(filename).exists() {
                     info!("Starting duplication process for One Hop Call Graphs");
                     let corpus = OneHopCGCorpus::new(filename, output_path).unwrap();
-                    println!(
-                        "{:?} - {:?}",
-                        &corpus.filepaths.len(),
-                        &corpus.loaded_data.len()
-                    );
-                    corpus.save_corpus()
+                    corpus.process_corpus();
                 } else {
                     error!("Filename provided does not exist! - {}", filename)
                 }
