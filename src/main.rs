@@ -807,7 +807,7 @@ fn main() {
                         .progress()
                         .for_each(|path| path.extract_register_behaviour(debug));
                 } else if job.job_type == ExtractionJobType::FunctionXrefs {
-                    info!("Extraction Job Type: Register Behaviour");
+                    info!("Extraction Job Type: Function Xrefs");
                     info!("Starting Parallel generation.");
                     #[allow(clippy::redundant_closure)]
                     job.files_to_be_processed
@@ -815,7 +815,7 @@ fn main() {
                         .progress()
                         .for_each(|path| path.extract_function_xrefs(debug));
                 } else if job.job_type == ExtractionJobType::CallGraphs {
-                    info!("Extraction Job Type: Register Behaviour");
+                    info!("Extraction Job Type: Call Graphs");
                     info!("Starting Parallel generation.");
                     #[allow(clippy::redundant_closure)]
                     job.files_to_be_processed
