@@ -14,7 +14,7 @@ use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::string::String;
 
-use std::sync::{Arc, Mutex};
+
 use std::{fs, vec};
 use walkdir::{DirEntry, WalkDir};
 
@@ -343,9 +343,9 @@ impl OneHopCGCorpus {
         debug!("Starting the duplicate removal!");
         for ele in indices_to_remove.iter().rev() {
             data.remove(*ele);
-            filepaths.remove(ele.clone());
+            filepaths.remove(*ele);
         }
-        return (data.to_vec(), filepaths);
+        (data.to_vec(), filepaths)
     }
 
     pub fn process_corpus(self) {
@@ -356,7 +356,7 @@ impl OneHopCGCorpus {
             let binary_intermediate = Path::new(file).parent().unwrap().file_name().unwrap();
             let binary = binary_intermediate
                 .to_string_lossy()
-                .split("_")
+                .split('_')
                 .nth(1)
                 .unwrap()
                 .to_string();
@@ -370,7 +370,7 @@ impl OneHopCGCorpus {
 
         for (file, binary) in self.filepaths.iter().zip(fp_binaries.iter()) {
             unique_binaries_fps
-                [unqiue_binaries.iter().position(|&x| x == binary).unwrap() as usize]
+                [unqiue_binaries.iter().position(|&x| x == binary).unwrap()]
                 .push(file.clone());
         }
 
@@ -384,7 +384,7 @@ impl OneHopCGCorpus {
 
                 for ele in fp_subset.iter() {
                     let data =
-                        read_to_string(&ele).expect(&format!("Unable to read file - {:?}", ele));
+                        read_to_string(ele).expect(&format!("Unable to read file - {:?}", ele));
 
                     let json: NetworkxDiGraph<CallGraphFuncWithMetadata> =
                         serde_json::from_str(&data)
@@ -403,7 +403,7 @@ impl OneHopCGCorpus {
                 let (subset_loaded_data, fp_subset) =
                     Self::dedup_corpus(&mut subset_loaded_data, fp_subset.to_vec());
                 let subset_loaded_data: Vec<NetworkxDiGraph<_>> =
-                    subset_loaded_data.into_iter().filter_map(|x| x).collect();
+                    subset_loaded_data.into_iter().flatten().collect();
                 info!("Starting to save - {}", idx);
                 self.save_corpus(subset_loaded_data, fp_subset);
                 info!("File processing complete - {}", idx);
