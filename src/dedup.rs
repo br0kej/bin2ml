@@ -327,7 +327,7 @@ impl OneHopCGCorpus {
         Vec<Option<NetworkxDiGraph<CallGraphFuncWithMetadata>>>,
         Vec<String>,
     ) {
-        //info!("Creating the removal index");
+        debug!("Creating the removal index");
 
         let mut seen = HashSet::new();
         let mut indices_to_remove = Vec::new();
@@ -340,7 +340,7 @@ impl OneHopCGCorpus {
                 seen.insert(hash_value);
             }
         }
-        //info!("Starting the duplicate removal!");
+        debug!("Starting the duplicate removal!");
         for ele in indices_to_remove.iter().rev() {
             data.remove(*ele);
             filepaths.remove(ele.clone());
@@ -373,10 +373,6 @@ impl OneHopCGCorpus {
                 [unqiue_binaries.iter().position(|&x| x == binary).unwrap() as usize]
                 .push(file.clone());
         }
-
-        // Create a Vec of Vec<String> where each vec is a unique binary
-        //let deduped_data = Arc::new(Mutex::new(vec![Vec::new(); unqiue_binaries.len()]));
-        //let deduped_paths = Arc::new(Mutex::new(vec![Vec::new(); unqiue_binaries.len()]));
 
         info!("Loading the filepaths");
         unique_binaries_fps
