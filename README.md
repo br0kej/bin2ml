@@ -18,8 +18,7 @@ git clone https://github.com/br0kej/bin2ml
 cd bin2ml
 cargo build --release
 ```
-Alternatively, there is a Dockerfile provided too which provides a means of creating a container with a ready to go version of `bin2ml` in it
-
+Alternatively, there are two Dockerfile's provided. `Dockerfile.build` can be used to build the `bin2ml` binary without having to have cargo on your workstation or `Dockerfile` builds `bin2ml` as well as installing radare2 to provide a means of doing processing within the container.
 ## Docs
 `bin2ml` does come with some documentation (albeit incomplete) and has been developed using `mdbook`. The documentation can be locally served by installing the platform relevant version of `mdbook` from [here](https://github.com/rust-lang/mdBook/releases)
 and then executing the commands below:

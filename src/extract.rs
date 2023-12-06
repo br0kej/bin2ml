@@ -176,10 +176,10 @@ pub struct AEAFJRegisterBehaviour {
     pub n: Vec<String>,
     #[serde(rename = "@R")]
     #[serde(default)]
-    pub r2: Vec<i64>,
+    pub r2: Vec<u64>,
     #[serde(rename = "@W")]
     #[serde(default)]
-    pub w2: Vec<i64>,
+    pub w2: Vec<u64>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
