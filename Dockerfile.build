@@ -16,7 +16,4 @@ FROM rust
 
 COPY --from=builder /usr/local/cargo/bin/bin2ml /usr/local/cargo/bin/bin2ml
 
-RUN git clone https://github.com/radareorg/radare2 radare2
-RUN cd radare2 ; sys/install.sh
-
 CMD bin2ml --version
