@@ -389,7 +389,7 @@ impl AFIJFile {
 
     pub fn subset(&mut self) -> Vec<AFIJFeatureSubset> {
         let mut func_info_subsets: Vec<AFIJFeatureSubset> = Vec::new();
-        info!("Starting to process functions");
+        debug!("Starting to subset functions");
         for function in self.function_info.as_ref().unwrap().iter() {
             let subset = AFIJFeatureSubset::from(function);
             func_info_subsets.push(subset)

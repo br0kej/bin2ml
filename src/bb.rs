@@ -98,7 +98,7 @@ pub struct ACFJBlock {
 }
 
 impl FeatureType {
-    // Returns the correpsonding feature map given a provided FeatureType
+    // Returns the corresponding feature map given a provided FeatureType
     // These feature maps are used to provide the functionality that handles
     // writing the output graphs to Networkx compatible JSON with
     // node attribute names.
@@ -115,7 +115,7 @@ impl FeatureType {
 impl ACFJBlock {
     // Generates integer encodings of a basic blocks ESIL instructions
     //
-    // This is to provide a means of conduting the extraction and tokenisation
+    // This is to provide a means of conducting the extraction and tokenisation
     // of ESIL instructions within Rust but then load the features in Python
     // to conduct inference and convert them into embeddings.
     #[cfg(feature = "inference")]
@@ -183,7 +183,7 @@ impl ACFJBlock {
 
     // Generates the features from the Gemini paper
     //
-    // Setting reduced = True is equalivant of generating the basic block
+    // Setting reduced = True is equivalent of generating the basic block
     // features from the DISCOVRE paper (Eshweiler et al (2016))
     //
     // Note: The Betweenness feature used in Gemini is calculated down stream using

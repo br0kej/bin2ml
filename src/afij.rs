@@ -98,7 +98,7 @@ pub struct Regvar {
     pub ref_field: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Hash, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AFIJFeatureSubset {
     pub name: String,
@@ -115,8 +115,8 @@ impl From<&AFIJFunctionInfo> for AFIJFeatureSubset {
     fn from(src: &AFIJFunctionInfo) -> AFIJFeatureSubset {
         AFIJFeatureSubset {
             name: src.name.clone(),
-            ninstrs: src.ninstrs.clone(),
-            edges: src.edges.clone(),
+            ninstrs: src.ninstrs,
+            edges: src.edges,
             indegree: src.indegree.unwrap_or(0),
             outdegree: src.outdegree.unwrap_or(0),
             nlocals: src.nlocals.unwrap_or(0),

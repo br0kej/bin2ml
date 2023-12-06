@@ -1,15 +1,21 @@
+use crate::networkx::{CallGraphFuncWithMetadata, NetworkxDiGraph};
 use anyhow::Result;
+use indicatif::ParallelProgressIterator;
 use itertools::Itertools;
 use prettytable::row;
 use prettytable::Table;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::{read_to_string, File};
 use std::hash::{Hash, Hasher};
+use std::path::Path;
 use std::string::String;
-use std::vec;
+
+
+use std::{fs, vec};
 use walkdir::{DirEntry, WalkDir};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -271,5 +277,168 @@ impl EsilFuncStringCorpus {
             )
             .expect("Unable to write JSON");
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct OneHopCGCorpus {
+    pub filepaths: Vec<String>,
+    pub output_path: String,
+}
+
+impl OneHopCGCorpus {
+    pub fn new(directory: &String, output_path: &String) -> Result<OneHopCGCorpus> {
+        if !Path::new(output_path).exists() {
+            fs::create_dir(output_path).expect("Failed to create output directory!");
+            info!("Output path not found - Creating {}", output_path)
+        }
+
+        let mut filepaths = Vec::new();
+
+        // Load all JSON filepaths
+        for file in WalkDir::new(directory)
+            .into_iter()
+            .filter_map(|file| file.ok())
+        {
+            if file.path().to_string_lossy().ends_with(".json") {
+                filepaths.push(file.clone().path().to_string_lossy().to_string());
+            }
+        }
+
+        info!("Returning One Hop CG Corpus Struct");
+
+        Ok(OneHopCGCorpus {
+            filepaths,
+            output_path: output_path.to_string(),
+        })
+    }
+
+    fn calculate_hash<T: Hash>(t: &T) -> u64 {
+        let mut s = DefaultHasher::new();
+        t.hash(&mut s);
+        s.finish()
+    }
+
+    // This is very slow O(N)^2
+    fn dedup_corpus(
+        data: &mut Vec<Option<NetworkxDiGraph<CallGraphFuncWithMetadata>>>,
+        mut filepaths: Vec<String>,
+    ) -> (
+        Vec<Option<NetworkxDiGraph<CallGraphFuncWithMetadata>>>,
+        Vec<String>,
+    ) {
+        debug!("Creating the removal index");
+
+        let mut seen = HashSet::new();
+        let mut indices_to_remove = Vec::new();
+        for (i, data_ele) in data.iter_mut().enumerate() {
+            let hash_value = Self::calculate_hash(&data_ele);
+
+            if seen.contains(&hash_value) {
+                indices_to_remove.push(i)
+            } else {
+                seen.insert(hash_value);
+            }
+        }
+        debug!("Starting the duplicate removal!");
+        for ele in indices_to_remove.iter().rev() {
+            data.remove(*ele);
+            filepaths.remove(*ele);
+        }
+        (data.to_vec(), filepaths)
+    }
+
+    pub fn process_corpus(self) {
+        let mut fp_binaries = Vec::new();
+        // Process the file paths to get the associated binary of each path
+        info!("Processing Filepaths to get binaries");
+        for file in &self.filepaths {
+            let binary_intermediate = Path::new(file).parent().unwrap().file_name().unwrap();
+            let binary = binary_intermediate
+                .to_string_lossy()
+                .split('_')
+                .nth(1)
+                .unwrap()
+                .to_string();
+
+            fp_binaries.push(binary)
+        }
+
+        // Generate binary specific filepath vectors
+        let unqiue_binaries: Vec<_> = fp_binaries.iter().unique().collect();
+        let mut unique_binaries_fps: Vec<Vec<String>> = vec![Vec::new(); unqiue_binaries.len()];
+
+        for (file, binary) in self.filepaths.iter().zip(fp_binaries.iter()) {
+            unique_binaries_fps
+                [unqiue_binaries.iter().position(|&x| x == binary).unwrap()]
+                .push(file.clone());
+        }
+
+        info!("Loading the filepaths");
+        unique_binaries_fps
+            .par_iter()
+            .progress()
+            .enumerate()
+            .for_each(|(idx, fp_subset)| {
+                let mut subset_loaded_data = Vec::new();
+
+                for ele in fp_subset.iter() {
+                    let data =
+                        read_to_string(ele).expect(&format!("Unable to read file - {:?}", ele));
+
+                    let json: NetworkxDiGraph<CallGraphFuncWithMetadata> =
+                        serde_json::from_str(&data)
+                            .expect(&format!("Unable to load function data from {}", ele));
+
+                    if !json.nodes.is_empty() {
+                        subset_loaded_data.push(Some(json))
+                    } else {
+                        subset_loaded_data.push(None)
+                    }
+                }
+
+                subset_loaded_data.retain(|c| c.is_some());
+
+                info!("Starting to deduplicate the corpus - {}", idx);
+                let (subset_loaded_data, fp_subset) =
+                    Self::dedup_corpus(&mut subset_loaded_data, fp_subset.to_vec());
+                let subset_loaded_data: Vec<NetworkxDiGraph<_>> =
+                    subset_loaded_data.into_iter().flatten().collect();
+                info!("Starting to save - {}", idx);
+                self.save_corpus(subset_loaded_data, fp_subset);
+                info!("File processing complete - {}", idx);
+            });
+    }
+    pub fn save_corpus(
+        &self,
+        subset_loaded_data: Vec<NetworkxDiGraph<CallGraphFuncWithMetadata>>,
+        fp_subset: Vec<String>,
+    ) {
+        subset_loaded_data
+            .iter()
+            .zip(fp_subset.iter())
+            .for_each(|(data_ele, filepath)| {
+                let fixed_path: Vec<_> = Path::new(filepath)
+                    .components()
+                    .rev()
+                    .take(2)
+                    .collect::<Vec<_>>();
+
+                let fixed_path = fixed_path
+                    .iter()
+                    .map(|c| c.as_os_str().to_string_lossy().to_string())
+                    .rev()
+                    .collect::<Vec<String>>();
+
+                let dirs = format!("{}{}", self.output_path, fixed_path[0]);
+                fs::create_dir_all(&dirs).expect("Failed to create output directory!");
+
+                let fixed_path = format!("{}/{}", dirs, fixed_path[1]);
+                serde_json::to_writer(
+                    &File::create(fixed_path).expect("Failed to create writer"),
+                    &data_ele,
+                )
+                .expect("Unable to write JSON");
+            });
     }
 }
