@@ -877,7 +877,7 @@ fn main() {
             just_hash_value,
         } => {
             if datatype == "esilfstr" {
-                warn!("THIS ONLY SUPPORTS FILES WITH THE FOLLOWING NAMING CONVENTION: <arch>-<compiler-name>-<verion>-<opt-level>_<binary_name>-<datatype>.json");
+                warn!("This only supports the Cisco Talos Binary Sim Dataset naming convention");
                 rayon::ThreadPoolBuilder::new()
                     .num_threads(*num_threads)
                     .build_global()
@@ -887,6 +887,7 @@ fn main() {
                     corpus.dedup_subset(name, *print_stats, *just_stats, *just_hash_value)
                 });
             } else if datatype == "onehopcgs" {
+                warn!("This only supports the Cisco Talos Binary Sim Dataset naming convention");
                 if Path::new(filename).exists() {
                     info!("Starting duplication process for One Hop Call Graphs");
                     let corpus = OneHopCGCorpus::new(filename, output_path).unwrap();
