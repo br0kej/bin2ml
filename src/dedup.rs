@@ -14,7 +14,6 @@ use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::string::String;
 
-
 use std::{fs, vec};
 use walkdir::{DirEntry, WalkDir};
 
@@ -369,8 +368,7 @@ impl OneHopCGCorpus {
         let mut unique_binaries_fps: Vec<Vec<String>> = vec![Vec::new(); unqiue_binaries.len()];
 
         for (file, binary) in self.filepaths.iter().zip(fp_binaries.iter()) {
-            unique_binaries_fps
-                [unqiue_binaries.iter().position(|&x| x == binary).unwrap()]
+            unique_binaries_fps[unqiue_binaries.iter().position(|&x| x == binary).unwrap()]
                 .push(file.clone());
         }
 
