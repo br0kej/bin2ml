@@ -23,20 +23,6 @@ pub struct AGCJParsedObjects {
 }
 
 impl AGCJFunctionCallGraphs {
-    fn build_local_call_graph(&self) -> Graph<String, u32> {
-        let mut graph = Graph::<String, u32>::new();
-        let calling_func = graph.add_node(self.name.clone());
-        if self.imports.is_some() {
-            for ele in self.imports.as_ref().unwrap().iter() {
-                let callee = graph.add_node(ele.clone());
-                graph.update_edge(calling_func, callee, 0);
-            }
-            graph
-        } else {
-            graph
-        }
-    }
-
     fn graph_to_json_func_node(
         &self,
         binary_name: &str,
@@ -97,7 +83,33 @@ impl AGCJFunctionCallGraphs {
         .expect("Unable to write JSON");
     }
 
-    fn get_callees_of_callees(&self, global_cg: &AGCJFile, graph: &mut Graph<String, u32>) {
+    fn build_local_call_graph(&self, include_unk: &bool) -> Graph<String, u32> {
+        let mut graph = Graph::<String, u32>::new();
+        let calling_func = graph.add_node(self.name.clone());
+        if self.imports.is_some() {
+            for ele in self.imports.as_ref().unwrap().iter() {
+                if !include_unk {
+                    if !ele.contains("unk") {
+                        let callee = graph.add_node(ele.clone());
+                        graph.update_edge(calling_func, callee, 0);
+                    }
+                } else {
+                    let callee = graph.add_node(ele.clone());
+                    graph.update_edge(calling_func, callee, 0);
+                }
+            }
+            graph
+        } else {
+            graph
+        }
+    }
+
+    fn get_callees_of_callees(
+        &self,
+        global_cg: &AGCJFile,
+        graph: &mut Graph<String, u32>,
+        include_unk: &bool,
+    ) {
         if self.imports.is_some() {
             for import in self.imports.as_ref().unwrap().iter() {
                 let import_object: &Vec<&AGCJFunctionCallGraphs> = &global_cg
@@ -110,11 +122,23 @@ impl AGCJFunctionCallGraphs {
                 if !import_object.is_empty() {
                     for entry in import_object {
                         for ele in entry.imports.as_ref().unwrap().iter() {
-                            let callee = graph.add_node(ele.clone());
-                            let import_node_index =
-                                graph.node_indices().find(|i| &graph[*i] == import).unwrap();
-                            trace!("{:?} -> {:?}", import, ele);
-                            graph.update_edge(import_node_index, callee, 0);
+                            if !include_unk {
+                                if !ele.contains("unk") {
+                                    let callee = graph.add_node(ele.clone());
+                                    let import_node_index = graph
+                                        .node_indices()
+                                        .find(|i| &graph[*i] == import)
+                                        .unwrap();
+                                    trace!("{:?} -> {:?}", import, ele);
+                                    graph.update_edge(import_node_index, callee, 0);
+                                }
+                            } else {
+                                let callee = graph.add_node(ele.clone());
+                                let import_node_index =
+                                    graph.node_indices().find(|i| &graph[*i] == import).unwrap();
+                                trace!("{:?} -> {:?}", import, ele);
+                                graph.update_edge(import_node_index, callee, 0);
+                            }
                         }
                     }
                 }
@@ -122,7 +146,12 @@ impl AGCJFunctionCallGraphs {
         }
     }
 
-    fn get_target_func_callers(&self, global_cg: &AGCJFile, graph: &mut Graph<String, u32>) {
+    fn get_target_func_callers(
+        &self,
+        global_cg: &AGCJFile,
+        graph: &mut Graph<String, u32>,
+        include_unk: &bool,
+    ) {
         let callers = &global_cg
             .function_call_graphs
             .as_ref()
@@ -133,8 +162,15 @@ impl AGCJFunctionCallGraphs {
 
         for cg in callers.iter() {
             let caller = graph.add_node(cg.name.clone());
-            let func_target_index = graph.node_indices().find(|i| graph[*i] == self.name);
-            graph.update_edge(caller, func_target_index.unwrap(), 0);
+            if !include_unk {
+                if !cg.name.contains("unk") {
+                    let func_target_index = graph.node_indices().find(|i| graph[*i] == self.name);
+                    graph.update_edge(caller, func_target_index.unwrap(), 0);
+                }
+            } else {
+                let func_target_index = graph.node_indices().find(|i| graph[*i] == self.name);
+                graph.update_edge(caller, func_target_index.unwrap(), 0);
+            }
         }
     }
 
@@ -145,8 +181,10 @@ impl AGCJFunctionCallGraphs {
         output_path: &String,
         binary_name: &str,
         with_metadata: &bool,
+        include_unk: &bool,
     ) {
-        let graph = self.build_local_call_graph();
+        let graph = self.build_local_call_graph(include_unk);
+        debug!("{:?}", graph);
         self.convert_graph_to_networkx(
             graph,
             global_cg,
@@ -165,10 +203,11 @@ impl AGCJFunctionCallGraphs {
         output_path: &String,
         binary_name: &str,
         with_metadata: &bool,
+        include_unk: &bool,
     ) {
-        let mut graph = self.build_local_call_graph();
-
-        self.get_callees_of_callees(global_cg, &mut graph);
+        let mut graph = self.build_local_call_graph(include_unk);
+        self.get_callees_of_callees(global_cg, &mut graph, include_unk);
+        debug!("{:?}", graph);
         self.convert_graph_to_networkx(
             graph,
             global_cg,
@@ -185,9 +224,11 @@ impl AGCJFunctionCallGraphs {
         output_path: &String,
         binary_name: &str,
         with_metadata: &bool,
+        include_unk: &bool,
     ) {
-        let mut graph = self.build_local_call_graph();
-        self.get_target_func_callers(global_cg, &mut graph);
+        let mut graph = self.build_local_call_graph(include_unk);
+        self.get_target_func_callers(global_cg, &mut graph, include_unk);
+        debug!("{:?}", graph);
         self.convert_graph_to_networkx(
             graph,
             global_cg,
@@ -204,11 +245,13 @@ impl AGCJFunctionCallGraphs {
         output_path: &String,
         binary_name: &str,
         with_metadata: &bool,
+        include_unk: &bool,
     ) {
-        let mut graph = self.build_local_call_graph();
+        let mut graph = self.build_local_call_graph(include_unk);
 
-        self.get_target_func_callers(global_cg, &mut graph);
-        self.get_callees_of_callees(global_cg, &mut graph);
+        self.get_target_func_callers(global_cg, &mut graph, include_unk);
+        self.get_callees_of_callees(global_cg, &mut graph, include_unk);
+        debug!("{:?}", graph);
         self.convert_graph_to_networkx(
             graph,
             global_cg,

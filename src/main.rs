@@ -138,6 +138,10 @@ enum GenerateSubCommands {
         /// Filepath to the AFIJ function metadata
         #[arg(long)]
         metadata_path: Option<String>,
+
+        /// Include unknown functions
+        #[arg(long, default_value = "false")]
+        include_unk: bool,
     },
     /// Generate NLP data from extracted data
     Nlp {
@@ -328,6 +332,7 @@ fn main() {
                 embed_dim,
                 with_features,
                 metadata_path,
+                include_unk,
             } => {
                 let graph_data_type = match graph_type.as_str() {
                     "cfg" => DataType::Cfg,
@@ -441,6 +446,7 @@ fn main() {
                                 function_call_graphs: None,
                                 output_path: output_path.to_owned(),
                                 function_metadata: Some(metadata_subset),
+                                include_unk: *include_unk,
                             }
                         } else {
                             AGCJFile {
@@ -448,6 +454,7 @@ fn main() {
                                 function_call_graphs: None,
                                 output_path: output_path.to_owned(),
                                 function_metadata: None,
+                                include_unk: *include_unk,
                             }
                         };
                         file.load_and_deserialize()
@@ -459,6 +466,7 @@ fn main() {
                                     &file.output_path,
                                     &file.filename,
                                     with_features,
+                                    &file.include_unk,
                                 );
                             }
                         } else if graph_data_type == DataType::OneHopCg {
@@ -468,6 +476,7 @@ fn main() {
                                     &file.output_path,
                                     &file.filename,
                                     with_features,
+                                    &file.include_unk,
                                 );
                             }
                         } else if graph_data_type == DataType::CgWithCallers {
@@ -477,6 +486,7 @@ fn main() {
                                     &file.output_path,
                                     &file.filename,
                                     with_features,
+                                    &file.include_unk,
                                 );
                             }
                         } else if graph_data_type == DataType::OneHopCgWithcallers {
@@ -486,6 +496,7 @@ fn main() {
                                     &file.output_path,
                                     &file.filename,
                                     with_features,
+                                    &file.include_unk,
                                 );
                             }
                         }
@@ -520,6 +531,7 @@ fn main() {
                                         function_call_graphs: None,
                                         output_path: output_path.to_owned(),
                                         function_metadata: None,
+                                        include_unk: *include_unk,
                                     };
                                     debug!("Proceissing {}", file.filename);
                                     file.load_and_deserialize()
@@ -532,6 +544,7 @@ fn main() {
                                                 &file.output_path,
                                                 &file.filename,
                                                 with_features,
+                                                &file.include_unk,
                                             );
                                         }
                                     } else if graph_data_type == DataType::OneHopCg {
@@ -541,6 +554,7 @@ fn main() {
                                                 &file.output_path,
                                                 &file.filename,
                                                 with_features,
+                                                &file.include_unk,
                                             );
                                         }
                                     } else if graph_data_type == DataType::CgWithCallers {
@@ -550,6 +564,7 @@ fn main() {
                                                 &file.output_path,
                                                 &file.filename,
                                                 with_features,
+                                                &file.include_unk,
                                             );
                                         }
                                     } else if graph_data_type == DataType::OneHopCgWithcallers {
@@ -559,6 +574,7 @@ fn main() {
                                                 &file.output_path,
                                                 &file.filename,
                                                 with_features,
+                                                &file.include_unk,
                                             );
                                         }
                                     }
@@ -613,6 +629,7 @@ fn main() {
                                             function_call_graphs: None,
                                             output_path: output_path.to_owned(),
                                             function_metadata: Some(metadata_subset),
+                                            include_unk: *include_unk,
                                         }
                                     };
                                     debug!("Attempting to load {}", file.filename);
@@ -627,12 +644,13 @@ fn main() {
                                                 &file.output_path,
                                                 &file.filename,
                                                 with_features,
+                                                &file.include_unk
                                             );
                                         }
                                 } else if graph_data_type == DataType::OneHopCg {
                                     debug!("Generating one hop call graphs using loaded cgs + metadata");
                                     for fcg in file.function_call_graphs.as_ref().unwrap() {
-                                        fcg.one_hop_to_petgraph(&file, &file.output_path, &file.filename, with_features);
+                                        fcg.one_hop_to_petgraph(&file, &file.output_path, &file.filename, with_features, &file.include_unk);
                                     }
                                 } else if graph_data_type == DataType::CgWithCallers {
                                     debug!("Generating call graphs with callers using loaded cgs + metadata");
@@ -641,7 +659,8 @@ fn main() {
                                             &file,
                                             &file.output_path,
                                             &file.filename,
-                                            with_features
+                                            with_features,
+                                            &file.include_unk
                                         );
                                     }
                                 } else if graph_data_type == DataType::OneHopCgWithcallers {
@@ -651,7 +670,8 @@ fn main() {
                                             &file,
                                             &file.output_path,
                                             &file.filename,
-                                            with_features
+                                            with_features,
+                                            &file.include_unk
                                         );
                                     }
                                 }

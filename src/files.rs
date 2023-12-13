@@ -353,6 +353,7 @@ pub struct AGCJFile {
     pub function_call_graphs: Option<Vec<AGCJFunctionCallGraphs>>,
     pub output_path: String,
     pub function_metadata: Option<Vec<AFIJFeatureSubset>>,
+    pub include_unk: bool,
 }
 
 impl AGCJFile {
