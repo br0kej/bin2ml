@@ -301,6 +301,11 @@ enum Commands {
         /// Toggle whether to dedup based on hashing only the value (and ignoring the key)
         #[arg(short, long, default_value = "false")]
         just_hash_value: bool,
+
+        /// The filepath_format of the dataset
+        #[arg(long,value_parser = clap::builder::PossibleValuesParser::new(["cisco", "binkit"])
+        .map(|s| s.parse::<String>().unwrap()))]
+        filepath_format: String,
     },
 }
 
@@ -905,6 +910,7 @@ fn main() {
             just_stats,
             num_threads,
             just_hash_value,
+            filepath_format,
         } => {
             rayon::ThreadPoolBuilder::new()
                 .num_threads(*num_threads)
@@ -921,7 +927,8 @@ fn main() {
                 warn!("This only supports the Cisco Talos Binary Sim Dataset naming convention");
                 if Path::new(filename).exists() {
                     info!("Starting duplication process for One Hop Call Graphs");
-                    let corpus = OneHopCGCorpus::new(filename, output_path).unwrap();
+                    let corpus =
+                        OneHopCGCorpus::new(filename, output_path, filepath_format).unwrap();
                     corpus.process_corpus();
                 } else {
                     error!("Filename provided does not exist! - {}", filename)

@@ -378,13 +378,11 @@ impl OneHopCGCorpus {
         // Process the file paths to get the associated binary of each path
         info!("Processing Filepaths to get binaries");
         for file in &self.filepaths {
-            let binary_intermediate = Path::new(file).parent().unwrap().file_name().unwrap();
-            let binary = binary_intermediate
-                .to_string_lossy()
-                .split('_')
-                .nth(1)
-                .unwrap()
-                .to_string();
+            let binary = match self.filepath_format.as_str() {
+                "cisco" => Self::get_binary_name_cisco(file),
+                "binkit" => Self::get_binary_name_binkit(file),
+                _ => unreachable!(),
+            };
             debug!("Extracted Binary Name: {:?} from {:?}", binary, file);
             fp_binaries.push(binary)
         }
