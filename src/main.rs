@@ -906,12 +906,13 @@ fn main() {
             num_threads,
             just_hash_value,
         } => {
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(*num_threads)
+                .build_global()
+                .unwrap();
+
             if datatype == "esilfstr" {
                 warn!("This only supports the Cisco Talos Binary Sim Dataset naming convention");
-                rayon::ThreadPoolBuilder::new()
-                    .num_threads(*num_threads)
-                    .build_global()
-                    .unwrap();
                 let corpus = EsilFuncStringCorpus::new(filename).unwrap();
                 corpus.uniq_binaries.par_iter().progress().for_each(|name| {
                     corpus.dedup_subset(name, *print_stats, *just_stats, *just_hash_value)
