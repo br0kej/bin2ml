@@ -89,7 +89,7 @@ impl AGCJFunctionCallGraphs {
         if self.imports.is_some() {
             for ele in self.imports.as_ref().unwrap().iter() {
                 if !include_unk {
-                    if !ele.contains("unk.") {
+                    if !ele.starts_with("unk.") {
                         let callee = graph.add_node(ele.clone());
                         graph.update_edge(calling_func, callee, 0);
                     }
@@ -128,7 +128,7 @@ impl AGCJFunctionCallGraphs {
                     for entry in import_object {
                         for ele in entry.imports.as_ref().unwrap().iter() {
                             if !include_unk {
-                                if !ele.contains("unk") {
+                                if !ele.starts_with("unk.") {
                                     let callee = graph.add_node(ele.clone());
                                     let import_node_index =
                                         graph.node_indices().find(|i| &graph[*i] == import);
@@ -173,7 +173,7 @@ impl AGCJFunctionCallGraphs {
         for cg in callers.iter() {
             let caller = graph.add_node(cg.name.clone());
             if !include_unk {
-                if !cg.name.contains("unk") {
+                if !cg.name.starts_with("unk.") {
                     let func_target_index = graph.node_indices().find(|i| graph[*i] == self.name);
                     graph.update_edge(caller, func_target_index.unwrap(), 0);
                 }
