@@ -89,7 +89,7 @@ impl AGCJFunctionCallGraphs {
         if self.imports.is_some() {
             for ele in self.imports.as_ref().unwrap().iter() {
                 if !include_unk {
-                    if !ele.contains("unk") {
+                    if !ele.contains("unk.") {
                         let callee = graph.add_node(ele.clone());
                         graph.update_edge(calling_func, callee, 0);
                     }
@@ -110,8 +110,12 @@ impl AGCJFunctionCallGraphs {
         graph: &mut Graph<String, u32>,
         include_unk: &bool,
     ) {
+        trace!("Starting getting callees of callees for: {:?}", self.name);
+        trace!("Graph: {:?}", graph);
         if self.imports.is_some() {
+            trace!("Imports: {:?}", self.imports);
             for import in self.imports.as_ref().unwrap().iter() {
+                trace! {"Starting to Process {:?}", import};
                 let import_object: &Vec<&AGCJFunctionCallGraphs> = &global_cg
                     .function_call_graphs
                     .as_ref()
@@ -120,17 +124,23 @@ impl AGCJFunctionCallGraphs {
                     .filter(|cg| cg.name == *import)
                     .collect_vec();
                 if !import_object.is_empty() {
+                    trace!("Import Object: {:?}", import_object);
                     for entry in import_object {
                         for ele in entry.imports.as_ref().unwrap().iter() {
                             if !include_unk {
                                 if !ele.contains("unk") {
                                     let callee = graph.add_node(ele.clone());
-                                    let import_node_index = graph
-                                        .node_indices()
-                                        .find(|i| &graph[*i] == import)
-                                        .unwrap();
-                                    trace!("{:?} -> {:?}", import, ele);
-                                    graph.update_edge(import_node_index, callee, 0);
+                                    let import_node_index =
+                                        graph.node_indices().find(|i| &graph[*i] == import);
+
+                                    trace!(
+                                        "{:?} ({:?}) -> {:?} ({:?})",
+                                        import,
+                                        import_node_index,
+                                        ele,
+                                        callee
+                                    );
+                                    graph.update_edge(import_node_index.unwrap(), callee, 0);
                                 }
                             } else {
                                 let callee = graph.add_node(ele.clone());
