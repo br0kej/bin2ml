@@ -528,7 +528,7 @@ fn main() {
                         if !with_features {
                             debug!("Creating call graphs without any node features");
 
-                            file_paths_vec.par_iter().for_each(|path| {
+                            file_paths_vec.par_iter().progress().for_each(|path| {
                                 let suffix = graph_type.to_owned().to_string();
                                 let full_output_path = PathBuf::from(get_save_file_path(
                                     path,
@@ -618,7 +618,7 @@ fn main() {
                                 .zip(metadata_paths_vec)
                                 .collect::<Vec<_>>();
 
-                            combined_cgs_metadata.par_iter().for_each(|tup| {
+                            combined_cgs_metadata.par_iter().progress().for_each(|tup| {
                                 let suffix = format!("{}-meta", graph_type.to_owned());
                                 let full_output_path =
                                     PathBuf::from(get_save_file_path(&tup.0, output_path, Some(suffix)));
