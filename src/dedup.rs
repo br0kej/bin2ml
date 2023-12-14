@@ -283,10 +283,15 @@ impl EsilFuncStringCorpus {
 pub struct OneHopCGCorpus {
     pub filepaths: Vec<String>,
     pub output_path: String,
+    pub filepath_format: String,
 }
 
 impl OneHopCGCorpus {
-    pub fn new(directory: &String, output_path: &String) -> Result<OneHopCGCorpus> {
+    pub fn new(
+        directory: &String,
+        output_path: &String,
+        filepath_format: &String,
+    ) -> Result<OneHopCGCorpus> {
         if !Path::new(output_path).exists() {
             fs::create_dir(output_path).expect("Failed to create output directory!");
             info!("Output path not found - Creating {}", output_path)
@@ -309,6 +314,7 @@ impl OneHopCGCorpus {
         Ok(OneHopCGCorpus {
             filepaths,
             output_path: output_path.to_string(),
+            filepath_format: filepath_format.to_string(),
         })
     }
 
@@ -318,7 +324,6 @@ impl OneHopCGCorpus {
         s.finish()
     }
 
-    // This is very slow O(N)^2
     fn dedup_corpus(
         data: &mut Vec<Option<NetworkxDiGraph<CallGraphFuncWithMetadata>>>,
         mut filepaths: Vec<String>,
@@ -347,6 +352,27 @@ impl OneHopCGCorpus {
         (data.to_vec(), filepaths)
     }
 
+    fn get_binary_name_cisco(filepath: &String) -> String {
+        // Example: x86-gcc-9-O3_nping_cg-onehopcgcallers-meta
+        let binary_intermediate = Path::new(filepath).parent().unwrap().file_name().unwrap();
+        binary_intermediate
+            .to_string_lossy()
+            .split('_')
+            .nth(1)
+            .unwrap()
+            .to_string()
+    }
+    fn get_binary_name_binkit(filepath: &String) -> String {
+        // Example: tar-1.34_gcc-8.2.0_x86_32_O3_rmt_cg-onehopcgcallers-meta
+        let binary_intermediate = Path::new(filepath).parent().unwrap().file_name().unwrap();
+        binary_intermediate
+            .to_string_lossy()
+            .split('_')
+            .rev()
+            .nth(1)
+            .unwrap()
+            .to_string()
+    }
     pub fn process_corpus(self) {
         let mut fp_binaries = Vec::new();
         // Process the file paths to get the associated binary of each path
@@ -359,7 +385,7 @@ impl OneHopCGCorpus {
                 .nth(1)
                 .unwrap()
                 .to_string();
-
+            debug!("Extracted Binary Name: {:?} from {:?}", binary, file);
             fp_binaries.push(binary)
         }
 
@@ -397,14 +423,14 @@ impl OneHopCGCorpus {
 
                 subset_loaded_data.retain(|c| c.is_some());
 
-                info!("Starting to deduplicate the corpus - {}", idx);
+                debug!("Starting to deduplicate the corpus - {}", idx);
                 let (subset_loaded_data, fp_subset) =
                     Self::dedup_corpus(&mut subset_loaded_data, fp_subset.to_vec());
                 let subset_loaded_data: Vec<NetworkxDiGraph<_>> =
                     subset_loaded_data.into_iter().flatten().collect();
-                info!("Starting to save - {}", idx);
+                debug!("Starting to save - {}", idx);
                 self.save_corpus(subset_loaded_data, fp_subset);
-                info!("File processing complete - {}", idx);
+                debug!("File processing complete - {}", idx);
             });
     }
     pub fn save_corpus(
@@ -438,5 +464,64 @@ impl OneHopCGCorpus {
                 )
                 .expect("Unable to write JSON");
             });
+    }
+}
+
+mod tests {
+
+    #[test]
+    fn test_binkit_binary_extraction() {
+        assert_eq!(
+            crate::dedup::OneHopCGCorpus::get_binary_name_binkit(
+                &"which-2.21_gcc-9.4.0_arm_32_O2_which_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
+".to_string()
+            ),
+            "which"
+        );
+        assert_eq!(
+            crate::dedup::OneHopCGCorpus::get_binary_name_binkit(
+                &"recutils-1.9_gcc-11.2.0_mips_64_O3_recins_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
+".to_string()
+            ),
+            "recins"
+        );
+        assert_eq!(
+            crate::dedup::OneHopCGCorpus::get_binary_name_binkit(
+                &"recutils-1.9_gcc-11.2.0_mips_64_O3_recsel_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
+".to_string(),
+            ),
+            "recsel",
+        );
+    }
+
+    #[test]
+    fn test_cisco_binary_extraction() {
+        assert_eq!(
+            crate::dedup::OneHopCGCorpus::get_binary_name_binkit(
+                &"arm64-clang-9-Os_curl_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json".to_string()
+            ),
+            "curl"
+        );
+        assert_eq!(
+            crate::dedup::OneHopCGCorpus::get_binary_name_binkit(
+                &"x86-clang-9-Os_libcrypto.so.3_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
+".to_string()
+            ),
+            "libcrypto.so.3"
+        );
+        assert_eq!(
+            crate::dedup::OneHopCGCorpus::get_binary_name_binkit(
+                &"x86-gcc-9-O3_unrar_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
+".to_string(),
+            ),
+            "unrar",
+        );
+        assert_eq!(
+            crate::dedup::OneHopCGCorpus::get_binary_name_binkit(
+                &"/random/path/before/x86-gcc-9-O3_unrar_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
+".to_string(),
+            ),
+            "unrar",
+        );
     }
 }
