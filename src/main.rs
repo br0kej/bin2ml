@@ -35,7 +35,7 @@ pub mod processors;
 pub mod tokeniser;
 pub mod utils;
 
-use crate::dedup::{EsilFuncStringCorpus, OneHopCGCorpus};
+use crate::dedup::{CGCorpus, EsilFuncStringCorpus};
 use crate::extract::ExtractionJobType;
 use crate::files::{AFIJFile, AGCJFile};
 use crate::tokeniser::{train_byte_bpe_tokeniser, TokeniserType};
@@ -278,7 +278,7 @@ enum Commands {
         filename: String,
 
         /// Type of dedup
-        #[arg(short, long, value_name = "TYPE", value_parser = clap::builder::PossibleValuesParser::new(["esilfstr", "onehopcgs"])
+        #[arg(short, long, value_name = "TYPE", value_parser = clap::builder::PossibleValuesParser::new(["esilfstr", "cgs"])
         .map(|s| s.parse::<String>().unwrap()))]
         datatype: String,
 
@@ -923,12 +923,11 @@ fn main() {
                 corpus.uniq_binaries.par_iter().progress().for_each(|name| {
                     corpus.dedup_subset(name, *print_stats, *just_stats, *just_hash_value)
                 });
-            } else if datatype == "onehopcgs" {
+            } else if datatype == "cgs" {
                 warn!("This only supports the Cisco Talos Binary Sim Dataset naming convention");
                 if Path::new(filename).exists() {
                     info!("Starting duplication process for One Hop Call Graphs");
-                    let corpus =
-                        OneHopCGCorpus::new(filename, output_path, filepath_format).unwrap();
+                    let corpus = CGCorpus::new(filename, output_path, filepath_format).unwrap();
                     corpus.process_corpus();
                 } else {
                     error!("Filename provided does not exist! - {}", filename)

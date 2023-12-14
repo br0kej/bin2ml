@@ -280,18 +280,18 @@ impl EsilFuncStringCorpus {
 }
 
 #[derive(Debug)]
-pub struct OneHopCGCorpus {
+pub struct CGCorpus {
     pub filepaths: Vec<String>,
     pub output_path: String,
     pub filepath_format: String,
 }
 
-impl OneHopCGCorpus {
+impl CGCorpus {
     pub fn new(
         directory: &String,
         output_path: &String,
         filepath_format: &String,
-    ) -> Result<OneHopCGCorpus> {
+    ) -> Result<CGCorpus> {
         if !Path::new(output_path).exists() {
             fs::create_dir(output_path).expect("Failed to create output directory!");
             info!("Output path not found - Creating {}", output_path)
@@ -311,7 +311,7 @@ impl OneHopCGCorpus {
 
         info!("Returning One Hop CG Corpus Struct");
 
-        Ok(OneHopCGCorpus {
+        Ok(CGCorpus {
             filepaths,
             output_path: output_path.to_string(),
             filepath_format: filepath_format.to_string(),
@@ -466,21 +466,21 @@ mod tests {
     #[test]
     fn test_binkit_binary_extraction() {
         assert_eq!(
-            crate::dedup::OneHopCGCorpus::get_binary_name_binkit(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
                 &"which-2.21_gcc-9.4.0_arm_32_O2_which_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
 ".to_string()
             ),
             "which"
         );
         assert_eq!(
-            crate::dedup::OneHopCGCorpus::get_binary_name_binkit(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
                 &"recutils-1.9_gcc-11.2.0_mips_64_O3_recins_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
 ".to_string()
             ),
             "recins"
         );
         assert_eq!(
-            crate::dedup::OneHopCGCorpus::get_binary_name_binkit(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
                 &"recutils-1.9_gcc-11.2.0_mips_64_O3_recsel_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
 ".to_string(),
             ),
@@ -491,27 +491,27 @@ mod tests {
     #[test]
     fn test_cisco_binary_extraction() {
         assert_eq!(
-            crate::dedup::OneHopCGCorpus::get_binary_name_binkit(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
                 &"arm64-clang-9-Os_curl_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json".to_string()
             ),
             "curl"
         );
         assert_eq!(
-            crate::dedup::OneHopCGCorpus::get_binary_name_binkit(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
                 &"x86-clang-9-Os_libcrypto.so.3_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
 ".to_string()
             ),
             "libcrypto.so.3"
         );
         assert_eq!(
-            crate::dedup::OneHopCGCorpus::get_binary_name_binkit(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
                 &"x86-gcc-9-O3_unrar_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
 ".to_string(),
             ),
             "unrar",
         );
         assert_eq!(
-            crate::dedup::OneHopCGCorpus::get_binary_name_binkit(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
                 &"/random/path/before/x86-gcc-9-O3_unrar_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
 ".to_string(),
             ),
