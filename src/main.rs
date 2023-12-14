@@ -142,6 +142,10 @@ enum GenerateSubCommands {
         /// Include unknown functions
         #[arg(long, default_value = "false")]
         include_unk: bool,
+
+        /// Num Threads
+        #[arg(short, long)]
+        num_threads: usize,
     },
     /// Generate NLP data from extracted data
     Nlp {
@@ -333,6 +337,7 @@ fn main() {
                 with_features,
                 metadata_path,
                 include_unk,
+                num_threads,
             } => {
                 let graph_data_type = match graph_type.as_str() {
                     "cfg" => DataType::Cfg,
@@ -342,6 +347,11 @@ fn main() {
                     "onehopcgcallers" => DataType::OneHopCgWithcallers,
                     _ => DataType::Invalid,
                 };
+
+                rayon::ThreadPoolBuilder::new()
+                    .num_threads(*num_threads)
+                    .build_global()
+                    .unwrap();
 
                 if graph_data_type == DataType::Cfg && *with_features {
                     warn!("The 'with_features' toggle is set but is not support for CFG generation. Will ignore.")
