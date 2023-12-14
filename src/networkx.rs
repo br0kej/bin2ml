@@ -29,6 +29,13 @@ pub enum NodeType {
     Discovere(DiscovreNode),
 }
 
+#[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize, EnumAsInner)]
+#[serde(untagged)]
+pub enum CallGraphNodeTypes {
+    CGName(CallGraphFuncNameNode),
+    CGMeta(CallGraphFuncWithMetadata),
+}
+
 #[derive(Default, Copy, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GeminiNode {
@@ -134,7 +141,7 @@ impl From<(i64, &Vec<f64>)> for DiscovreNode {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CallGraphFuncNameNode {
     pub id: i64,

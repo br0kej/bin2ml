@@ -1,4 +1,4 @@
-use crate::networkx::{CallGraphFuncWithMetadata, NetworkxDiGraph};
+use crate::networkx::{CallGraphNodeTypes, NetworkxDiGraph};
 use anyhow::Result;
 use indicatif::ParallelProgressIterator;
 use itertools::Itertools;
@@ -324,12 +324,9 @@ impl OneHopCGCorpus {
         s.finish()
     }
 
-    fn dedup_corpus(
-        data: &mut Vec<Option<NetworkxDiGraph<CallGraphFuncWithMetadata>>>,
-        mut filepaths: Vec<String>,
-    ) -> (
-        Vec<Option<NetworkxDiGraph<CallGraphFuncWithMetadata>>>,
-        Vec<String>,
+    fn dedup_corpus<N: Hash>(
+        data: &mut Vec<Option<NetworkxDiGraph<N>>>,
+        filepaths: &mut Vec<String>,
     ) {
         debug!("Creating the removal index");
 
@@ -349,7 +346,6 @@ impl OneHopCGCorpus {
             data.remove(*ele);
             filepaths.remove(*ele);
         }
-        (data.to_vec(), filepaths)
     }
 
     fn get_binary_name_cisco(filepath: &String) -> String {
@@ -402,14 +398,15 @@ impl OneHopCGCorpus {
             .progress()
             .enumerate()
             .for_each(|(idx, fp_subset)| {
-                let mut subset_loaded_data = Vec::new();
+                let mut subset_loaded_data: Vec<std::option::Option<NetworkxDiGraph<_>>> =
+                    Vec::new();
 
                 for ele in fp_subset.iter() {
                     let data =
                         read_to_string(ele).expect(&format!("Unable to read file - {:?}", ele));
 
-                    let json: NetworkxDiGraph<CallGraphFuncWithMetadata> =
-                        serde_json::from_str(&data)
+                    let json: NetworkxDiGraph<CallGraphNodeTypes> =
+                        serde_json::from_str::<NetworkxDiGraph<CallGraphNodeTypes>>(&data)
                             .expect(&format!("Unable to load function data from {}", ele));
 
                     if !json.nodes.is_empty() {
@@ -422,8 +419,7 @@ impl OneHopCGCorpus {
                 subset_loaded_data.retain(|c| c.is_some());
 
                 debug!("Starting to deduplicate the corpus - {}", idx);
-                let (subset_loaded_data, fp_subset) =
-                    Self::dedup_corpus(&mut subset_loaded_data, fp_subset.to_vec());
+                Self::dedup_corpus(&mut subset_loaded_data, &mut fp_subset.to_vec());
                 let subset_loaded_data: Vec<NetworkxDiGraph<_>> =
                     subset_loaded_data.into_iter().flatten().collect();
                 debug!("Starting to save - {}", idx);
@@ -433,8 +429,8 @@ impl OneHopCGCorpus {
     }
     pub fn save_corpus(
         &self,
-        subset_loaded_data: Vec<NetworkxDiGraph<CallGraphFuncWithMetadata>>,
-        fp_subset: Vec<String>,
+        subset_loaded_data: Vec<NetworkxDiGraph<CallGraphNodeTypes>>,
+        fp_subset: &[String],
     ) {
         subset_loaded_data
             .iter()
