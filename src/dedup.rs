@@ -279,6 +279,7 @@ impl EsilFuncStringCorpus {
     }
 }
 
+/// Struct and Impl for de-duplicating Call Graph Corpus's
 #[derive(Debug)]
 pub struct CGCorpus {
     pub filepaths: Vec<String>,
