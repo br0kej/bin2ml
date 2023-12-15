@@ -1,8 +1,6 @@
-
 use crate::files::AGCJFile;
 use crate::networkx::{
-    CallGraphFuncNameNode, CallGraphFuncWithMetadata, CallGraphTikNibFeatures,
-    NetworkxDiGraph,
+    CallGraphFuncNameNode, CallGraphFuncWithMetadata, CallGraphTikNibFeatures, NetworkxDiGraph,
 };
 use crate::utils::{check_or_create_dir, get_save_file_path};
 use itertools::Itertools;
@@ -318,6 +316,7 @@ impl AGCJFunctionCallGraphs {
         println!("{:?}", self.imports)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn convert_graph_to_networkx(
         &self,
         graph: Graph<String, u32>,
