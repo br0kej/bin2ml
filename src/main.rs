@@ -191,6 +191,10 @@ enum GenerateSubCommands {
         /// The path for the generated output
         #[arg(short, long, value_name = "OUTPUT_PATH")]
         output_path: String,
+        /// Data Source Type
+        #[arg(short, long, value_parser = clap::builder::PossibleValuesParser::new(["finfo", "agfj"])
+            .map(|s| s.parse::<String>().unwrap()))]
+        data_source_type: String,
     },
     /// Generate tokenisers from extracted data
     Tokeniser {
@@ -701,18 +705,35 @@ fn main() {
             GenerateSubCommands::Metadata {
                 input_path,
                 output_path,
+                data_source_type,
             } => {
-                let mut file = AFIJFile {
-                    filename: input_path.to_owned(),
-                    function_info: None,
-                    output_path: output_path.to_owned(),
-                };
-                info!("Generating function metadata subsets");
-                file.load_and_deserialize()
-                    .expect("Unable to load and desearilize JSON");
-                info!("Successfully loaded JSON");
-                file.subset_and_save();
-                info!("Generation complete");
+                if data_source_type == "finfo" {
+                    let mut file = AFIJFile {
+                        filename: input_path.to_owned(),
+                        function_info: None,
+                        output_path: output_path.to_owned(),
+                    };
+                    info!("Generating function metadata subsets");
+                    file.load_and_deserialize()
+                        .expect("Unable to load and desearilize JSON");
+                    info!("Successfully loaded JSON");
+                    file.subset_and_save();
+                    info!("Generation complete");
+                } else if data_source_type == "agfj" {
+                    warn!("This currently only supports making TikNib features for single files");
+                    let mut file = AGFJFile {
+                        functions: None,
+                        filename: input_path.to_owned(),
+                        output_path: output_path.to_string(),
+                        min_blocks: 1, // Dummy
+                        feature_type: None,
+                        architecture: None,
+                        reg_norm: false, // Dummy
+                    };
+
+                    file.load_and_deserialize().expect("Unable to load data");
+                    file.tiknib_func_level_feature_gen()
+                }
             }
             GenerateSubCommands::Nlp {
                 path,

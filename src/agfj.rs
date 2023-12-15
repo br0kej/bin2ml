@@ -1,8 +1,8 @@
-use crate::bb::{ACFJBlock, FeatureType};
+use crate::bb::{ACFJBlock, FeatureType, TikNibFeaturesBB};
 #[cfg(feature = "inference")]
 use crate::inference::InferenceJob;
 use crate::networkx::{DGISNode, DiscovreNode, GeminiNode, NetworkxDiGraph, NodeType};
-use crate::utils::{check_or_create_dir, get_save_file_path};
+use crate::utils::{average, check_or_create_dir, get_save_file_path};
 use itertools::Itertools;
 use petgraph::prelude::Graph;
 use petgraph::visit::Dfs;
@@ -30,7 +30,7 @@ struct EdgePair {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AGFJFunc {
-    name: String,
+    pub name: String,
     nargs: u64,
     ninstr: u64,
     nlocals: u64,
@@ -419,6 +419,70 @@ impl AGFJFunc {
             let i_idx = idx.index();
             let hex = addr_idxs[i_idx];
             graph[idx] = format!("{hex:#x} / {hex}");
+        }
+    }
+
+    pub fn generate_tiknib_cfg_features(&self, architecture: &String) -> TikNibFunc {
+        let mut basic_block_features = Vec::new();
+
+        for block in &self.blocks {
+            let feats = block.get_tiknib_features(architecture);
+            basic_block_features.push(feats)
+        }
+
+        let func_features = TikNibFunc::from((&self.name, basic_block_features));
+
+        func_features
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TikNibFunc {
+    pub name: String,
+    pub features: TikNibFuncFeatures,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TikNibFuncFeatures {
+    // Averages
+    pub avg_arithshift: f32,
+    pub avg_compare: f32,
+    pub avg_ctransfer: f32,
+    pub avg_ctransfercond: f32,
+    pub avg_dtransfer: f32,
+    pub avg_float: f32,
+    pub avg_total: f32,
+    // Sum
+    pub sum_arithshift: f32,
+    pub sum_compare: f32,
+    pub sum_ctransfer: f32,
+    pub sum_ctransfercond: f32,
+    pub sum_dtransfer: f32,
+    pub sum_float: f32,
+    pub sum_total: f32,
+}
+
+// This is a bit odd but is to make sure the JSON output is formatted nice!
+impl From<(&String, Vec<TikNibFeaturesBB>)> for TikNibFunc {
+    fn from(input: (&String, Vec<TikNibFeaturesBB>)) -> Self {
+        TikNibFunc {
+            name: input.0.to_string(),
+            features: TikNibFuncFeatures {
+                avg_arithshift: average(input.1.iter().map(|ele| ele.arithshift).collect()),
+                avg_compare: average(input.1.iter().map(|ele| ele.arithshift).collect()),
+                avg_ctransfer: average(input.1.iter().map(|ele| ele.ctransfer).collect()),
+                avg_ctransfercond: average(input.1.iter().map(|ele| ele.ctransfercond).collect()),
+                avg_dtransfer: average(input.1.iter().map(|ele| ele.dtransfer).collect()),
+                avg_float: average(input.1.iter().map(|ele| ele.float).collect()),
+                avg_total: average(input.1.iter().map(|ele| ele.total).collect()),
+                sum_arithshift: input.1.iter().map(|ele| ele.arithshift).sum(),
+                sum_compare: input.1.iter().map(|ele| ele.compare).sum(),
+                sum_ctransfer: input.1.iter().map(|ele| ele.ctransfer).sum(),
+                sum_ctransfercond: input.1.iter().map(|ele| ele.ctransfercond).sum(),
+                sum_dtransfer: input.1.iter().map(|ele| ele.dtransfer).sum(),
+                sum_float: input.1.iter().map(|ele| ele.float).sum(),
+                sum_total: input.1.iter().map(|ele| ele.total).sum(),
+            },
         }
     }
 }

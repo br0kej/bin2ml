@@ -67,7 +67,7 @@ impl AGFJFile {
     /// Detects the architecture of a file by iterating through the functions
     /// until a call instruction type is found. Once found, the opcode is then
     /// matched with architecture specific options.
-    fn detect_architecture(&self) -> Option<String> {
+    pub fn detect_architecture(&self) -> Option<String> {
         let mut call_op: Option<String> = None;
 
         for func in self.functions.as_ref().unwrap() {
@@ -76,7 +76,6 @@ impl AGFJFile {
                     if op.r#type == "call" || op.r#type == "rcall" {
                         call_op = Some(op.disasm.as_ref().unwrap().clone())
                     }
-
                     if call_op.is_some() {
                         let opcode = call_op.as_ref().unwrap().split_whitespace().next().unwrap();
                         if X86_CALL.contains(&opcode) {
@@ -322,6 +321,26 @@ impl AGFJFile {
                 self.architecture.as_ref().unwrap(),
             )
         });
+    }
+
+    pub fn tiknib_func_level_feature_gen(self) {
+        let arch = self.detect_architecture();
+
+        let mut func_feature_vectors = Vec::new();
+
+        for func in self.functions.unwrap().iter() {
+            let feature_vec = func[0].generate_tiknib_cfg_features(&arch.as_ref().unwrap());
+            func_feature_vectors.push(feature_vec);
+        }
+
+        let json = json!(&func_feature_vectors);
+        let fname_string: String = get_save_file_path(&self.filename, &self.output_path, None);
+        let fname_string = format!("{}-tiknib.json", fname_string);
+        serde_json::to_writer(
+            &File::create(fname_string).expect("Failed to create writer"),
+            &json,
+        )
+        .expect("Unable to write JSON");
     }
 
     /// EXPERIMENTAL
