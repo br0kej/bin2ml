@@ -1,5 +1,9 @@
+use crate::agfj::TikNibFunc;
 use crate::files::AGCJFile;
-use crate::networkx::{CallGraphFuncNameNode, CallGraphFuncWithMetadata, NetworkxDiGraph};
+use crate::networkx::{
+    CallGraphFuncNameNode, CallGraphFuncWithMetadata, CallGraphNodeTypes, CallGraphTikNibFeatures,
+    NetworkxDiGraph,
+};
 use crate::utils::{check_or_create_dir, get_save_file_path};
 use itertools::Itertools;
 use petgraph::prelude::Graph;
@@ -53,7 +57,37 @@ impl AGCJFunctionCallGraphs {
         .expect("Unable to write JSON");
     }
 
-    fn graph_to_json_func_metadata(
+    fn graph_to_json_func_metadata_tiknib(
+        &self,
+        binary_name: &str,
+        output_path: &String,
+        networkx_graph: NetworkxDiGraph<CallGraphTikNibFeatures>,
+        type_suffix: &str,
+    ) {
+        let full_output_path =
+            get_save_file_path(binary_name, output_path, Some(type_suffix.to_string()));
+        check_or_create_dir(&full_output_path);
+
+        let mut function_name = self.name.clone();
+
+        // This is a pretty dirty fix and may break things
+        if function_name.chars().count() > 100 {
+            function_name = self.name[..75].to_string();
+        }
+
+        let filename = format!(
+            "{}/{}-{}.json",
+            full_output_path, function_name, type_suffix
+        );
+
+        serde_json::to_writer(
+            &File::create(filename).expect("Failed to create writer"),
+            &networkx_graph,
+        )
+        .expect("Unable to write JSON");
+    }
+
+    fn graph_to_json_func_metadata_finfo(
         &self,
         binary_name: &str,
         output_path: &String,
@@ -192,6 +226,7 @@ impl AGCJFunctionCallGraphs {
         binary_name: &str,
         with_metadata: &bool,
         include_unk: &bool,
+        node_feature_type: String,
     ) {
         let graph = self.build_local_call_graph(include_unk);
         debug!("{:?}", graph);
@@ -201,6 +236,7 @@ impl AGCJFunctionCallGraphs {
             binary_name,
             output_path,
             with_metadata,
+            node_feature_type,
             "cg",
         )
     }
@@ -214,6 +250,7 @@ impl AGCJFunctionCallGraphs {
         binary_name: &str,
         with_metadata: &bool,
         include_unk: &bool,
+        node_feature_type: String,
     ) {
         let mut graph = self.build_local_call_graph(include_unk);
         self.get_callees_of_callees(global_cg, &mut graph, include_unk);
@@ -224,6 +261,7 @@ impl AGCJFunctionCallGraphs {
             binary_name,
             output_path,
             with_metadata,
+            node_feature_type,
             "onehopcg",
         )
     }
@@ -235,6 +273,7 @@ impl AGCJFunctionCallGraphs {
         binary_name: &str,
         with_metadata: &bool,
         include_unk: &bool,
+        node_feature_type: String,
     ) {
         let mut graph = self.build_local_call_graph(include_unk);
         self.get_target_func_callers(global_cg, &mut graph, include_unk);
@@ -245,6 +284,7 @@ impl AGCJFunctionCallGraphs {
             binary_name,
             output_path,
             with_metadata,
+            node_feature_type,
             "cgcallers",
         );
     }
@@ -256,6 +296,7 @@ impl AGCJFunctionCallGraphs {
         binary_name: &str,
         with_metadata: &bool,
         include_unk: &bool,
+        node_feature_type: String,
     ) {
         let mut graph = self.build_local_call_graph(include_unk);
 
@@ -268,6 +309,7 @@ impl AGCJFunctionCallGraphs {
             binary_name,
             output_path,
             with_metadata,
+            node_feature_type,
             "onehopcgcallers",
         );
     }
@@ -283,18 +325,46 @@ impl AGCJFunctionCallGraphs {
         binary_name: &str,
         output_path: &String,
         with_metadata: &bool,
+        node_feature_type: String,
         type_suffix: &str,
     ) {
         if *with_metadata {
-            let type_suffix = type_suffix.to_owned() + "-meta";
-            let networkx_graph =
-                NetworkxDiGraph::from((graph, global_cg.function_metadata.as_ref().unwrap()));
-            self.graph_to_json_func_metadata(
-                binary_name,
-                output_path,
-                networkx_graph,
-                type_suffix.as_str(),
-            )
+            if node_feature_type == "finfo" {
+                let type_suffix = type_suffix.to_owned() + "-meta";
+                let networkx_graph = NetworkxDiGraph::from((
+                    graph,
+                    global_cg
+                        .function_metadata
+                        .as_ref()
+                        .unwrap()
+                        .as_afij()
+                        .unwrap(),
+                ));
+                self.graph_to_json_func_metadata_finfo(
+                    binary_name,
+                    output_path,
+                    networkx_graph,
+                    type_suffix.as_str(),
+                )
+            } else if node_feature_type == "tiknib" {
+                let type_suffix = type_suffix.to_owned() + "-tiknib";
+                let networkx_graph: NetworkxDiGraph<CallGraphTikNibFeatures> =
+                    NetworkxDiGraph::from((
+                        graph,
+                        global_cg
+                            .function_metadata
+                            .as_ref()
+                            .unwrap()
+                            .as_agfj()
+                            .unwrap(),
+                    ));
+                self.graph_to_json_func_metadata_tiknib(
+                    binary_name,
+                    output_path,
+                    networkx_graph,
+                    type_suffix.as_str(),
+                )
+            }
         } else {
             let networkx_graph = NetworkxDiGraph::from(graph);
             self.graph_to_json_func_node(binary_name, output_path, networkx_graph, type_suffix)

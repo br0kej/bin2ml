@@ -1,12 +1,13 @@
 use crate::afij::{AFIJFeatureSubset, AFIJFunctionInfo};
 use crate::agcj::AGCJFunctionCallGraphs;
-use crate::agfj::AGFJFunc;
+use crate::agfj::{AGFJFunc, TikNibFunc};
 use crate::bb::{FeatureType, InstructionMode};
 use crate::consts::*;
 use crate::errors::FileLoadError;
 #[cfg(feature = "inference")]
 use crate::inference::InferenceJob;
 use crate::utils::get_save_file_path;
+use enum_as_inner::EnumAsInner;
 use indicatif::ParallelProgressIterator;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator};
@@ -366,12 +367,19 @@ impl AGFJFile {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, EnumAsInner)]
+#[serde(untagged)]
+pub enum FunctionMetadataTypes {
+    AFIJ(Vec<AFIJFeatureSubset>),
+    AGFJ(Vec<TikNibFunc>),
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AGCJFile {
     pub filename: String,
     pub function_call_graphs: Option<Vec<AGCJFunctionCallGraphs>>,
     pub output_path: String,
-    pub function_metadata: Option<Vec<AFIJFeatureSubset>>,
+    pub function_metadata: Option<FunctionMetadataTypes>,
     pub include_unk: bool,
 }
 
@@ -407,14 +415,14 @@ impl AFIJFile {
         Ok(())
     }
 
-    pub fn subset(&mut self) -> Vec<AFIJFeatureSubset> {
+    pub fn subset(&mut self) -> FunctionMetadataTypes {
         let mut func_info_subsets: Vec<AFIJFeatureSubset> = Vec::new();
         debug!("Starting to subset functions");
         for function in self.function_info.as_ref().unwrap().iter() {
             let subset = AFIJFeatureSubset::from(function);
             func_info_subsets.push(subset)
         }
-        func_info_subsets
+        FunctionMetadataTypes::AFIJ(func_info_subsets)
     }
     pub fn subset_and_save(&mut self) {
         let func_info_subsets = self.subset();
@@ -425,5 +433,29 @@ impl AFIJFile {
             &func_info_subsets,
         )
         .expect("Unable to write JSON");
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TikNibFuncMetaFile {
+    pub filename: String,
+    pub function_info: Option<Vec<TikNibFunc>>,
+    pub output_path: String,
+}
+
+impl TikNibFuncMetaFile {
+    pub fn load_and_deserialize(&mut self) -> Result<(), FileLoadError> {
+        let data = read_to_string(&self.filename)?;
+
+        #[allow(clippy::expect_fun_call)]
+        // Kept in to ensure that the JSON decode error message is printed alongside the filename
+        let json: Vec<TikNibFunc> = serde_json::from_str(&data)?;
+
+        self.function_info = Some(json);
+        Ok(())
+    }
+
+    pub fn subset(&mut self) -> FunctionMetadataTypes {
+        FunctionMetadataTypes::AGFJ(self.function_info.clone().unwrap())
     }
 }

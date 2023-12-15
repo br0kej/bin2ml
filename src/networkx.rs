@@ -1,4 +1,5 @@
 use crate::afij::AFIJFeatureSubset;
+use crate::agfj::TikNibFunc;
 use crate::bb::FeatureType;
 use enum_as_inner::EnumAsInner;
 use petgraph::prelude::Graph;
@@ -34,6 +35,7 @@ pub enum NodeType {
 pub enum CallGraphNodeTypes {
     CGName(CallGraphFuncNameNode),
     CGMeta(CallGraphFuncWithMetadata),
+    TikNib(CallGraphTikNibFeatures),
 }
 
 #[derive(Default, Copy, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -212,6 +214,62 @@ impl From<(Graph<String, u32>, &Vec<AFIJFeatureSubset>)>
                     id: i as i64,
                     func_name: node_weight.to_owned(),
                     function_feature_subset: Default::default(),
+                })
+            }
+        }
+        let mut adjacency: Vec<Vec<Adjacency>> = vec![];
+        let node_indices = src_graph.0.node_indices();
+
+        for node in node_indices {
+            let mut node_adjacency_vec = vec![];
+            let node_edges = src_graph.0.edges(node);
+            for edge in node_edges {
+                let edge_entry = Adjacency {
+                    id: edge.target().index(),
+                    weight: edge.weight().to_owned(),
+                };
+                node_adjacency_vec.push(edge_entry)
+            }
+            adjacency.push(node_adjacency_vec)
+        }
+
+        NetworkxDiGraph {
+            adjacency,
+            directed: "True".to_string(),
+            graph: vec![],
+            multigraph: false,
+            nodes,
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CallGraphTikNibFeatures {
+    pub id: i64,
+    pub func_name: String,
+    pub features: TikNibFunc,
+}
+
+impl From<(Graph<String, u32>, &Vec<TikNibFunc>)> for NetworkxDiGraph<CallGraphTikNibFeatures> {
+    fn from(
+        src_graph: (Graph<String, u32>, &Vec<TikNibFunc>),
+    ) -> NetworkxDiGraph<CallGraphTikNibFeatures> {
+        let node_weights = src_graph.0.node_weights();
+        let mut nodes: Vec<CallGraphTikNibFeatures> = vec![];
+        for (i, node_weight) in node_weights.enumerate() {
+            let subset_object = src_graph.1.iter().find(|ele| &ele.name == node_weight);
+            if let Some(subset_object) = subset_object {
+                nodes.push(CallGraphTikNibFeatures {
+                    id: i as i64,
+                    func_name: node_weight.to_owned(),
+                    features: subset_object.clone(),
+                })
+            } else {
+                nodes.push(CallGraphTikNibFeatures {
+                    id: i as i64,
+                    func_name: node_weight.to_owned(),
+                    features: Default::default(),
                 })
             }
         }
