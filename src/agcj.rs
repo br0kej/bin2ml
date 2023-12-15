@@ -1,7 +1,7 @@
-use crate::agfj::TikNibFunc;
+
 use crate::files::AGCJFile;
 use crate::networkx::{
-    CallGraphFuncNameNode, CallGraphFuncWithMetadata, CallGraphNodeTypes, CallGraphTikNibFeatures,
+    CallGraphFuncNameNode, CallGraphFuncWithMetadata, CallGraphTikNibFeatures,
     NetworkxDiGraph,
 };
 use crate::utils::{check_or_create_dir, get_save_file_path};

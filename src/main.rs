@@ -37,10 +37,10 @@ pub mod utils;
 
 use crate::dedup::{CGCorpus, EsilFuncStringCorpus};
 use crate::extract::ExtractionJobType;
-use crate::files::{AFIJFile, AGCJFile, FunctionMetadataTypes, TikNibFuncMetaFile};
+use crate::files::{AFIJFile, AGCJFile, TikNibFuncMetaFile};
 use crate::tokeniser::{train_byte_bpe_tokeniser, TokeniserType};
 use crate::utils::get_save_file_path;
-use crate::GenerateSubCommands::Metadata;
+
 use bb::{FeatureType, InstructionMode};
 #[cfg(feature = "goblin")]
 use binnfo::goblin_info;
@@ -612,48 +612,6 @@ fn main() {
                                             _ => unreachable!("Not possible hopefully! :O"),
                                         }
                                     }
-                                    /*
-                                    if graph_data_type == DataType::Cg {
-                                        for fcg in file.function_call_graphs.as_ref().unwrap() {
-                                            fcg.to_petgraph(
-                                                &file,
-                                                &file.output_path,
-                                                &file.filename,
-                                                with_features,
-                                                &file.include_unk,
-                                            );
-                                        }
-                                    } else if graph_data_type == DataType::OneHopCg {
-                                        for fcg in file.function_call_graphs.as_ref().unwrap() {
-                                            fcg.one_hop_to_petgraph(
-                                                &file,
-                                                &file.output_path,
-                                                &file.filename,
-                                                with_features,
-                                                &file.include_unk,
-                                            );
-                                        }
-                                    } else if graph_data_type == DataType::CgWithCallers {
-                                        for fcg in file.function_call_graphs.as_ref().unwrap() {
-                                            fcg.to_petgraph_with_callers(
-                                                &file,
-                                                &file.output_path,
-                                                &file.filename,
-                                                with_features,
-                                                &file.include_unk,
-                                            );
-                                        }
-                                    } else if graph_data_type == DataType::OneHopCgWithcallers {
-                                        for fcg in file.function_call_graphs.as_ref().unwrap() {
-                                            fcg.one_hop_to_petgraph_with_callers(
-                                                &file,
-                                                &file.output_path,
-                                                &file.filename,
-                                                with_features,
-                                                &file.include_unk,
-                                            );
-                                        }
-                                    }*/
                                 } else {
                                     info!(
                                         "Skipping {} as already exists",
@@ -691,7 +649,7 @@ fn main() {
                                 if !full_output_path.is_dir() {
                                     let mut file = {
                                         let mut metadata = None;
-                                        if metadata_type.clone().unwrap() == "finfo".to_string() {
+                                        if metadata_type.clone().unwrap() == *"finfo" {
                                             let mut metadata_file = AFIJFile {
                                                 filename: tup.1.clone(),
                                                 function_info: None,
@@ -702,7 +660,7 @@ fn main() {
                                                 .load_and_deserialize()
                                                 .expect("Unable to load associated metadata file");
                                             metadata = Some(metadata_file.subset());
-                                        } else if metadata_type.clone().unwrap() == "tiknib".to_string() {
+                                        } else if metadata_type.clone().unwrap() == *"tiknib" {
                                             let mut metadata_file = TikNibFuncMetaFile {
                                                 filename: tup.1.clone(),
                                                 function_info: None,

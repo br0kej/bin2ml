@@ -330,7 +330,7 @@ impl AGFJFile {
         let mut func_feature_vectors = Vec::new();
 
         for func in self.functions.unwrap().iter() {
-            let feature_vec = func[0].generate_tiknib_cfg_features(&arch.as_ref().unwrap());
+            let feature_vec = func[0].generate_tiknib_cfg_features(arch.as_ref().unwrap());
             func_feature_vectors.push(feature_vec);
         }
 
