@@ -4,6 +4,7 @@ use crate::inference::InferenceJob;
 use crate::networkx::{DGISNode, DiscovreNode, GeminiNode, NetworkxDiGraph, NodeType};
 use crate::utils::{average, check_or_create_dir, get_save_file_path};
 use itertools::Itertools;
+use ordered_float::OrderedFloat;
 use petgraph::prelude::Graph;
 use petgraph::visit::Dfs;
 use serde::{Deserialize, Serialize};
@@ -436,30 +437,60 @@ impl AGFJFunc {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Hash, Serialize, Deserialize)]
 pub struct TikNibFunc {
     pub name: String,
     pub features: TikNibFuncFeatures,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+impl Default for TikNibFunc {
+    fn default() -> Self {
+        TikNibFunc {
+            name: "default".to_string(),
+            features: TikNibFuncFeatures::default(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Hash, Serialize, Deserialize)]
 pub struct TikNibFuncFeatures {
     // Averages
-    pub avg_arithshift: f32,
-    pub avg_compare: f32,
-    pub avg_ctransfer: f32,
-    pub avg_ctransfercond: f32,
-    pub avg_dtransfer: f32,
-    pub avg_float: f32,
-    pub avg_total: f32,
+    pub avg_arithshift: OrderedFloat<f32>,
+    pub avg_compare: OrderedFloat<f32>,
+    pub avg_ctransfer: OrderedFloat<f32>,
+    pub avg_ctransfercond: OrderedFloat<f32>,
+    pub avg_dtransfer: OrderedFloat<f32>,
+    pub avg_float: OrderedFloat<f32>,
+    pub avg_total: OrderedFloat<f32>,
     // Sum
-    pub sum_arithshift: f32,
-    pub sum_compare: f32,
-    pub sum_ctransfer: f32,
-    pub sum_ctransfercond: f32,
-    pub sum_dtransfer: f32,
-    pub sum_float: f32,
-    pub sum_total: f32,
+    pub sum_arithshift: OrderedFloat<f32>,
+    pub sum_compare: OrderedFloat<f32>,
+    pub sum_ctransfer: OrderedFloat<f32>,
+    pub sum_ctransfercond: OrderedFloat<f32>,
+    pub sum_dtransfer: OrderedFloat<f32>,
+    pub sum_float: OrderedFloat<f32>,
+    pub sum_total: OrderedFloat<f32>,
+}
+
+impl Default for TikNibFuncFeatures {
+    fn default() -> Self {
+        TikNibFuncFeatures {
+            avg_arithshift: OrderedFloat(0.0),
+            avg_compare: OrderedFloat(0.0),
+            avg_ctransfer: OrderedFloat(0.0),
+            avg_ctransfercond: OrderedFloat(0.0),
+            avg_dtransfer: OrderedFloat(0.0),
+            avg_float: OrderedFloat(0.0),
+            avg_total: OrderedFloat(0.0),
+            sum_arithshift: OrderedFloat(0.0),
+            sum_compare: OrderedFloat(0.0),
+            sum_ctransfer: OrderedFloat(0.0),
+            sum_ctransfercond: OrderedFloat(0.0),
+            sum_dtransfer: OrderedFloat(0.0),
+            sum_float: OrderedFloat(0.0),
+            sum_total: OrderedFloat(0.0),
+        }
+    }
 }
 
 // This is a bit odd but is to make sure the JSON output is formatted nice!
@@ -468,20 +499,42 @@ impl From<(&String, Vec<TikNibFeaturesBB>)> for TikNibFunc {
         TikNibFunc {
             name: input.0.to_string(),
             features: TikNibFuncFeatures {
-                avg_arithshift: average(input.1.iter().map(|ele| ele.arithshift).collect()),
-                avg_compare: average(input.1.iter().map(|ele| ele.arithshift).collect()),
-                avg_ctransfer: average(input.1.iter().map(|ele| ele.ctransfer).collect()),
-                avg_ctransfercond: average(input.1.iter().map(|ele| ele.ctransfercond).collect()),
-                avg_dtransfer: average(input.1.iter().map(|ele| ele.dtransfer).collect()),
-                avg_float: average(input.1.iter().map(|ele| ele.float).collect()),
-                avg_total: average(input.1.iter().map(|ele| ele.total).collect()),
-                sum_arithshift: input.1.iter().map(|ele| ele.arithshift).sum(),
-                sum_compare: input.1.iter().map(|ele| ele.compare).sum(),
-                sum_ctransfer: input.1.iter().map(|ele| ele.ctransfer).sum(),
-                sum_ctransfercond: input.1.iter().map(|ele| ele.ctransfercond).sum(),
-                sum_dtransfer: input.1.iter().map(|ele| ele.dtransfer).sum(),
-                sum_float: input.1.iter().map(|ele| ele.float).sum(),
-                sum_total: input.1.iter().map(|ele| ele.total).sum(),
+                avg_arithshift: OrderedFloat::from(average(
+                    input.1.iter().map(|ele| ele.arithshift).collect(),
+                )),
+                avg_compare: OrderedFloat::from(average(
+                    input.1.iter().map(|ele| ele.arithshift).collect(),
+                )),
+                avg_ctransfer: OrderedFloat::from(average(
+                    input.1.iter().map(|ele| ele.ctransfer).collect(),
+                )),
+                avg_ctransfercond: OrderedFloat::from(average(
+                    input.1.iter().map(|ele| ele.ctransfercond).collect(),
+                )),
+                avg_dtransfer: OrderedFloat::from(average(
+                    input.1.iter().map(|ele| ele.dtransfer).collect(),
+                )),
+                avg_float: OrderedFloat::from(average(
+                    input.1.iter().map(|ele| ele.float).collect(),
+                )),
+                avg_total: OrderedFloat::from(average(
+                    input.1.iter().map(|ele| ele.total).collect(),
+                )),
+                sum_arithshift: OrderedFloat::from(
+                    input.1.iter().map(|ele| ele.arithshift).sum::<f32>(),
+                ),
+                sum_compare: OrderedFloat::from(input.1.iter().map(|ele| ele.compare).sum::<f32>()),
+                sum_ctransfer: OrderedFloat::from(
+                    input.1.iter().map(|ele| ele.ctransfer).sum::<f32>(),
+                ),
+                sum_ctransfercond: OrderedFloat::from(
+                    input.1.iter().map(|ele| ele.ctransfercond).sum::<f32>(),
+                ),
+                sum_dtransfer: OrderedFloat::from(
+                    input.1.iter().map(|ele| ele.dtransfer).sum::<f32>(),
+                ),
+                sum_float: OrderedFloat::from(input.1.iter().map(|ele| ele.float).sum::<f32>()),
+                sum_total: OrderedFloat::from(input.1.iter().map(|ele| ele.total).sum::<f32>()),
             },
         }
     }
