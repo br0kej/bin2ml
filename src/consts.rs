@@ -3410,3 +3410,298 @@ pub const MIPS_GRP_COND_CTRANSFER: [&str; 33] = [
     "bnez", "bnz", "teq", "teqi", "tge", "tgei", "tgeiu", "tgeu", "tlt", "tlti", "tltiu", "tltu",
     "tne", "tnei", "beql", "bgezall", "bgezl", "bgtzl", "blezl", "bltzall", "bltzl", "bnel",
 ];
+
+// ================= POWERPC 32 =============================================
+// data transfer
+// reference : https://www.ibm.com/docs/en/aix/7.3?topic=reference-appendix-f-powerpc-instructions
+// reference : https://files.openpower.foundation/s/dAYSdGzTfW4j2r2
+pub const PPC_UNKOWN: [&str; 8] = [
+    // condition register _
+    "creqv", "crmove", "crnot", "crset", "mcrf", // move condition register field
+    "eqv", "isync", // instruction synccccchronize
+    // unknown 64-bit
+    "vsel",
+];
+
+pub const PPC_GRP_DTRANSFER: [&str; 178] = [
+    // load
+    "la",
+    // load byte
+    "lbz",
+    "lbzcix",
+    "lbzu",
+    "lbzux",
+    "lbzx",
+    // load double
+    "ld",
+    "ldarx",
+    "ldbrx",
+    "ldcix",
+    "ldu",
+    "ldux",
+    "ldx",
+    // load half
+    "lha",
+    "lhau",
+    "lhaux",
+    "lhax",
+    "lhbrx",
+    "lhz",
+    "lhzcix",
+    "lhzu",
+    "lhzux",
+    "lhzx",
+    // load immediate
+    "li",
+    "lis",
+    "lmw",
+    "lswi",
+    // load vector
+    "lvebx",
+    "lvehx",
+    "lvewx",
+    "lvsl",
+    "lvsr",
+    "lvx",
+    "lvxl",
+    // load word
+    "lwa",
+    "lwarx",
+    "lwaux",
+    "lwax",
+    "lwbrx",
+    "lwsync",
+    "lwz",
+    "lwzcix",
+    "lwzu",
+    "lwzux",
+    "lwzx",
+    // load vsx
+    "lxsdx",
+    "lxvd2x",
+    "lxvdsx",
+    "lxvw4x",
+    // store byte
+    "stb",
+    "stbcix",
+    "stbu",
+    "stbux",
+    "stbx",
+    // store double
+    "std",
+    "stdbrx",
+    "stdcix",
+    "stdcx",
+    "stdu",
+    "stdux",
+    "stdx",
+    // store half word
+    "sth",
+    "sthbrx",
+    "sthcix",
+    "sthu",
+    "sthux",
+    "sthx",
+    "stmw",
+    "stswi",
+    // store vector
+    "stvebx",
+    "stvehx",
+    "stvewx",
+    "stvx",
+    "stvxl",
+    // store word
+    "stw",
+    "stwbrx",
+    "stwcix",
+    "stwcx",
+    "stwu",
+    "stwux",
+    "stwx",
+    // store vsx
+    "stxsdx",
+    "stxvd2x",
+    "stxvw4x",
+    "mr",
+    // move from
+    "mfamr",
+    "mfasr",
+    "mfbr0",
+    "mfbr1",
+    "mfbr2",
+    "mfbr3",
+    "mfbr4",
+    "mfbr5",
+    "mfbr6",
+    "mfbr7",
+    "mfcfar",
+    "mfcr",
+    "mfctr",
+    "mfdar",
+    "mfdbatl",
+    "mfdbatu",
+    "mfdccr",
+    "mfdcr",
+    "mfdear",
+    "mfdscr",
+    "mfdsisr",
+    "mfesr",
+    "mffs",
+    "mfibatl",
+    "mfibatu",
+    "mficcr",
+    "mflr",
+    "mfmsr",
+    "mfocrf",
+    "mfpid",
+    "mfpvr",
+    "mfrtcl",
+    "mfrtcu",
+    "mfspefscr",
+    "mfspr",
+    "mfsr",
+    "mfsrin",
+    "mfsrr2",
+    "mfsrr3",
+    "mftb",
+    "mftbhi",
+    "mftblo",
+    "mftbu",
+    "mftcr",
+    "mfvscr",
+    "mfxer",
+    // move to
+    "mtamr",
+    "mtbr0",
+    "mtbr1",
+    "mtbr2",
+    "mtbr3",
+    "mtbr4",
+    "mtbr5",
+    "mtbr6",
+    "mtbr7",
+    "mtcfar",
+    "mtcr",
+    "mtcrf",
+    "mtctr",
+    "mtdar",
+    "mtdbatl",
+    "mtdbatu",
+    "mtdccr",
+    "mtdcr",
+    "mtdear",
+    "mtdscr",
+    "mtdsisr",
+    "mtesr",
+    "mtfsb0",
+    "mtfsb1",
+    "mtfsf",
+    "mtfsfi",
+    "mtibatl",
+    "mtibatu",
+    "mticcr",
+    "mtlr",
+    "mtmsr",
+    "mtmsrd",
+    "mtocrf",
+    "mtpid",
+    "mtspefscr",
+    "mtspr",
+    "mtsr",
+    "mtsrin",
+    "mtsrr2",
+    "mtsrr3",
+    "mttbhi",
+    "mttbl",
+    "mttblo",
+    "mttbu",
+    "mttcr",
+    "mtvscr",
+    "mtxer",
+];
+
+pub const PPC_GRP_FLOAT_DTRANSFER: [&str; 25] = [
+    "fmr", "lfd", "lfdu", "lfdux", "lfdx", "lfiwax", "lfiwzx", "lfs", "lfsu", "lfsux", "lfsx",
+    "stfd", "stfdu", "stfdux", "stfdx", "stfiwx", "stfs", "stfsu", "stfsux", "stfsx",
+    // vector merge
+    "vmrghb", "vmrglb", // vector pack
+    "vpkuhum", "vpkuwum", // vector permute
+    "vperm",
+];
+
+// binary arithmetic instructions:
+pub const PPC_GRP_ARITH: [&str; 28] = [
+    "neg", "add", "addc", "adde", "addi", "addic", "addis", "addme", "addze", "divd", "divdu",
+    "divw", "divwu", "mulhd", "mulhdu", "mulhw", "mulhwu", "mulld", "mulli", "mullw", "sub",
+    "subc", "subf", "subfc", "subfe", "subfic", "subfme", "subfze",
+];
+
+// floating point arithmetic instructions
+pub const PPC_GRP_FLOAT_ARITH: [&str; 24] = [
+    "fabs", "fmadd", "fmsub", "fneg", "fadd", "fadds", "fdiv", "fdivs", "fmul", "fmuls", "fsub",
+    "fsubs", "frsp",  // floating round to single-precision
+    "fsqrt", // floating convert
+    "fcfid", "fctidz", "fctiwz", // vector add
+    "vaddubm", "vadduhm", "vadduwm", // vector multiply
+    "vmsumuhm", "vmulouh", // vector subtract
+    "vsubuhs", "vsubuwm",
+];
+
+pub const PPC_GRP_CMP: [&str; 9] = [
+    "cmpb", "cmpd", "cmpdi", "cmpld", "cmpldi", "cmplw", "cmplwi", "cmpw", "cmpwi",
+];
+
+// floating point compare instructions
+pub const PPC_GRP_FLOAT_CMP: [&str; 8] = [
+    "fcmpo", "fcmpu", // vector compare
+    "vcmpequb", "vcmpequw", "vcmpgtsh", "vcmpgtsw", "vcmpgtub", "vcmpgtuw",
+];
+
+// shift operation
+pub const PPC_GRP_SHIFT: [&str; 43] = [
+    "rotlw", "rotlwi", "rotld", "rotldi", "slbia", "slbie", "slbmfee", "slbmte", "sld", "sldi",
+    "slw", "slwi", "srad", "sradi", "sraw", "srawi", "srd", "srw", "srwi", "rldcl", "rldcr",
+    "rldic", "rldicl", "rldicr", "rldimi", "rlwimi", "rlwinm", "rlwnm",
+    // vector shift left
+    "vslb", "vsldoi", "vslh", "vslw", // vector splat
+    "vspltb", "vsplth", "vspltisb", "vspltish", "vspltisw", "vspltw",
+    // vector shift right
+    "vsraw", "vsrb", "vsrh", "vsrw", // vector rotate
+    "vrlw",
+];
+
+// Logical Instructions:
+pub const PPC_GRP_LOGIC: [&str; 49] = [
+    "not", "and", "andc", "andi", "andis", "crand", "crandc", "crnand", "crnor", "cror", "crorc",
+    "crxor", "evand", "evandc", "evnand", "evnor", "evor", "evorc", "evxor", "nand", "nor", "or",
+    "orc", "ori", "oris", "qvfand", "qvfandc", "qvfnand", "qvfnor", "qvfor", "qvforc", "qvfxor",
+    "vand", "vandc", "vnand", "vnor", "vor", "vorc", "vxor", "xor", "xori", "xoris", "xxland",
+    "xxlandc", "xxlnand", "xxlnor", "xxlor", "xxlorc", "xxlxor",
+];
+
+// bit and byte instructions:
+pub const PPC_GRP_BIT: [&str; 8] = [
+    // condition register clear
+    "crclr", // count leading zeros
+    "cntlzd", "cntlzw", // clear high-order bits register
+    "clrldi", "clrlwi", // extend sign
+    "extsb", "extsw", "extsh",
+];
+
+pub const PPC_GRP_MISC: [&str; 1] = ["nop"];
+
+// control transfer instructions:
+pub const PPC_GRP_CTRANSFER: [&str; 26] = [
+    "b", "bl", "bctrl", "bctr", "bla", "blr", "blrl", "ba", "sc", // trap
+    "trap", "tw", "tweq", "tweqi", "twgt", "twgti", "twi", "twlgt", "twlgti", "twllt", "twllti",
+    "twlt", "twlti", "twne", "twnei", "twu", "twui",
+];
+
+pub const PPC_GRP_COND_CTRANSFER: [&str; 61] = [
+    "bc", "bca", "bcctr", "bcctrl", "bcl", "bcla", "bclr", "bclrl", "bct", "bdnz", "bdnza",
+    "bdnzf", "bdnzfa", "bdnzfl", "bdnzfla", "bdnzflrl", "bdnzl", "bdnzla", "bdnzlr", "bdnzlrl",
+    "bdnzt", "bdnzta", "bdnztl", "bdnztla", "bdnztlr", "bdnztlrl", "bdz", "bdza", "bdzf", "bdzfa",
+    "bdzfl", "bdzfla", "bdzflr", "bdzflrl", "bdzl", "bdzla", "bdzlr", "bdzlrl", "bdzt", "bdzta",
+    "bdztl", "bdztla", "bdztlr", "bdztlrl", "bf", "bfa", "bfctr", "bfctrl", "bfl", "bfla", "bflr",
+    "bflrl", "brinc", "bt", "bta", "btctr", "btctrl", "btl", "btla", "btlr", "btlrl",
+];
