@@ -2611,3 +2611,802 @@ pub const MIPS_CALL: [&str; 8] = [
 ];
 
 pub const MIPS_COMPARE: [&str; 4] = ["slt", "sltu", "slti", "sltiu"];
+
+// TikNib Instruction Categories
+// Shamlessly taken from https://github.com/SoftSec-KAIST/TikNib/blob/bb8d3f33808d4cbe8128d52e252525ebd6f05c3e/tiknib/feature/asm_const.py
+// I think all of these have been derived from Capstone some how - Something to look at another day
+pub const X86_GRP_DTRANSFER: [&str; 147] = [
+    // general purpose instructions
+    "cmov",
+    "cmova",
+    "cmovae",
+    "cmovb",
+    "cmovbe",
+    "cmovc",
+    "cmove",
+    "cmovg",
+    "cmovge",
+    "cmovl",
+    "cmovle",
+    "cmovna",
+    "cmovnae",
+    "cmovnb",
+    "cmovnbe",
+    "cmovnc",
+    "cmovne",
+    "cmovng",
+    "cmovnge",
+    "cmovnl",
+    "cmovnle",
+    "cmovno",
+    "cmovnp",
+    "cmovns",
+    "cmovnz",
+    "cmovo",
+    "cmovp",
+    "cmovpe",
+    "cmovpo",
+    "cmovs",
+    "cmovz",
+    "bswap",
+    "xchg",
+    "xadd",
+    "cmpxchg",
+    "cmpxchg8b",
+    "pop",
+    "popa",
+    "popad",
+    "push",
+    "pusha",
+    "pushad",
+    "cdq",
+    "cdqe",
+    "cbw",
+    "cwd",
+    "cwde",
+    "mov",
+    "movd",
+    "movq",
+    "movabs",
+    "movsx",
+    "movsxd",
+    "movzx",
+    "movzxd",
+    // string
+    "movs",
+    "movsb",
+    "movsd",
+    "movsw",
+    "stos",
+    "stosb",
+    "stosd",
+    "stosw",
+    "lods",
+    "lodsb",
+    "lodsd",
+    "lodsw",
+    // segment register
+    "lds",
+    "les",
+    "lfs",
+    "lgs",
+    "lss",
+    // user mode extended
+    "xsave",
+    "xsavec",
+    "xsaveopt",
+    "xrstor",
+    "xgetbv",
+    "xsetbv",
+    // bmi1, bmi2
+    "bextr",
+    "blsi",
+    "pdep",
+    "pext",
+    // mmx
+    "packssdw",
+    "packsswb",
+    "packusdw",
+    "packuswb",
+    "punpckhbw",
+    "punpckhdq",
+    "punpckhwd",
+    "punpcklbw",
+    "punpckldq",
+    "punpcklwd",
+    "emms",
+    // sse 64-bit integer
+    "pmovmskb",
+    "pshufw",
+    // sse2 128-bit integer
+    "movdqa",
+    "movdqu",
+    "movq2dq",
+    "movdq2q",
+    "pshuflw",
+    "pshufhw",
+    "pshufd",
+    "punpcklqdq",
+    "punpckhqdq",
+    // ssse2
+    "pshufb",
+    "palignr",
+    // sse4
+    "movntdqa",
+    "pblendvb",
+    "pblendw",
+    "pinsrb",
+    "pinsrd",
+    "pinsrq",
+    "pextrb",
+    "pextrw",
+    "pextrd",
+    "pextrq",
+    "pmovsxbw",
+    "pmovzxbw",
+    "pmovsxbd",
+    "pmovzxbd",
+    "pmovsxwd",
+    "pmovzxwd",
+    "pmovsxbq",
+    "pmovzxbq",
+    "pmovsxwq",
+    "pmovzxwq",
+    "pmovsxdq",
+    "pmovzxdq",
+    "packusdw",
+    "lgdt",
+    "sgdt",
+    "lldt",
+    "sldt",
+    "ltr",
+    "str",
+    "lidt",
+    "sidt",
+    "mov",
+    "lmsw",
+    "smsw",
+    "clts",
+    "lsl",
+    "lar",
+    "verr",
+    "verw",
+    // 64-bit
+    "cdqe",
+    "cqo",
+];
+
+pub const X86_GRP_FLOAT_DTRANSFER: [&str; 126] = [
+    // floating point instrutions
+    "fld",
+    "fst",
+    "fstp",
+    "fild",
+    "fist",
+    "fistp",
+    "fbld",
+    "fbstp",
+    "fxch",
+    "fcmovb",
+    "fcmovbe",
+    "fcmove",
+    "fcmovnb",
+    "fcmovnbe",
+    "fcmovne",
+    "fcmovnu",
+    "fcmovu",
+    // floating point load const instructions
+    "fld1",
+    "fldz",
+    "fldpi",
+    "fldl2e",
+    "fldln2",
+    "fldl2t",
+    "fldlg2",
+    // fpu register related
+    "fclex",
+    "ffree",
+    "finit",
+    "fldcw",
+    "fldenv",
+    "fnclex",
+    "fninit",
+    "fnop",
+    "fnsave",
+    "fnstcw",
+    "fnstenv",
+    "fnstsw",
+    "frstor",
+    "fsave",
+    "fstcw",
+    "fstenv",
+    "fstsw",
+    // sse
+    "movaps",
+    "movups",
+    "movhps",
+    "movhlps",
+    "movlps",
+    "movlhps",
+    "movmskps",
+    "movss",
+    // sse2
+    "movapd",
+    "movupd",
+    "movhpd",
+    "movhlpd",
+    "movlpd",
+    "movlhpd",
+    "movmskpd",
+    "movsd",
+    // sse shuffle
+    "shufps",
+    "unpckhps",
+    "unpcklps",
+    // sse2 shuffle
+    "shufpd",
+    "unpckhpd",
+    "unpcklpd",
+    // sse conversion
+    "cvtpi2ps",
+    "cvtsi2ss",
+    "cvtps2pi",
+    "cvttps2pi",
+    "cvtss2si",
+    "cvttss2si",
+    // sse2 conversion
+    "cvtpd2pi",
+    "cvttpd2pi",
+    "cvtpi2pd",
+    "cvtpd2dq",
+    "cvttpd2dq",
+    "cvtdq2pd",
+    "cvtps2pd",
+    "cvtpd2ps",
+    "cvtss2sd",
+    "cvtsd2ss",
+    "cvtsd2si",
+    "cvttsd2si",
+    "cvtsi2sd",
+    "cvtdq2ps",
+    "cvtps2dq",
+    "cvttps2dq",
+    // sse mxcsr state
+    "ldmxcsr",
+    "stmxcsr",
+    // sse 64-bit
+    "pextrw",
+    "pinsrw",
+    // sse cache
+    "maskmovq",
+    "movntq",
+    "movntps",
+    "prefetch",
+    "sfence",
+    // sse3
+    "fisttp",
+    "lddqu",
+    "movshdup",
+    "movsldup",
+    "movddup",
+    // sse4
+    "blendpd",
+    "blendps",
+    "blendvpd",
+    "blendvps",
+    "extractps",
+    "insertps",
+    // 16-bit fp
+    "vcvtps2ph",
+    "vcvtps2ph",
+    // vector
+    "valign",
+    "vblend",
+    "vcompress",
+    "vextract",
+    "vinsert",
+    "vmov",
+    "vfixup",
+    "vget",
+    "vexpand",
+    "vcvt",
+    "vpblend",
+    "vpbroad",
+    "vpcompress",
+    "vperm",
+    "vpexpand",
+    "vpmov",
+    "vpscatter",
+    "vscatter",
+    "vshuf",
+];
+
+// Miscellaneous Instructions:
+pub const X86_GRP_MISC: [&str; 19] = [
+    "nop",
+    "ud",
+    "ud2",
+    "lea",
+    "xlat",
+    "xlatb",
+    "cpuid",
+    "movbe",
+    "prefetchw",
+    "prefetchwt1",
+    "clflush",
+    "clflushopt",
+    // sse2 cache
+    "clflush",
+    "lfence",
+    "mfence",
+    "maskmovdqu",
+    "movntpd",
+    "movntdq",
+    "movnti",
+];
+
+pub const X86_GRP_ARITH: [&str; 106] = [
+    // general purpose binary arithmetic instructions
+    "adcx",
+    "adox",
+    "adc",
+    "add",
+    "xadd",
+    "sub",
+    "sbb",
+    "imul",
+    "mul",
+    "idiv",
+    "div",
+    "inc",
+    "dec",
+    "neg",
+    "cmp",
+    // decimal arithmetic instructions
+    "daa",
+    "das",
+    "aaa",
+    "aas",
+    "aam",
+    "aad",
+    // flag
+    "stc",
+    "clc",
+    "cmc",
+    "cld",
+    "std",
+    // bmi1, bmi2
+    "mulx",
+    // mmx
+    "padd",
+    "paddb",
+    "paddw",
+    "paddd",
+    "paddsb",
+    "paddsw",
+    "paddusb",
+    "paddusw",
+    "psub",
+    "psubb",
+    "psubw",
+    "psubd",
+    "psubsb",
+    "psubsw",
+    "psubusb",
+    "psubusw",
+    "pmulhw",
+    "pmullw",
+    "pmaddwd",
+    // sse 64bit integer
+    "pavgb",
+    "pavgw",
+    "pmaxub",
+    "pmaxsb",
+    "pminub",
+    "pminsb",
+    "pmulhuw",
+    "psadbw",
+    // sse 128-bit integer
+    "pmuludq",
+    "paddq",
+    "psubq",
+    // ssse3
+    "phaddw",
+    "phaddsw",
+    "phaddd",
+    "phsubw",
+    "phsubsw",
+    "phsubd",
+    "pabsb",
+    "pabsw",
+    "pabsd",
+    "pabsq",
+    "pmaddubsw",
+    "pmulhrsw",
+    "psignb",
+    "psignw",
+    "psignd",
+    // sse4
+    "pmulld",
+    "pmuldq",
+    "pminuw",
+    "pminud",
+    "pminsb",
+    "pminsd",
+    "pmaxuw",
+    "pmaxud",
+    "pmaxsb",
+    "pmaxsd",
+    "roundps",
+    "roundpd",
+    "roundss",
+    "roundsd",
+    "pmpsadbw",
+    // aesni
+    "aesdec",
+    "aesdeclast",
+    "aesenc",
+    "aesenclast",
+    "aesimc",
+    "aeskeygenassist",
+    "pclmulqdq",
+    // sha1
+    "sha1msg1",
+    "sha1msg2",
+    "sha1nexte",
+    "sha1rnds4",
+    "sha256msg1",
+    "sha256msg2",
+    "sha256rnds2",
+    "crc32",
+    // bmi1, bmi2
+    "blsmsk",
+    "blsr",
+    "clac",
+    "stac",
+];
+
+pub const X86_GRP_FLOAT_CMP: [&str; 39] = [
+    // floating point compare instructions
+    "fcom", "fcomp", "fcompp", "fucom", "fucomp", "fucompp", "ficom", "ficomp", "fcomi", "fucomi",
+    "fcomip", "fucomip", "ftst", "fxam", // sse
+    "cmpps", "cmpeqps", "cmpneqps", "cmpltps", "cmpnltps", "cmpss", "cmpeqss", "cmpneqss",
+    "cmpltss", "cmpnltss", "comiss", "ucomiss", "cmppd", "cmpeqpd", "cmpneqpd", "cmpltpd",
+    "cmpnltpd", "cmpsd", "cmpeqsd", "cmpneqsd", "cmpltsd", "cmpnltsd", "comisd", "ucomisd",
+    // vector
+    "vpcmp",
+];
+
+pub const X86_GRP_FLOAT_ARITH: [&str; 87] = [
+    // - floating point instructions:
+    "fadd", "faddp", "fiadd", "fsub", "fsubp", "fisub", "fsubr", "fsubrp", "fisubr", "fmul",
+    "fmulp", "fimul", "fdiv", "fdivp", "fidiv", "fdivr", "fdivrp", "fidivr", "fprem", "fprem1",
+    "fabs", "fchs", "frndint", "fscale", "fsqrt", "fxtract",
+    // floating point transcendental instructions
+    "fsin", "fcos", "fsincos", "fptan", "fpatan", "f2xm1", "fyl2x", "fyl2xp1",
+    // fpu register related
+    "fincstp", "fdecstp", // sse
+    "addps", "addss", "subps", "subss", "mulps", "mulss", "divps", "divss", "rcpps", "rcpss",
+    "sqrtps", "sqrtss", "rsqrtps", "rsqrtss", "maxps", "maxss", "minps", "minss",
+    // sse2
+    "addsd", "subsd", "mulsd", "divsd", "rcpsd", "sqrtsd", "rsqrtsd", "maxsd", "minsd",
+    // sse3
+    "addsubps", "addsubpd", "haddps", "hsubps", "haddpd", "hsubpd", // sse4
+    "dppd", "dpps", // vector
+    "vpmax", "vpmin", "vrcp", "vrndscal", "vrsqrt", "vscale", "addpd", "addsd", "mulpd", "mulsd",
+    "subpd", "subsd", "divpd", "divsd", "rcppd", "rcpsd",
+];
+
+pub const X86_GRP_CMP: [&str; 25] = [
+    "cmp",
+    "comi",
+    "clt",
+    // from dtransfer
+    "cmpxchg",
+    "cmpxchg8b",
+    // from bit
+    "test",
+    // from string
+    "cmps",
+    "cmpsb",
+    "cmpsd",
+    "cmpsw",
+    // mmx
+    "pcmpeqb",
+    "pcmpeqw",
+    "pcmpeqd",
+    "pcmpgtb",
+    "pcmpgtw",
+    "pcmpgtd",
+    // sse4
+    "phminposuw",
+    "ptest",
+    "pcmpeqq",
+    // sse4.2
+    "pcmpestri",
+    "pcmpestrm",
+    "pcmpistri",
+    "pcmpistrm",
+    "pcmpgtq",
+    // vector
+    "vptest",
+];
+
+// Shift and Rotate Instructions:
+pub const X86_GRP_SHIFT: [&str; 29] = [
+    // general purpose instructions
+    "sar", "shr", "sal", "shl", "shrd", "shld", "ror", "rol", "rcr", "rcl",
+    // bmi1, bmi2
+    "rorx", "sarx", "shlx", "shrx", // mmx
+    "psllw", "pslld", "psllq", "psrlw", "psrld", "psrlq", "psraw", "psrad",
+    // sse2 128-bit integer
+    "pslldq", "psrldq", // vector
+    "vprol", "vpror", "vpsra", "vpsll", "vpsra",
+];
+
+// Logical Instructions:
+pub const X86_GRP_LOGIC: [&str; 18] = [
+    // general purpose instructions
+    "and", "not", "or", "xor",  // bmi1, bmi2
+    "andn", // mmx
+    "pand", "pandn", "por", "pxor", // sse
+    "andps", "andnps", "orps", "xorps", // sse2
+    "andpd", "andnpd", "orpd", "xorpd", // vector
+    "vpterlog",
+];
+
+// bit and byte instructions:
+pub const X86_GRP_BIT: [&str; 46] = [
+    // general purpose instructions
+    "seta", "setae", "setb", "setbe", "setc", "sete", "setg", "setge", "setl", "setle", "setna",
+    "setnae", "setnb", "setnbe", "setnc", "setne", "setng", "setnge", "setnl", "setnle", "setno",
+    "setnp", "setns", "setnz", "seto", "setp", "setpe", "setpo", "sets", "setz", "test", "crc32",
+    // bmi1, bmi2
+    "blsmsk", "blsr", "clac", "stac", // from bit
+    "test", "bt", "bts", "btr", "btc", "bsf", "bsr", "popcnt", "tzcnt", "lzcnt",
+];
+
+// control transfer instructions:
+pub const X86_GRP_CTRANSFER: [&str; 36] = [
+    // general purpose instructions
+    "jmp", "call", "ret", "iret", "int", "into", "bound", "enter", "leave", // flag
+    "cli", "sti",   // sse2
+    "pause", // sse3
+    "monitor", "mwait", "xabort", "xacquire", "xrelease", "xbegin", "xend", "xtest", "hlt",
+    "syscall", "sysenter", "sysexit", "sysret", "fwait", "wait",
+    // vm related instructions
+    "vmcall", "vmlaunch", "vmmcall", "vmresume", "vmrun", "vmfunc", "vmclear", "vmxon", "vmxoff",
+];
+
+pub const X86_GRP_COND_CTRANSFER: [&str; 44] = [
+    // general purpose instructions
+    "ja",
+    "jae",
+    "jb",
+    "jbe",
+    "jc",
+    "jcxz",
+    "je",
+    "jecxz",
+    "jrcxz",
+    "jg",
+    "jge",
+    "jl",
+    "jle",
+    "jnae",
+    "jnb",
+    "jnbe",
+    "jnc",
+    "jne",
+    "jng",
+    "jnge",
+    "jnl",
+    "jnle",
+    "jno",
+    "jnp",
+    "jns",
+    "jnz",
+    "jo",
+    "jp",
+    "jpe",
+    "jpo",
+    "js",
+    "jz",
+    "loop",
+    "loope",
+    "loopne",
+    "loopnz",
+    "loopz",
+    // string
+    "rep",
+    "rep movsq",
+    "rep stosq",
+    "repne",
+    "repnz",
+    "repe",
+    "repz",
+];
+
+// ==================== ARM 32 =============================================
+pub const ARM_GRP_DTRANSFER: [&str; 101] = [
+    // general purpose instructions
+    "lda", "adr", "adrp", "ldr", "ldrd", "ldrb", "ldrbt", "ldrh", "ldrs", "ldrsb", "ldrsbt",
+    "ldrsh", "ldrsht", "ldrt", "ldrht", "str", "strb", "strd", "strh", "strbt", "strt", "ldm",
+    "ldmda", "ldmdb", "ldmib", "stm", "stmda", "stmdb", "stmib", "pld", "swp", "mov", "movi",
+    "movk", "movz", "movt", "movn", "mvn", "mvni", "stp", "ldp", "rfeib",
+    // coprocessor data operations
+    "cdp", "mcr", "mcrr", "mrc", "mrr", "ldc", "ldcl", "stc", "stcl", "push", "sbfx", "sbfiz",
+    "bfx", "bfxil", "ubfx", "ubfiz", "vld", "vst", "vst2", "vstmdb", "vtbl", "vtbx", "zip", "zip1",
+    "zip2", "uzp", "uzp1", "uzp2", "xtn", "xtn2", "csel", "ld1", "ld2", "ld4", "st1", "st2", "st4",
+    "ldpsw", "ldrsw", "sxtab", "sxtb", "sxth", "sxtw", "ext", "extr", "ins", "uxtab", "uxtb",
+    "uxth", "uxtw", "bfc", "bfi", "bic", "clz", "rev", "rev16", "rev32", "rev64", "cset",
+];
+
+pub const ARM_GRP_FLOAT_DTRANSFER: [&str; 33] = [
+    // floating point data transfer instructions
+    "fcpy", "fcvtms", "fcvtmu", "fcvtzs", "fcvtzu", "fcvt", "fld", "fst", "fmr", "fmd", "fms",
+    "fmx", "fsito", "fuito", "ftosi", "ftoui", "fmov", "umov", "ldur", "ldurb", "ldurh", "ldursb",
+    "ldursh", "ldursw", "stur", "sturb", "sturh", "stursb", "stursh", "stursw", "dup", "scvtf",
+    "ucvtf",
+];
+
+pub const ARM_GRP_MISC: [&str; 13] = [
+    "udf", "nop", "mrs", "msr", "mar", "mra", "vmrs", "vmsr", "dbg", "dmb", "dsb", "isb", "setend",
+];
+
+// binary arithmetic instructions:
+pub const ARM_GRP_ARITH: [&str; 106] = [
+    // general purpose instructions
+    "add", "addw", "addp", "addv", "adc", "sub", "sbc", "rsb", "rsc", "cmn", "clz", "mul", "mla",
+    "mls", "cinc", "cinv", "neg", "negs", "div", "smax", "smaxv", "smin", "sminv", "umull",
+    "umlal", "umlal2", "smla", "smlal", "smlaltt", "smul", "smsub", "madd", "mneg", "msub",
+    "smaddl", "smnegl", "smsubl", "smulh", "smull", "umaddl", "umnegl", "umsubl", "umulh", "umull",
+    "sdiv", "udiv", "mia", "qadd", "qsub", "qdadd", "qdsub", "qasx", "sadd", "saddw", "saddw2",
+    "sasx", "shadd", "shasx", "smlsd", "smmla", "smuad", "smusd", "ssub", "sat", "sax", "uadd",
+    "uaddw", "uaddw2", "usat", "usax", "uasx", "uhadd", "uhasx", "umlsd", "ummla", "uqadd",
+    "uqsax", "uqsub", "uhsax", "vaba", "vabd", "max", "min", "vmla", "vmls", "vnmul", "vnmla",
+    "vnmls", "vfms", "vfms", "vfma", "vfms", "vfnma", "vfnms", "vrecpe", "vsqrt", "vqrsh", "umull",
+    "umaal", "umlal", "usada8", "vneg", "cneg", "csinc", "csinv", "csneg",
+];
+
+pub const ARM_GRP_FLOAT_ARITH: [&str; 26] = [
+    // floating point arithmetic instructions
+    "fabs", "fabd", "fadd", "fsub", "fdiv", "fmul", "fnmul", "fsqrt", "fmac", "fnmac", "fmsc",
+    "fnmsc", "fneg", "fmadd", "fmsub", "fnmadd", "fnmsub", "fpint", "fcsel", "fmax", "fmin",
+    "fmla", "fmls", "frintm", "frintp", "frint",
+];
+
+pub const ARM_GRP_SHIFT: [&str; 17] = [
+    // shift operations
+    "asr", "lsl", "lsr", "ror", "rrx", "pkhbt", "pkhtb", "shl", "ushl", "ushll", "ushll2", "ushr",
+    "usra", "sshl", "sshll", "sshll2", "sshr",
+];
+
+pub const ARM_GRP_CMP: [&str; 14] = [
+    // compare instructions
+    "cmeq", "cmgt", "cmhi", "cmhs", "cmp", "ccmn", "ccmp", "vceq", "vcge", "vcgt", "vcle", "vclt",
+    // from bit
+    "tst", "teq",
+];
+
+pub const ARM_GRP_FLOAT_CMP: [&str; 8] = [
+    "vcmp", "vcmpe", "fcmpe", "fcmgt", "fcm", "fcmp", "fccmp", "vcm",
+];
+
+// Logical Instructions:
+pub const ARM_GRP_LOGIC: [&str; 5] = ["and", "orr", "eor", "eon", "orn"];
+
+// bit and byte instructions:
+pub const ARM_GRP_BIT: [&str; 15] = [
+    "tst", "teq", "bsl", "bif", "bit", "bfc", "bfi", "bic", "clz", "rbit", "rev", "rev16", "rev32",
+    "rev64", "cset",
+];
+
+// control transfer instructions:
+pub const ARM_GRP_CTRANSFER: [&str; 29] = [
+    "b", "br", "bl", "blr", "bx", "blx", "bxj", "bal", "blal", "bxal", "blxal", "bxjal", "swi",
+    "bkpt", "ret", "yield", "wfe", "wfi", "sev", "sevl", "cps", "brk", "hlt", "svc", "hvc", "smc",
+    "trap", "eret", // arm pop is return
+    "pop",
+];
+
+pub const ARM_GRP_COND_CTRANSFER: [&str; 74] = [
+    "beq", "bne", "bcs", "bcc", "bmi", "bpl", "bvs", "bvc", "bhi", "bls", "bge", "blt", "bgt",
+    "ble", "bleq", "blne", "blcs", "blcc", "blmi", "blpl", "blvs", "blvc", "blhi", "blls", "blge",
+    "bllt", "blgt", "blle", "bxeq", "bxne", "bxcs", "bxcc", "bxmi", "bxpl", "bxvs", "bxvc", "bxhi",
+    "bxls", "bxge", "bxlt", "bxgt", "bxle", "blxeq", "blxne", "blxcs", "blxcc", "blxmi", "blxpl",
+    "blxvs", "blxvc", "blxhi", "blxls", "blxge", "blxlt", "blxgt", "blxle", "bxjeq", "bxjne",
+    "bxjcs", "bxjcc", "bxjmi", "bxjpl", "bxjvs", "bxjvc", "bxjhi", "bxjls", "bxjge", "bxjlt",
+    "bxjgt", "bxjle", "tbz", "tbnz", // combined instructions
+    "cbz", "cbnz",
+];
+
+// ==================== MIPS 32 =============================================
+// data transfer
+// refernce : https://www.cs.cornell.edu/courses/cs3410/2008fa/MIPS_Vol2.pdf
+pub const MIPS_GRP_DTRANSFER: [&str; 75] = [
+    "lb", "lbu", "lh", "lhu", "ll", "lw", "lwu", "ld", "ldl", "ldr", "lwl", "lwr", "pref", "sb",
+    "sc", "sd", "sdl", "sdr", "sh", "st", "sw", "swl", "swr", "sync", "lui", "ldxc1", "lwxc1",
+    "sdxc1", "swxc1", "mfhi", "mflo", "mov", "movf", "movn", "movt", "movz", "mthi", "mtlo",
+    "move", "cvt", "ldc", "lwc", "sdc", "swc", // move
+    "cfc", "ctc", "mfc", "mtc", "pref", "sync", "splat", "cfcmsa", "ctcmsa", "copy", "push", "seh",
+    "seb", "wsbh", "dsbh", "dshd", "mtc0", "mfc0", "ldc3", "lwc3", "sdc3", "swc3",
+    // coprocessor load, store
+    "cop2", "ldc2", "lwc2", "sdc2", "swc2", // cop move
+    "cfc2", "ctc2", "mfc2", "mtc2",
+];
+
+pub const MIPS_GRP_FLOAT_DTRANSFER: [&str; 34] = [
+    // floating point
+    "frint", "fclass", // load, store, memory
+    "ldc1", "lwc1", "sdc1", "swc1", // move
+    "cfc1", "ctc1", "mfc1", "fmov", "movf", "movn", "movt", "movz", "mtc1", // convert
+    "fex", "ffint", "ffq", "ftint", "ftrun", "ftq", "fcvt", "floor", "round", "trunc", "ffloor",
+    "fround", "ftrunc", "dmfc", "dmfc1", "dmtc", "dmtc1", "mthc1", "mfhc1",
+];
+
+// binary arithmetic instructions:
+pub const MIPS_GRP_ARITH: [&str; 57] = [
+    // general purpose instructions
+    "add", "addi", "addu", "addiu", "sub", "subu", "mul", "mult", "multu", "clo", "clz", "div",
+    "divu", "madd", "maddu", "msub", "msubu", "aadd", "asub", "abs", "neg", "negu",
+    // additional
+    "daa", "dsub", "dsubu", "dsubiu", "ddiv", "ddivu", "ddiviu", "dmul", "dmult", "dmultu", "dotp",
+    "dpadd", "dpsub", "madd", "max", "min", "msub", "mod", "sat", "hsub", "sqrt", "aui", "daui",
+    "dahi", "dati", "addiupc", "auipc", "aluipc", "dadd", "daddu", "daddiu", "dclz",
+    // from bit
+    "bmz", "bmn", "bneg",
+];
+
+pub const MIPS_GRP_CMP: [&str; 45] = [
+    "slt", "slti", "sltiu", "sltu", // compare instructions
+    "cmp", "ceq", "cle", "clt", "cf", "cun", "ceq", "cueq", "colt", "cult", "cole", "cule", "csf",
+    "cngle", "cseq", "cngl", "clt", "cnge", "cle", "cngt", "cmp", "ceq", "cle", "clt", "cf", "cun",
+    "ceq", "cueq", "colt", "cult", "cole", "cule", "csf", "cngle", "cseq", "cngl", "clt", "cnge",
+    "cle", "cngt", "c",
+];
+
+pub const MIPS_GRP_FLOAT_CMP: [&str; 3] = [
+    // floating point compare instructions
+    "facf", "fc", "fs",
+];
+
+pub const MIPS_GRP_SHIFT: [&str; 25] = [
+    // shift operation
+    "sll", "sllv", "srl", "srlv", "sra", "srav", "shl", "shr", "sld", "dsll", "dsll32", "dsllv",
+    "dsra", "dsra32", "dsrav", "dsrl", "dsrl32", "dsrlv", "rotr", "rotrv", "drotr", "drotr32",
+    "drotrv", "lsa", "dlsa",
+];
+
+pub const MIPS_GRP_FLOAT_ARITH: [&str; 19] = [
+    // floating point
+    "fabs", "fadd", "fdiv", "fmadd", "fmsub", "fmul", "fneg", "fnmadd", "fnmsub", "fexp", "flog",
+    "fmax", "fmin", "frcp", "recip", "frecip", "frsqrt", "fsqrt", "fsub",
+];
+
+// Logical Instructions:
+pub const MIPS_GRP_LOGIC: [&str; 8] = ["and", "andi", "nor", "or", "not", "ori", "xor", "xori"];
+
+// bit and byte instructions:
+pub const MIPS_GRP_BIT: [&str; 14] = [
+    "bins", "dins", "dext", "ext", "ins", "bmz", "bmn", "bneg", "bsel", "bset", "bclr",
+    // bit wise count
+    "nloc", "nlzc", "pcnt",
+];
+
+pub const MIPS_GRP_MISC: [&str; 7] = ["nop", "ssnop", "cache", "tlbp", "tlbr", "tlbwi", "tlbwr"];
+
+// control transfer instructions:
+pub const MIPS_GRP_CTRANSFER: [&str; 32] = [
+    "b", "bal", "j", "jal", "jr", "jalr", "break", "syscall", "pause", "wait", "hlt", "eret",
+    "deret", "sdbbp", "bkpt", "ret", "mfc0", "mtc0", // mips pop is return
+    "pop",  // float
+    "bc1", "bc1f", "bc1t", "bc1fl", "bc1tl", // cop
+    "bc2f", "bc2t", "bc2fl", "bc2tl", "bc3f", "bc3t", "bc3fl", "bc3tl",
+];
+
+pub const MIPS_GRP_COND_CTRANSFER: [&str; 33] = [
+    "beq", "beqz", "bne", "bge", "bgez", "bgezal", "bgtz", "blez", "bltz", "bltzal", "bnel",
+    "bnez", "bnz", "teq", "teqi", "tge", "tgei", "tgeiu", "tgeu", "tlt", "tlti", "tltiu", "tltu",
+    "tne", "tnei", "beql", "bgezall", "bgezl", "bgtzl", "blezl", "bltzall", "bltzl", "bnel",
+];
