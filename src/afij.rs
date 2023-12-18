@@ -7,7 +7,7 @@ use serde_json::Value;
 pub struct AFIJFunctionInfo {
     pub offset: i64,
     pub name: String,
-    pub size: i64,
+    pub size: i128,
     #[serde(rename = "is-pure")]
     pub is_pure: String,
     pub realsz: i64,
@@ -26,8 +26,8 @@ pub struct AFIJFunctionInfo {
     pub edges: i64,
     pub ebbs: i64,
     pub signature: String,
-    pub minbound: i64,
-    pub maxbound: i64,
+    pub minbound: u64,
+    pub maxbound: i128,
     pub callrefs: Option<Vec<Callref>>,
     // TODO: Need to fix this and change to string instead of i64 to get round large random numbers
     pub datarefs: Option<Vec<Dataref>>,

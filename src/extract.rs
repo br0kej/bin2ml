@@ -84,7 +84,7 @@ pub struct AFLJFuncDetails {
     pub edges: u64,
     pub ebbs: u64,
     pub signature: String,
-    pub minbound: u64,
+    pub minbound: i64,
     pub maxbound: u64,
     #[serde(default)]
     pub callrefs: Vec<Callref>,
@@ -439,8 +439,8 @@ impl FileToBeProcessed {
         info!("Getting function information from binary");
         let json = r2p.cmd("aflj").expect("aflj command failed");
         trace!("{:?}", json);
-        let json_obj: Vec<AFLJFuncDetails> =
-            serde_json::from_str(&json).expect("Unable to convert to JSON object!");
+        let json_obj: Vec<AFLJFuncDetails> = serde_json::from_str(&json)
+            .expect(&format!("Unable to convert to JSON object! - {}", json));
 
         json_obj
     }
@@ -475,8 +475,8 @@ impl FileToBeProcessed {
     fn get_function_info(&self, function_addr: u64, r2p: &mut R2Pipe) -> Vec<AFIJFunctionInfo> {
         Self::go_to_address(r2p, function_addr);
         let json = r2p.cmd("afij").expect("afij command failed");
-        let json_obj: Vec<AFIJFunctionInfo> =
-            serde_json::from_str(&json).expect("Unable to convert to JSON object!");
+        let json_obj: Vec<AFIJFunctionInfo> = serde_json::from_str(&json)
+            .expect(&format!("Unable to convert to JSON object! - {}", json));
         json_obj
     }
 
