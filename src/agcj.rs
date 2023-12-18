@@ -327,6 +327,10 @@ impl AGCJFunctionCallGraphs {
         node_feature_type: String,
         type_suffix: &str,
     ) {
+        // TODO: It look likes in downstream datasets, there are cases where graphs with a single node
+        // can make it through and dont't play very well with the loading in PyG.
+        // Need to devise a plan to format these correctly so they can still be loaded!
+        // One option may be to include a self loop - Or probably better, just bounce em'
         if *with_metadata {
             if node_feature_type == "finfo" {
                 let type_suffix = type_suffix.to_owned() + "-meta";
