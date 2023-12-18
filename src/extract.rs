@@ -65,12 +65,12 @@ impl std::fmt::Display for ExtractionJob {
 pub struct AFLJFuncDetails {
     pub offset: u64,
     pub name: String,
-    pub size: i64,
+    pub size: u64,
     #[serde(rename = "is-pure")]
     pub is_pure: String,
     pub realsz: u64,
     pub noreturn: bool,
-    pub stackframe: i64,
+    pub stackframe: u64,
     pub calltype: String,
     pub cost: u64,
     pub cc: u64,
@@ -134,7 +134,7 @@ pub struct Bpvar {
 #[serde(rename_all = "camelCase")]
 pub struct Ref {
     pub base: String,
-    pub offset: u64,
+    pub offset: i64,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -438,6 +438,7 @@ impl FileToBeProcessed {
     fn get_function_name_list(&self, r2p: &mut R2Pipe) -> Vec<AFLJFuncDetails> {
         info!("Getting function information from binary");
         let json = r2p.cmd("aflj").expect("aflj command failed");
+        trace!("{:?}", json);
         let json_obj: Vec<AFLJFuncDetails> =
             serde_json::from_str(&json).expect("Unable to convert to JSON object!");
 
