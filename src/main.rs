@@ -321,7 +321,7 @@ enum Commands {
 
 fn main() {
     let env = Env::default()
-        .filter_or("LOG_LEVEL", "info")
+        .filter_or("LOG_LEVEL", "error")
         .write_style_or("LOG_STYLE", "always");
 
     env_logger::init_from_env(env);
