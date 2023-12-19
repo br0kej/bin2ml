@@ -313,7 +313,7 @@ enum Commands {
         just_hash_value: bool,
 
         /// The filepath_format of the dataset
-        #[arg(long,value_parser = clap::builder::PossibleValuesParser::new(["cisco", "binkit"])
+        #[arg(long,value_parser = clap::builder::PossibleValuesParser::new(["cisco", "binkit", "trex"])
         .map(|s| s.parse::<String>().unwrap()))]
         filepath_format: String,
     },
@@ -628,6 +628,9 @@ fn main() {
                                 exit(1)
                             };
 
+                            if with_features & metadata_type.is_none() {
+                                error!("with features requires metadata_type to be set")
+                            }
                             let mut metadata_paths_vec = get_json_paths_from_dir(
                                 metadata_path.as_ref().unwrap(),
                                 Some(metadata_type.as_ref().unwrap().to_string()),

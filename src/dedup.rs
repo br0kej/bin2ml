@@ -370,6 +370,18 @@ impl CGCorpus {
             .unwrap()
             .to_string()
     }
+
+    fn get_binary_name_trex(filepath: &String) -> String {
+        // Example: arm-32_binutils-2.34-O0_ar_cg-onehopcgcallers-meta
+        let binary_intermediate = Path::new(filepath).parent().unwrap().file_name().unwrap();
+        binary_intermediate
+            .to_string_lossy()
+            .split('_')
+            .rev()
+            .nth(2)
+            .unwrap()
+            .to_string()
+    }
     pub fn process_corpus(self) {
         let mut fp_binaries = Vec::new();
         // Process the file paths to get the associated binary of each path
@@ -378,6 +390,7 @@ impl CGCorpus {
             let binary = match self.filepath_format.as_str() {
                 "cisco" => Self::get_binary_name_cisco(file),
                 "binkit" => Self::get_binary_name_binkit(file),
+                "trex" => Self::get_binary_name_trex(file),
                 _ => unreachable!(),
             };
             debug!("Extracted Binary Name: {:?} from {:?}", binary, file);
@@ -463,7 +476,6 @@ impl CGCorpus {
 }
 
 mod tests {
-
     #[test]
     fn test_binkit_binary_extraction() {
         assert_eq!(
@@ -517,6 +529,36 @@ mod tests {
 ".to_string(),
             ),
             "unrar",
+        );
+    }
+
+    #[test]
+    fn test_trex_binary_extraction() {
+        assert_eq!(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
+                &"arm-32_binutils-2.34-O0_elfedit_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json".to_string()
+            ),
+            "elfedit"
+        );
+
+        assert_eq!(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
+                &"arm-32_binutils-2.34-O0_objdump_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json".to_string()
+            ),
+            "objdump"  
+        );
+        assert_eq!(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
+                &"arm-32_binutils-2.34-O0_nm-new_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json".to_string()
+            ),
+            "nm-new"
+        );
+        // __ for c++ bins that sometimes crop up
+        assert_eq!(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
+                &"arm-32_binutils-2.34-O0_nm-new_cg-onehopcgcallers-meta/sym.dummy___func__-onehopcgcallers-meta.json".to_string()
+            ),
+            "nm-new"
         );
     }
 }
