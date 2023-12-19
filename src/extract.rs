@@ -437,8 +437,9 @@ impl FileToBeProcessed {
 
     fn get_function_name_list(&self, r2p: &mut R2Pipe) -> Vec<AFLJFuncDetails> {
         info!("Getting function information from binary");
-        let json = r2p.cmd("aflj").expect("aflj command failed");
-        trace!("{:?}", json);
+        let json = r2p
+            .cmd("aflj")
+            .expect(&format!("aflj command failed for {}", self.file_path));
         let json_obj: Vec<AFLJFuncDetails> = serde_json::from_str(&json)
             .expect(&format!("Unable to convert to JSON object! - {}", json));
 
