@@ -33,9 +33,9 @@ pub enum NodeType {
 #[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize, EnumAsInner)]
 #[serde(untagged)]
 pub enum CallGraphNodeTypes {
-    CGName(CallGraphFuncNameNode),
-    CGMeta(CallGraphFuncWithMetadata),
     TikNib(CallGraphTikNibFeatures),
+    CGMeta(CallGraphFuncWithMetadata),
+    CGName(CallGraphFuncNameNode),
 }
 
 #[derive(Default, Copy, Debug, Clone, PartialEq, Serialize, Deserialize)]

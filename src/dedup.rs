@@ -371,17 +371,6 @@ impl CGCorpus {
             .to_string()
     }
 
-    fn get_binary_name_trex(filepath: &String) -> String {
-        // Example: arm-32_binutils-2.34-O0_ar_cg-onehopcgcallers-meta
-        let binary_intermediate = Path::new(filepath).parent().unwrap().file_name().unwrap();
-        binary_intermediate
-            .to_string_lossy()
-            .split('_')
-            .rev()
-            .nth(2)
-            .unwrap()
-            .to_string()
-    }
     pub fn process_corpus(self) {
         let mut fp_binaries = Vec::new();
         // Process the file paths to get the associated binary of each path
@@ -390,10 +379,10 @@ impl CGCorpus {
             let binary = match self.filepath_format.as_str() {
                 "cisco" => Self::get_binary_name_cisco(file),
                 "binkit" => Self::get_binary_name_binkit(file),
-                "trex" => Self::get_binary_name_trex(file),
+                "trex" => Self::get_binary_name_binkit(file),
                 _ => unreachable!(),
             };
-            debug!("Extracted Binary Name: {:?} from {:?}", binary, file);
+            trace!("Extracted Binary Name: {:?} from {:?}", binary, file);
             fp_binaries.push(binary)
         }
 
@@ -412,16 +401,15 @@ impl CGCorpus {
             .progress()
             .enumerate()
             .for_each(|(idx, fp_subset)| {
-                let mut subset_loaded_data: Vec<std::option::Option<NetworkxDiGraph<_>>> =
-                    Vec::new();
+                let mut subset_loaded_data: Vec<Option<NetworkxDiGraph<_>>> = Vec::new();
 
                 for ele in fp_subset.iter() {
                     let data =
                         read_to_string(ele).expect(&format!("Unable to read file - {:?}", ele));
-
                     let json: NetworkxDiGraph<CallGraphNodeTypes> =
                         serde_json::from_str::<NetworkxDiGraph<CallGraphNodeTypes>>(&data)
                             .expect(&format!("Unable to load function data from {}", ele));
+                    debug!("{:?}", json);
 
                     if !json.nodes.is_empty() {
                         subset_loaded_data.push(Some(json))
@@ -559,6 +547,11 @@ mod tests {
                 &"arm-32_binutils-2.34-O0_nm-new_cg-onehopcgcallers-meta/sym.dummy___func__-onehopcgcallers-meta.json".to_string()
             ),
             "nm-new"
+        );
+
+        assert_eq!(
+            crate::dedup::CGCorpus::get_binary_name_binkit(&"fast-disk/Dataset-2/cgs/x86-32_coreutils-8.32-O1_stat_cg-onehopcgcallers-meta/main-onehopcgcallers-meta.json".to_string()),
+            "stat"
         );
     }
 }
