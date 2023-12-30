@@ -158,28 +158,13 @@ impl AGCJFunctionCallGraphs {
                 if !import_object.is_empty() {
                     trace!("Import Object: {:?}", import_object);
                     for entry in import_object {
-                        for ele in entry.imports.as_ref().unwrap().iter() {
+                        for importee in entry.imports.as_ref().unwrap().iter() {
                             if !include_unk {
-                                if !ele.starts_with("unk.") {
-                                    let callee = graph.add_node(ele.clone());
-                                    let import_node_index =
-                                        graph.node_indices().find(|i| &graph[*i] == import);
-
-                                    trace!(
-                                        "{:?} ({:?}) -> {:?} ({:?})",
-                                        import,
-                                        import_node_index,
-                                        ele,
-                                        callee
-                                    );
-                                    graph.update_edge(import_node_index.unwrap(), callee, 0);
+                                if !importee.starts_with("unk.") {
+                                    self.process_callee(graph, import, importee)
                                 }
                             } else {
-                                let callee = graph.add_node(ele.clone());
-                                let import_node_index =
-                                    graph.node_indices().find(|i| &graph[*i] == import).unwrap();
-                                trace!("{:?} -> {:?}", import, ele);
-                                graph.update_edge(import_node_index, callee, 0);
+                                self.process_callee(graph, import, importee)
                             }
                         }
                     }
@@ -188,6 +173,18 @@ impl AGCJFunctionCallGraphs {
         }
     }
 
+    fn process_callee(&self, graph: &mut Graph<String, u32>, import: &String, importee: &String) {
+        let import_node_index =
+        graph.node_indices().find(|i| &graph[*i] == import).unwrap();
+        let importee_node_index = graph.node_indices().find(|i| &graph[*i] == importee);
+        if importee_node_index.is_some() {
+        trace!("Importee Present - Import -> Ele: {:?} -> {:?}", import, importee);
+        graph.update_edge(import_node_index, importee_node_index.unwrap(), 0);
+        } else {
+        let importee_node_index = graph.add_node(importee.clone());
+        trace!("Importee Not Present - Import -> Ele: {:?} -> {:?}", import, importee);
+        graph.update_edge(import_node_index, importee_node_index, 0);
+        }}
     fn get_target_func_callers(
         &self,
         global_cg: &AGCJFile,
@@ -373,4 +370,92 @@ impl AGCJFunctionCallGraphs {
             self.graph_to_json_func_node(binary_name, output_path, networkx_graph, type_suffix)
         };
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use env_logger;
+    use crate::files::AGCJFile;
+
+    fn return_test_file_oject() -> AGCJFile {
+        let mut call_graph_file = AGCJFile {
+            filename: "test-files/ls_cg.json".to_string(),
+            function_call_graphs: None,
+            output_path: "".to_string(),
+            function_metadata: None,
+            include_unk: false,
+        };
+
+        call_graph_file.load_and_deserialize().expect("Failed to load data");
+        call_graph_file
+    }
+    #[test]
+    fn test_function_call_graph_without_unks() {
+        let mut call_graph_file = return_test_file_oject();
+
+        // Get main function - No Unks
+        let raw_call_graph_data = &call_graph_file.function_call_graphs.clone().unwrap()[0];
+        assert_eq!(raw_call_graph_data.name, "main".to_string());
+        let local_call_graph = raw_call_graph_data.build_local_call_graph(&true);
+        assert_eq!(local_call_graph.node_count(), 20);
+        assert_eq!(local_call_graph.edge_count(), 19);
+        let local_call_graph = raw_call_graph_data.build_local_call_graph(&false);
+        assert_eq!(local_call_graph.node_count(), 20);
+        assert_eq!(local_call_graph.edge_count(), 19);
+    }
+
+    #[test]
+    fn test_function_call_graph_with_callees_without_unks() {
+        let mut call_graph_file = return_test_file_oject();
+
+        // Unk False
+        let raw_call_graph_data = &call_graph_file.function_call_graphs.clone().unwrap()[0];
+        assert_eq!(raw_call_graph_data.name, "main".to_string());
+        let mut local_call_graph = raw_call_graph_data.build_local_call_graph(&true);
+        raw_call_graph_data.get_callees_of_callees(&call_graph_file, &mut local_call_graph, &true);
+        assert_eq!(local_call_graph.node_count(), 37);
+        assert_eq!(local_call_graph.edge_count(), 39);
+
+        // Unk True
+        let mut local_call_graph = raw_call_graph_data.build_local_call_graph(&false);
+        raw_call_graph_data.get_callees_of_callees(&call_graph_file, &mut local_call_graph, &false);
+        assert_eq!(local_call_graph.node_count(), 37);
+        assert_eq!(local_call_graph.edge_count(), 39);
+    }
+
+    #[test]
+    fn test_function_call_graph_with_unks() {
+        let call_graph_file = return_test_file_oject();
+
+        // sym.func.100004d11 - One unknown
+        let raw_call_graph_data = &call_graph_file.function_call_graphs.unwrap()[2];
+        assert_eq!(raw_call_graph_data.name, "sym.func.100004d11".to_string());
+
+        let local_call_graph = raw_call_graph_data.build_local_call_graph(&true);
+        assert_eq!(local_call_graph.node_count(), 26);
+        assert_eq!(local_call_graph.edge_count(), 25);
+        let local_call_graph = raw_call_graph_data.build_local_call_graph(&false);
+        assert_eq!(local_call_graph.node_count(), 25);
+        assert_eq!(local_call_graph.edge_count(), 24);
+    }
+
+    #[test]
+    fn test_function_call_graph_with_callees_with_unks() {
+        let mut call_graph_file = return_test_file_oject();
+
+        // sym.func.100004d11 - One unknown
+        let raw_call_graph_data = &call_graph_file.function_call_graphs.clone().unwrap()[2];
+        assert_eq!(raw_call_graph_data.name, "sym.func.100004d11".to_string());
+
+        let mut local_call_graph = raw_call_graph_data.build_local_call_graph(&true);
+        raw_call_graph_data.get_callees_of_callees(&call_graph_file, &mut local_call_graph, &true);
+        assert_eq!(local_call_graph.node_count(), 31);
+        assert_eq!(local_call_graph.edge_count(), 33);
+
+        let mut local_call_graph = raw_call_graph_data.build_local_call_graph(&false);
+        raw_call_graph_data.get_callees_of_callees(&call_graph_file, &mut local_call_graph, &false);
+        assert_eq!(local_call_graph.node_count(), 30);
+        assert_eq!(local_call_graph.edge_count(), 32);
+    }
+
 }
