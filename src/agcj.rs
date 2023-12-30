@@ -458,4 +458,25 @@ mod tests {
         assert_eq!(local_call_graph.edge_count(), 32);
     }
 
+    #[test]
+    fn test_function_call_graph_callees_and_callers_with_unks() {
+        let mut call_graph_file = return_test_file_oject();
+
+        // sym.func.100004d11 - One unknown
+        let raw_call_graph_data = &call_graph_file.function_call_graphs.clone().unwrap()[2];
+        assert_eq!(raw_call_graph_data.name, "sym.func.100004d11".to_string());
+
+        let mut local_call_graph = raw_call_graph_data.build_local_call_graph(&true);
+        raw_call_graph_data.get_callees_of_callees(&call_graph_file, &mut local_call_graph, &true);
+        raw_call_graph_data.get_target_func_callers(&call_graph_file, &mut local_call_graph, &true);
+        assert_eq!(local_call_graph.node_count(), 32);
+        assert_eq!(local_call_graph.edge_count(), 34);
+
+        let mut local_call_graph = raw_call_graph_data.build_local_call_graph(&false);
+        raw_call_graph_data.get_callees_of_callees(&call_graph_file, &mut local_call_graph, &false);
+        raw_call_graph_data.get_target_func_callers(&call_graph_file, &mut local_call_graph, &false);
+        assert_eq!(local_call_graph.node_count(), 31);
+        assert_eq!(local_call_graph.edge_count(), 33);
+    }
+
 }
