@@ -174,17 +174,26 @@ impl AGCJFunctionCallGraphs {
     }
 
     fn process_callee(&self, graph: &mut Graph<String, u32>, import: &String, importee: &String) {
-        let import_node_index =
-        graph.node_indices().find(|i| &graph[*i] == import).unwrap();
+        let import_node_index = graph.node_indices().find(|i| &graph[*i] == import).unwrap();
         let importee_node_index = graph.node_indices().find(|i| &graph[*i] == importee);
-        if importee_node_index.is_some() {
-        trace!("Importee Present - Import -> Ele: {:?} -> {:?}", import, importee);
-        graph.update_edge(import_node_index, importee_node_index.unwrap(), 0);
+
+        if let Some(importee_node_index_value) = importee_node_index {
+            trace!(
+                "Importee Present - Import -> Ele: {:?} -> {:?}",
+                import,
+                importee
+            );
+            graph.update_edge(import_node_index, importee_node_index_value, 0);
         } else {
-        let importee_node_index = graph.add_node(importee.clone());
-        trace!("Importee Not Present - Import -> Ele: {:?} -> {:?}", import, importee);
-        graph.update_edge(import_node_index, importee_node_index, 0);
-        }}
+            let importee_node_index = graph.add_node(importee.clone());
+            trace!(
+                "Importee Not Present - Import -> Ele: {:?} -> {:?}",
+                import,
+                importee
+            );
+            graph.update_edge(import_node_index, importee_node_index, 0);
+        }
+    }
     fn get_target_func_callers(
         &self,
         global_cg: &AGCJFile,
@@ -374,8 +383,8 @@ impl AGCJFunctionCallGraphs {
 
 #[cfg(test)]
 mod tests {
-    use env_logger;
     use crate::files::AGCJFile;
+    use env_logger;
 
     fn return_test_file_oject() -> AGCJFile {
         let mut call_graph_file = AGCJFile {
@@ -386,7 +395,9 @@ mod tests {
             include_unk: false,
         };
 
-        call_graph_file.load_and_deserialize().expect("Failed to load data");
+        call_graph_file
+            .load_and_deserialize()
+            .expect("Failed to load data");
         call_graph_file
     }
     #[test]
@@ -474,9 +485,12 @@ mod tests {
 
         let mut local_call_graph = raw_call_graph_data.build_local_call_graph(&false);
         raw_call_graph_data.get_callees_of_callees(&call_graph_file, &mut local_call_graph, &false);
-        raw_call_graph_data.get_target_func_callers(&call_graph_file, &mut local_call_graph, &false);
+        raw_call_graph_data.get_target_func_callers(
+            &call_graph_file,
+            &mut local_call_graph,
+            &false,
+        );
         assert_eq!(local_call_graph.node_count(), 31);
         assert_eq!(local_call_graph.edge_count(), 33);
     }
-
 }

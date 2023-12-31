@@ -431,8 +431,6 @@ impl AGFJFunc {
             basic_block_features.push(feats)
         }
 
-        
-
         TikNibFunc::from((&self.name, basic_block_features))
     }
 }
