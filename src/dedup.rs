@@ -1,4 +1,4 @@
-use crate::networkx::{CallGraphNodeTypes, NetworkxDiGraph};
+use crate::networkx::{CallGraphFuncWithMetadata, CallGraphNodeTypes, NetworkxDiGraph};
 use anyhow::Result;
 use indicatif::ParallelProgressIterator;
 use itertools::Itertools;
@@ -401,13 +401,15 @@ impl CGCorpus {
             .progress()
             .enumerate()
             .for_each(|(idx, fp_subset)| {
-                let mut subset_loaded_data: Vec<Option<NetworkxDiGraph<_>>> = Vec::new();
+                let mut subset_loaded_data: Vec<
+                    Option<NetworkxDiGraph<CallGraphFuncWithMetadata>>,
+                > = Vec::new();
 
                 for ele in fp_subset.iter() {
                     let data =
                         read_to_string(ele).expect(&format!("Unable to read file - {:?}", ele));
-                    let json: NetworkxDiGraph<CallGraphNodeTypes> =
-                        serde_json::from_str::<NetworkxDiGraph<CallGraphNodeTypes>>(&data)
+                    let json: NetworkxDiGraph<CallGraphFuncWithMetadata> =
+                        serde_json::from_str::<NetworkxDiGraph<CallGraphFuncWithMetadata>>(&data)
                             .expect(&format!("Unable to load function data from {}", ele));
                     debug!("{:?}", json);
 
@@ -431,7 +433,7 @@ impl CGCorpus {
     }
     pub fn save_corpus(
         &self,
-        subset_loaded_data: Vec<NetworkxDiGraph<CallGraphNodeTypes>>,
+        subset_loaded_data: Vec<NetworkxDiGraph<CallGraphFuncWithMetadata>>,
         fp_subset: &[String],
     ) {
         subset_loaded_data
@@ -443,17 +445,18 @@ impl CGCorpus {
                     .rev()
                     .take(2)
                     .collect::<Vec<_>>();
-
+                trace!("Fixed Path (First Pass): {:?}", fixed_path);
                 let fixed_path = fixed_path
                     .iter()
                     .map(|c| c.as_os_str().to_string_lossy().to_string())
                     .rev()
                     .collect::<Vec<String>>();
-
+                trace!("Fixed Path (Second Pass): {:?}", fixed_path);
                 let dirs = format!("{}{}", self.output_path, fixed_path[0]);
                 fs::create_dir_all(&dirs).expect("Failed to create output directory!");
 
                 let fixed_path = format!("{}/{}", dirs, fixed_path[1]);
+                trace!("Fixed Path (Final Pass): {:?}", fixed_path);
                 serde_json::to_writer(
                     &File::create(fixed_path).expect("Failed to create writer"),
                     &data_ele,
@@ -464,6 +467,8 @@ impl CGCorpus {
 }
 
 mod tests {
+    use itertools::assert_equal;
+
     #[test]
     fn test_binkit_binary_extraction() {
         assert_eq!(
@@ -553,5 +558,8 @@ mod tests {
             crate::dedup::CGCorpus::get_binary_name_binkit(&"fast-disk/Dataset-2/cgs/x86-32_coreutils-8.32-O1_stat_cg-onehopcgcallers-meta/main-onehopcgcallers-meta.json".to_string()),
             "stat"
         );
+
+        assert_eq!(crate::dedup::CGCorpus::get_binary_name_binkit(&"/fast-disk/processed_datasets/Dataset-2/arm-32_binutils-2.34-O0_addr2line_cg-onehopcgcallers-meta/sym.adjust_relative_path-onehopcgcallers-meta.json".to_string()),
+        "addr2line")
     }
 }
