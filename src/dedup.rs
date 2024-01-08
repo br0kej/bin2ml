@@ -425,7 +425,7 @@ impl CGCorpus {
                 subset_loaded_data.push(None)
             }
         }
-        subset_loaded_data.retain(|c| c.is_some());
+        subset_loaded_data
     }
 
     pub fn process_corpus(self) {
@@ -610,11 +610,9 @@ mod tests {
         CGCorpus::dedup_corpus(&mut subset_loaded, &mut unique_binary_fps[0]);
 
         // Subset
-        println!("{:?}", subset_loaded);
         assert_eq!(subset_loaded.len(), 4);
 
         // Filepaths
-        println!("{:?}", unique_binary_fps[0]);
         assert_eq!(unique_binary_fps[0].len(), 4);
 
         // Check first node - should be function name
@@ -638,9 +636,39 @@ mod tests {
         let subset_loaded: Vec<NetworkxDiGraph<_>> = subset_loaded.into_iter().flatten().collect();
 
         // Save corpus!
-        corpus.save_corpus(subset_loaded, &mut unique_binary_fps[0])
+        corpus.save_corpus(subset_loaded, &mut unique_binary_fps[0]);
 
         // Check the files saved!
+        for file in WalkDir::new(&corpus.output_path)
+            .into_iter()
+            .filter_map(|file| file.ok())
+        {
+            if file.path().to_string_lossy().ends_with(".json") {
+                let data = read_to_string(file.path())
+                    .expect(&format!("Unable to read file - {:?}", file));
+                let json: NetworkxDiGraph<CallGraphFuncWithMetadata> =
+                    serde_json::from_str::<NetworkxDiGraph<CallGraphFuncWithMetadata>>(&data)
+                        .expect(&format!("Unable to load function data from {:?}", file));
+
+                let filepath_func_name: Vec<_> = Path::new(file.file_name())
+                    .components()
+                    .rev()
+                    .take(1)
+                    .collect::<Vec<_>>();
+
+                let filepath_func_name = filepath_func_name[0]
+                    .as_os_str()
+                    .to_string_lossy()
+                    .to_string();
+
+                let filepath_func_name = filepath_func_name.split("-").next().unwrap();
+
+                assert_eq!(json.nodes[0].func_name, filepath_func_name)
+            }
+        }
+
+        // clean up
+        fs::remove_dir_all(&corpus.output_path).expect("Unable to remove directory!");
     }
 
     // Test binary name extraction
