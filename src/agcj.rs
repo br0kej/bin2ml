@@ -230,7 +230,7 @@ impl AGCJFunctionCallGraphs {
         binary_name: &str,
         with_metadata: &bool,
         include_unk: &bool,
-        node_feature_type: String,
+        node_feature_type: Option<String>,
     ) {
         let graph = self.build_local_call_graph(include_unk);
         debug!("{:?}", graph);
@@ -254,7 +254,7 @@ impl AGCJFunctionCallGraphs {
         binary_name: &str,
         with_metadata: &bool,
         include_unk: &bool,
-        node_feature_type: String,
+        node_feature_type: Option<String>,
     ) {
         let mut graph = self.build_local_call_graph(include_unk);
         self.get_callees_of_callees(global_cg, &mut graph, include_unk);
@@ -277,7 +277,7 @@ impl AGCJFunctionCallGraphs {
         binary_name: &str,
         with_metadata: &bool,
         include_unk: &bool,
-        node_feature_type: String,
+        node_feature_type: Option<String>,
     ) {
         let mut graph = self.build_local_call_graph(include_unk);
         self.get_target_func_callers(global_cg, &mut graph, include_unk);
@@ -300,7 +300,7 @@ impl AGCJFunctionCallGraphs {
         binary_name: &str,
         with_metadata: &bool,
         include_unk: &bool,
-        node_feature_type: String,
+        node_feature_type: Option<String>,
     ) {
         let mut graph = self.build_local_call_graph(include_unk);
 
@@ -330,15 +330,15 @@ impl AGCJFunctionCallGraphs {
         binary_name: &str,
         output_path: &String,
         with_metadata: &bool,
-        node_feature_type: String,
+        node_feature_type: Option<String>,
         type_suffix: &str,
     ) {
         // TODO: It look likes in downstream datasets, there are cases where graphs with a single node
         // can make it through and dont't play very well with the loading in PyG.
         // Need to devise a plan to format these correctly so they can still be loaded!
         // One option may be to include a self loop - Or probably better, just bounce em'
-        if *with_metadata {
-            if node_feature_type == "finfo" {
+        if *with_metadata & node_feature_type.is_some() {
+            if node_feature_type.as_ref().unwrap() == "finfo" {
                 let type_suffix = type_suffix.to_owned() + "-meta";
                 let networkx_graph = NetworkxDiGraph::from((
                     graph,
@@ -355,7 +355,7 @@ impl AGCJFunctionCallGraphs {
                     networkx_graph,
                     type_suffix.as_str(),
                 )
-            } else if node_feature_type == "tiknib" {
+            } else if node_feature_type.as_ref().unwrap() == "tiknib" {
                 let type_suffix = type_suffix.to_owned() + "-tiknib";
                 let networkx_graph: NetworkxDiGraph<CallGraphTikNibFeatures> =
                     NetworkxDiGraph::from((

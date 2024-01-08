@@ -467,7 +467,6 @@ impl CGCorpus {
 }
 
 mod tests {
-    use itertools::assert_equal;
 
     #[test]
     fn test_binkit_binary_extraction() {

@@ -493,7 +493,7 @@ fn main() {
                                     &file.filename,
                                     with_features,
                                     &file.include_unk,
-                                    metadata_type.clone().unwrap(),
+                                    metadata_type.clone(),
                                 );
                             }
                         } else if graph_data_type == DataType::OneHopCg {
@@ -504,7 +504,7 @@ fn main() {
                                     &file.filename,
                                     with_features,
                                     &file.include_unk,
-                                    metadata_type.clone().unwrap(),
+                                    metadata_type.clone(),
                                 );
                             }
                         } else if graph_data_type == DataType::CgWithCallers {
@@ -515,7 +515,7 @@ fn main() {
                                     &file.filename,
                                     with_features,
                                     &file.include_unk,
-                                    metadata_type.clone().unwrap(),
+                                    metadata_type.clone(),
                                 );
                             }
                         } else if graph_data_type == DataType::OneHopCgWithcallers {
@@ -526,7 +526,7 @@ fn main() {
                                     &file.filename,
                                     with_features,
                                     &file.include_unk,
-                                    metadata_type.clone().unwrap(),
+                                    metadata_type.clone(),
                                 );
                             }
                         }
@@ -545,9 +545,8 @@ fn main() {
                             file_paths_vec.len()
                         );
                         // if without metadata
-                        if !with_features {
+                        if !with_features & metadata_type.is_none() {
                             debug!("Creating call graphs without any node features");
-
                             file_paths_vec.par_iter().progress().for_each(|path| {
                                 let suffix = graph_type.to_owned().to_string();
                                 let full_output_path = PathBuf::from(get_save_file_path(
@@ -576,7 +575,7 @@ fn main() {
                                                     &file.filename,
                                                     with_features,
                                                     &file.include_unk,
-                                                    metadata_type.clone().unwrap(),
+                                                    None,
                                                 );
                                             }
                                             DataType::OneHopCg => {
@@ -586,7 +585,7 @@ fn main() {
                                                     &file.filename,
                                                     with_features,
                                                     &file.include_unk,
-                                                    metadata_type.clone().unwrap(),
+                                                    None,
                                                 );
                                             }
                                             DataType::CgWithCallers => {
@@ -596,7 +595,7 @@ fn main() {
                                                     &file.filename,
                                                     with_features,
                                                     &file.include_unk,
-                                                    metadata_type.clone().unwrap(),
+                                                    None,
                                                 );
                                             }
                                             DataType::OneHopCgWithcallers => {
@@ -606,7 +605,7 @@ fn main() {
                                                     &file.filename,
                                                     with_features,
                                                     &file.include_unk,
-                                                    metadata_type.clone().unwrap(),
+                                                    None,
                                                 );
                                             }
                                             _ => unreachable!("Not possible hopefully! :O"),
@@ -697,13 +696,13 @@ fn main() {
                                                 &file.filename,
                                                 with_features,
                                                 &file.include_unk,
-                                                metadata_type.clone().unwrap()
+                                                metadata_type.clone()
                                             );
                                         }
                                 } else if graph_data_type == DataType::OneHopCg {
                                     debug!("Generating one hop call graphs using loaded cgs + metadata");
                                     for fcg in file.function_call_graphs.as_ref().unwrap() {
-                                        fcg.one_hop_to_petgraph(&file, &file.output_path, &file.filename, with_features, &file.include_unk, metadata_type.clone().unwrap());
+                                        fcg.one_hop_to_petgraph(&file, &file.output_path, &file.filename, with_features, &file.include_unk, metadata_type.clone());
                                     }
                                 } else if graph_data_type == DataType::CgWithCallers {
                                     debug!("Generating call graphs with callers using loaded cgs + metadata");
@@ -714,7 +713,7 @@ fn main() {
                                             &file.filename,
                                             with_features,
                                             &file.include_unk,
-                                            metadata_type.clone().unwrap()
+                                            metadata_type.clone()
                                         );
                                     }
                                 } else if graph_data_type == DataType::OneHopCgWithcallers {
@@ -726,7 +725,7 @@ fn main() {
                                             &file.filename,
                                             with_features,
                                             &file.include_unk,
-                                            metadata_type.clone().unwrap()
+                                            metadata_type.clone()
                                         );
                                     }
                                 }
