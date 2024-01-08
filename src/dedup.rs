@@ -312,6 +312,12 @@ impl CGCorpus {
 
         info!("Returning One Hop CG Corpus Struct");
 
+        let output_path = if output_path.ends_with("/") {
+            output_path.to_owned()
+        } else {
+            output_path.to_owned() + &*"/".to_string()
+        };
+
         Ok(CGCorpus {
             filepaths,
             output_path: output_path.to_string(),
@@ -371,7 +377,7 @@ impl CGCorpus {
             .to_string()
     }
 
-    pub fn process_corpus(self) {
+    fn extract_binary_from_fps(&self) -> Vec<String> {
         let mut fp_binaries = Vec::new();
         // Process the file paths to get the associated binary of each path
         info!("Processing Filepaths to get binaries");
@@ -385,45 +391,61 @@ impl CGCorpus {
             trace!("Extracted Binary Name: {:?} from {:?}", binary, file);
             fp_binaries.push(binary)
         }
+        fp_binaries
+    }
 
+    fn get_unique_binary_fps(&self, fp_binaries: Vec<String>) -> Vec<Vec<String>> {
         // Generate binary specific filepath vectors
-        let unqiue_binaries: Vec<_> = fp_binaries.iter().unique().collect();
-        let mut unique_binaries_fps: Vec<Vec<String>> = vec![Vec::new(); unqiue_binaries.len()];
+        let unique_binaries: Vec<_> = fp_binaries.iter().unique().collect();
+        let mut unique_binaries_fps: Vec<Vec<String>> = vec![Vec::new(); unique_binaries.len()];
 
         for (file, binary) in self.filepaths.iter().zip(fp_binaries.iter()) {
-            unique_binaries_fps[unqiue_binaries.iter().position(|&x| x == binary).unwrap()]
+            unique_binaries_fps[unique_binaries.iter().position(|&x| x == binary).unwrap()]
                 .push(file.clone());
         }
 
+        unique_binaries_fps
+    }
+
+    fn load_subset(
+        &self,
+        fp_subset: &Vec<String>,
+    ) -> Vec<Option<NetworkxDiGraph<CallGraphFuncWithMetadata>>> {
+        let mut subset_loaded_data = Vec::new();
+        for ele in fp_subset.iter() {
+            let data = read_to_string(ele).expect(&format!("Unable to read file - {:?}", ele));
+            let json: NetworkxDiGraph<CallGraphFuncWithMetadata> =
+                serde_json::from_str::<NetworkxDiGraph<CallGraphFuncWithMetadata>>(&data)
+                    .expect(&format!("Unable to load function data from {}", ele));
+            debug!("{:?}", json);
+
+            if !json.nodes.is_empty() {
+                subset_loaded_data.push(Some(json))
+            } else {
+                subset_loaded_data.push(None)
+            }
+        }
+        subset_loaded_data.retain(|c| c.is_some());
+    }
+
+    pub fn process_corpus(self) {
+        let fp_binaries = self.extract_binary_from_fps();
+
+        // Generate binary specific filepath vectors
+        let mut unique_binaries_fps = self.get_unique_binary_fps(fp_binaries);
+
         info!("Loading the filepaths");
         unique_binaries_fps
-            .par_iter()
+            .par_iter_mut()
             .progress()
             .enumerate()
             .for_each(|(idx, fp_subset)| {
                 let mut subset_loaded_data: Vec<
                     Option<NetworkxDiGraph<CallGraphFuncWithMetadata>>,
-                > = Vec::new();
-
-                for ele in fp_subset.iter() {
-                    let data =
-                        read_to_string(ele).expect(&format!("Unable to read file - {:?}", ele));
-                    let json: NetworkxDiGraph<CallGraphFuncWithMetadata> =
-                        serde_json::from_str::<NetworkxDiGraph<CallGraphFuncWithMetadata>>(&data)
-                            .expect(&format!("Unable to load function data from {}", ele));
-                    debug!("{:?}", json);
-
-                    if !json.nodes.is_empty() {
-                        subset_loaded_data.push(Some(json))
-                    } else {
-                        subset_loaded_data.push(None)
-                    }
-                }
-
-                subset_loaded_data.retain(|c| c.is_some());
+                > = self.load_subset(fp_subset);
 
                 debug!("Starting to deduplicate the corpus - {}", idx);
-                Self::dedup_corpus(&mut subset_loaded_data, &mut fp_subset.to_vec());
+                Self::dedup_corpus(&mut subset_loaded_data, fp_subset);
                 let subset_loaded_data: Vec<NetworkxDiGraph<_>> =
                     subset_loaded_data.into_iter().flatten().collect();
                 debug!("Starting to save - {}", idx);
@@ -434,7 +456,7 @@ impl CGCorpus {
     pub fn save_corpus(
         &self,
         subset_loaded_data: Vec<NetworkxDiGraph<CallGraphFuncWithMetadata>>,
-        fp_subset: &[String],
+        fp_subset: &mut Vec<String>,
     ) {
         subset_loaded_data
             .iter()
@@ -467,7 +489,161 @@ impl CGCorpus {
 }
 
 mod tests {
+    use super::*;
+    use crate::dedup::CGCorpus;
+    use itertools::assert_equal;
+    // Test Dedup on typed CG's
+    #[test]
+    fn test_cg_corpus_gen() {
+        // CG Corpus Generation
+        let corpus = CGCorpus::new(
+            &"test-files/cg_dedup/to_dedup".to_string(),
+            &"test-files/cg_dedup/deduped".to_string(),
+            &"cisco".to_string(),
+        );
+        assert_eq!(corpus.as_ref().unwrap().filepaths.len(), 12);
+        assert_eq!(
+            corpus.as_ref().unwrap().output_path,
+            "test-files/cg_dedup/deduped/".to_string()
+        );
+        assert_eq!(
+            corpus.as_ref().unwrap().filepath_format,
+            "cisco".to_string()
+        );
 
+        let corpus = CGCorpus::new(
+            &"test-files/cg_dedup/to_dedup".to_string(),
+            &"test-files/cg_dedup/deduped/".to_string(),
+            &"cisco".to_string(),
+        );
+        assert_eq!(corpus.as_ref().unwrap().filepaths.len(), 12);
+        assert_eq!(
+            corpus.as_ref().unwrap().output_path,
+            "test-files/cg_dedup/deduped/".to_string()
+        );
+        assert_eq!(
+            corpus.as_ref().unwrap().filepath_format,
+            "cisco".to_string()
+        );
+    }
+
+    #[test]
+    fn test_extract_binary_from_fps() {
+        let corpus = CGCorpus::new(
+            &"test-files/cg_dedup/to_dedup".to_string(),
+            &"test-files/cg_dedup/deduped".to_string(),
+            &"cisco".to_string(),
+        );
+
+        let fp_binaries = corpus.unwrap().extract_binary_from_fps();
+        assert_eq!(fp_binaries.len(), 12);
+        assert_eq!(
+            fp_binaries,
+            vec![
+                "testbin".to_string(),
+                "testbin".to_string(),
+                "testbin".to_string(),
+                "testbin".to_string(),
+                "testbin".to_string(),
+                "testbin".to_string(),
+                "testbin".to_string(),
+                "testbin".to_string(),
+                "testbin2".to_string(),
+                "testbin2".to_string(),
+                "testbin2".to_string(),
+                "testbin2".to_string(),
+            ]
+        )
+    }
+
+    #[test]
+    fn test_get_unique_binary_fps() {
+        let corpus = CGCorpus::new(
+            &"test-files/cg_dedup/to_dedup".to_string(),
+            &"test-files/cg_dedup/deduped".to_string(),
+            &"cisco".to_string(),
+        )
+        .unwrap();
+        let fp_binaries = corpus.extract_binary_from_fps();
+        let unique_binary_fps = corpus.get_unique_binary_fps(fp_binaries);
+
+        assert_eq!(unique_binary_fps.len(), 2);
+        assert_eq!(unique_binary_fps[0].len(), 8);
+        assert_eq!(unique_binary_fps[1].len(), 4);
+    }
+
+    #[test]
+    fn test_processing_unique_binary_collection() {
+        let corpus = CGCorpus::new(
+            &"test-files/cg_dedup/to_dedup".to_string(),
+            &"test-files/cg_dedup/deduped".to_string(),
+            &"cisco".to_string(),
+        )
+        .unwrap();
+        let fp_binaries = corpus.extract_binary_from_fps();
+        let unique_binary_fps = corpus.get_unique_binary_fps(fp_binaries);
+
+        // Load the first collection which has dups
+        let mut subset_loaded = corpus.load_subset(&unique_binary_fps[0]);
+        assert_eq!(subset_loaded.len(), 8);
+        subset_loaded.retain(|c| c.is_some());
+        assert_eq!(subset_loaded.len(), 8);
+    }
+
+    #[test]
+    fn test_dedup_binary_subset() {
+        let corpus = CGCorpus::new(
+            &"test-files/cg_dedup/to_dedup".to_string(),
+            &"test-files/cg_dedup/deduped".to_string(),
+            &"cisco".to_string(),
+        )
+        .unwrap();
+        let fp_binaries = corpus.extract_binary_from_fps();
+        let mut unique_binary_fps = corpus.get_unique_binary_fps(fp_binaries);
+
+        // Load the first collection which has dups
+        let mut subset_loaded = corpus.load_subset(&unique_binary_fps[0]);
+        subset_loaded.retain(|c| c.is_some());
+
+        // Prior to dedup
+        assert_eq!(subset_loaded.len(), 8);
+        CGCorpus::dedup_corpus(&mut subset_loaded, &mut unique_binary_fps[0]);
+
+        // Subset
+        println!("{:?}", subset_loaded);
+        assert_eq!(subset_loaded.len(), 4);
+
+        // Filepaths
+        println!("{:?}", unique_binary_fps[0]);
+        assert_eq!(unique_binary_fps[0].len(), 4);
+
+        // Check first node - should be function name
+        for (loaded_ele, filepath) in subset_loaded.iter().zip(unique_binary_fps[0].iter()) {
+            let loaded_func_name = &loaded_ele.clone().unwrap().nodes[0].func_name;
+            let filepath_func_name: Vec<_> = Path::new(filepath)
+                .components()
+                .rev()
+                .take(1)
+                .collect::<Vec<_>>();
+
+            let filepath_func_name = filepath_func_name[0]
+                .as_os_str()
+                .to_string_lossy()
+                .to_string();
+
+            let filepath_func_name = filepath_func_name.split("-").next().unwrap();
+
+            assert_eq!(loaded_func_name.to_owned(), filepath_func_name)
+        }
+        let subset_loaded: Vec<NetworkxDiGraph<_>> = subset_loaded.into_iter().flatten().collect();
+
+        // Save corpus!
+        corpus.save_corpus(subset_loaded, &mut unique_binary_fps[0])
+
+        // Check the files saved!
+    }
+
+    // Test binary name extraction
     #[test]
     fn test_binkit_binary_extraction() {
         assert_eq!(
