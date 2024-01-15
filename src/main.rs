@@ -133,23 +133,23 @@ enum GenerateSubCommands {
         #[arg(short, long, value_name = "EMBED_DIM")]
         embed_dim: Option<i64>,
 
-        /// Toggle for call graphs to include AFIJ feature subsets
-        #[arg(long, default_value = "false")]
-        with_features: bool,
-
-        /// Filepath to the AFIJ function metadata
-        #[arg(long)]
-        metadata_path: Option<String>,
-
-        /// Include unknown functions
-        #[arg(long, default_value = "false")]
-        include_unk: bool,
-
         /// Num Threads
         #[arg(short, long)]
         num_threads: usize,
 
-        /// Metadata Type
+        /// Toggle for call graphs to include AFIJ feature subsets (For call graphs)
+        #[arg(long, default_value = "false")]
+        with_features: bool,
+
+        /// Filepath to the AFIJ function metadata (For call graphs)
+        #[arg(long)]
+        metadata_path: Option<String>,
+
+        /// Include unknown functions (For call graphs)
+        #[arg(long, default_value = "false")]
+        include_unk: bool,
+
+        /// Metadata Type (For call graphs)
         #[arg(short, long, value_name = "METADATA_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "tiknib"])
         .map(|s| s.parse::<String>().unwrap()),)]
         metadata_type: Option<String>,
