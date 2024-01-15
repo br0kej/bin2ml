@@ -91,11 +91,12 @@ pub struct EsilFuncStringCorpus {
     pub binary_name_index: Vec<String>,
     pub uniq_binaries: Vec<String>,
     pub arch_index: Vec<String>,
+    pub output_path: String,
 }
 
 /// A collection of processed Esil Function String files
 impl EsilFuncStringCorpus {
-    pub fn new(directory: &String) -> Result<EsilFuncStringCorpus> {
+    pub fn new(directory: &String, output_path: &String) -> Result<EsilFuncStringCorpus> {
         let mut filepaths = Vec::new();
         let mut binary_name_index = Vec::new();
         let mut uniq_binaries = Vec::new();
@@ -123,12 +124,20 @@ impl EsilFuncStringCorpus {
                 }
             }
         }
+
+        let output_path: String = if !output_path.ends_with("/") {
+            format!("{}{}", output_path, "/")
+        } else {
+            output_path.to_string()
+        };
+
         Ok(EsilFuncStringCorpus {
             loaded_data: None,
             filepaths,
             binary_name_index,
             uniq_binaries,
             arch_index,
+            output_path,
         })
     }
 
@@ -271,7 +280,7 @@ impl EsilFuncStringCorpus {
 
         if !just_stats {
             let uniques_to_drop = json!(unique_func_hash_tuples);
-            let fname_string = format!("{}-dedup.json", &target_binary_name);
+            let fname_string = format!("{}{}-dedup.json", self.output_path, &target_binary_name);
             serde_json::to_writer(
                 &File::create(fname_string).expect("Failed to create writer"),
                 &uniques_to_drop,

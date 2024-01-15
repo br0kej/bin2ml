@@ -1021,51 +1021,11 @@ fn main() {
                     .unwrap();
 
                 warn!("This only supports the Cisco Talos Binary Sim Dataset naming convention");
-                let corpus = EsilFuncStringCorpus::new(filename).unwrap();
+                let corpus = EsilFuncStringCorpus::new(filename, output_path).unwrap();
                 corpus.uniq_binaries.par_iter().progress().for_each(|name| {
                     corpus.dedup_subset(name, *print_stats, *just_stats, *just_hash_value)
                 });
             }
-        }, /*
-               filename,
-               datatype,
-               output_path,
-               print_stats,
-               just_stats,
-               num_threads,
-               just_hash_value,
-               filepath_format,
-               node_feature_type,
-           } => {
-               rayon::ThreadPoolBuilder::new()
-                   .num_threads(*num_threads)
-                   .build_global()
-                   .unwrap();
-
-               if datatype == "esilfstr" {
-                   warn!("This only supports the Cisco Talos Binary Sim Dataset naming convention");
-                   let corpus = EsilFuncStringCorpus::new(filename).unwrap();
-                   corpus.uniq_binaries.par_iter().progress().for_each(|name| {
-                       corpus.dedup_subset(name, *print_stats, *just_stats, *just_hash_value)
-                   });
-               } else if datatype == "cgs" {
-                   warn!("This only supports the Cisco Talos Binary Sim Dataset naming convention");
-                   if Path::new(filename).exists() {
-                       let node_feature_type =
-                           CallGraphNodeFeatureType::new(&node_feature_type.as_ref().unwrap());
-                       info!("Starting duplication process for One Hop Call Graphs");
-                       let corpus = CGCorpus::new(
-                           filename,
-                           output_path,
-                           &filepath_format.as_ref().unwrap(),
-                           node_feature_type,
-                       )
-                       .unwrap();
-                       corpus.process_corpus();
-                   } else {
-                       error!("Filename provided does not exist! - {}", filename)
-                   }
-               }
-           }*/
+        },
     }
 }
