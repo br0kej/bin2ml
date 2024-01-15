@@ -284,16 +284,44 @@ enum Commands {
     },
     /// Utility to remove duplicate entries within processed data
     Dedup {
+        #[command(subcommand)]
+        subcommands: DedupSubCommands,
+    },
+}
+
+#[derive(Subcommand, Clone)]
+enum DedupSubCommands {
+    /// De-Dup generated call graphs
+    CGS {
         /// The filename to dedup
         #[arg(short, long, value_name = "FILENAME")]
         filename: String,
 
-        /// Type of dedup
-        #[arg(short, long, value_name = "TYPE", value_parser = clap::builder::PossibleValuesParser::new(["esilfstr", "cgs"])
-        .map(|s| s.parse::<String>().unwrap()))]
-        datatype: String,
+        /// Output path to save dedup corpus
+        #[arg(short, long, value_name = "OUTPUT_PATH")]
+        output_path: String,
 
-        /// Output path to save dedup corpus - Only works for onehopcgs atm
+        /// Number of threads to use with Rayon
+        #[arg(short, long, value_name = "NUM_THREADS", default_value = "2")]
+        num_threads: usize,
+
+        /// The filepath_format of the dataset
+        #[arg(long,value_parser = clap::builder::PossibleValuesParser::new(["cisco", "binkit", "trex"])
+        .map(|s| s.parse::<String>().unwrap()), required = true)]
+        filepath_format: String,
+
+        /// The node feature type for call graphs
+        #[arg(long,value_parser = clap::builder::PossibleValuesParser::new(["cgmeta", "cgname", "tiknib"])
+        .map(|s| s.parse::<String>().unwrap()), required = true)]
+        node_feature_type: String,
+    },
+    /// De-dup generate ESIL strings
+    ESIL {
+        /// The filename to dedup
+        #[arg(short, long, value_name = "FILENAME")]
+        filename: String,
+
+        /// Output path to save dedup corpus
         #[arg(short, long, value_name = "OUTPUT_PATH")]
         output_path: String,
 
@@ -312,16 +340,6 @@ enum Commands {
         /// Toggle whether to dedup based on hashing only the value (and ignoring the key)
         #[arg(short, long, default_value = "false")]
         just_hash_value: bool,
-
-        /// The filepath_format of the dataset
-        #[arg(long,value_parser = clap::builder::PossibleValuesParser::new(["cisco", "binkit", "trex"])
-        .map(|s| s.parse::<String>().unwrap()))]
-        filepath_format: String,
-
-        /// The node feature type for call graphs
-        #[arg(long,value_parser = clap::builder::PossibleValuesParser::new(["cgmeta", "cgname", "tiknib"])
-        .map(|s| s.parse::<String>().unwrap()))]
-        node_feature_type: String,
     },
 }
 
@@ -964,29 +982,19 @@ fn main() {
                 sequence,
             );
         }
-        Commands::Dedup {
-            filename,
-            datatype,
-            output_path,
-            print_stats,
-            just_stats,
-            num_threads,
-            just_hash_value,
-            filepath_format,
-            node_feature_type,
-        } => {
-            rayon::ThreadPoolBuilder::new()
-                .num_threads(*num_threads)
-                .build_global()
-                .unwrap();
+        Commands::Dedup { subcommands } => match subcommands {
+            DedupSubCommands::CGS {
+                filename,
+                output_path,
+                num_threads,
+                filepath_format,
+                node_feature_type,
+            } => {
+                rayon::ThreadPoolBuilder::new()
+                    .num_threads(*num_threads)
+                    .build_global()
+                    .unwrap();
 
-            if datatype == "esilfstr" {
-                warn!("This only supports the Cisco Talos Binary Sim Dataset naming convention");
-                let corpus = EsilFuncStringCorpus::new(filename).unwrap();
-                corpus.uniq_binaries.par_iter().progress().for_each(|name| {
-                    corpus.dedup_subset(name, *print_stats, *just_stats, *just_hash_value)
-                });
-            } else if datatype == "cgs" {
                 warn!("This only supports the Cisco Talos Binary Sim Dataset naming convention");
                 if Path::new(filename).exists() {
                     let node_feature_type = CallGraphNodeFeatureType::new(node_feature_type);
@@ -999,6 +1007,65 @@ fn main() {
                     error!("Filename provided does not exist! - {}", filename)
                 }
             }
-        }
+            DedupSubCommands::ESIL {
+                filename,
+                print_stats,
+                just_stats,
+                just_hash_value,
+                num_threads,
+                output_path,
+            } => {
+                rayon::ThreadPoolBuilder::new()
+                    .num_threads(*num_threads)
+                    .build_global()
+                    .unwrap();
+
+                warn!("This only supports the Cisco Talos Binary Sim Dataset naming convention");
+                let corpus = EsilFuncStringCorpus::new(filename).unwrap();
+                corpus.uniq_binaries.par_iter().progress().for_each(|name| {
+                    corpus.dedup_subset(name, *print_stats, *just_stats, *just_hash_value)
+                });
+            }
+        }, /*
+               filename,
+               datatype,
+               output_path,
+               print_stats,
+               just_stats,
+               num_threads,
+               just_hash_value,
+               filepath_format,
+               node_feature_type,
+           } => {
+               rayon::ThreadPoolBuilder::new()
+                   .num_threads(*num_threads)
+                   .build_global()
+                   .unwrap();
+
+               if datatype == "esilfstr" {
+                   warn!("This only supports the Cisco Talos Binary Sim Dataset naming convention");
+                   let corpus = EsilFuncStringCorpus::new(filename).unwrap();
+                   corpus.uniq_binaries.par_iter().progress().for_each(|name| {
+                       corpus.dedup_subset(name, *print_stats, *just_stats, *just_hash_value)
+                   });
+               } else if datatype == "cgs" {
+                   warn!("This only supports the Cisco Talos Binary Sim Dataset naming convention");
+                   if Path::new(filename).exists() {
+                       let node_feature_type =
+                           CallGraphNodeFeatureType::new(&node_feature_type.as_ref().unwrap());
+                       info!("Starting duplication process for One Hop Call Graphs");
+                       let corpus = CGCorpus::new(
+                           filename,
+                           output_path,
+                           &filepath_format.as_ref().unwrap(),
+                           node_feature_type,
+                       )
+                       .unwrap();
+                       corpus.process_corpus();
+                   } else {
+                       error!("Filename provided does not exist! - {}", filename)
+                   }
+               }
+           }*/
     }
 }
