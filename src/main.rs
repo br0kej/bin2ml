@@ -41,6 +41,7 @@ use crate::files::{AFIJFile, AGCJFile, TikNibFuncMetaFile};
 use crate::tokeniser::{train_byte_bpe_tokeniser, TokeniserType};
 use crate::utils::get_save_file_path;
 
+use crate::networkx::CallGraphNodeFeatureType;
 use bb::{FeatureType, InstructionMode};
 #[cfg(feature = "goblin")]
 use binnfo::goblin_info;
@@ -316,6 +317,11 @@ enum Commands {
         #[arg(long,value_parser = clap::builder::PossibleValuesParser::new(["cisco", "binkit", "trex"])
         .map(|s| s.parse::<String>().unwrap()))]
         filepath_format: String,
+
+        /// The node feature type for call graphs
+        #[arg(long,value_parser = clap::builder::PossibleValuesParser::new(["cgmeta", "cgname", "tiknib"])
+        .map(|s| s.parse::<String>().unwrap()))]
+        node_feature_type: String,
     },
 }
 
@@ -967,6 +973,7 @@ fn main() {
             num_threads,
             just_hash_value,
             filepath_format,
+            node_feature_type,
         } => {
             rayon::ThreadPoolBuilder::new()
                 .num_threads(*num_threads)
@@ -982,8 +989,11 @@ fn main() {
             } else if datatype == "cgs" {
                 warn!("This only supports the Cisco Talos Binary Sim Dataset naming convention");
                 if Path::new(filename).exists() {
+                    let node_feature_type = CallGraphNodeFeatureType::new(node_feature_type);
                     info!("Starting duplication process for One Hop Call Graphs");
-                    let corpus = CGCorpus::new(filename, output_path, filepath_format).unwrap();
+                    let corpus =
+                        CGCorpus::new(filename, output_path, filepath_format, node_feature_type)
+                            .unwrap();
                     corpus.process_corpus();
                 } else {
                     error!("Filename provided does not exist! - {}", filename)

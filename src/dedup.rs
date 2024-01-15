@@ -1,4 +1,6 @@
-use crate::networkx::{CallGraphFuncWithMetadata, CallGraphNodeTypes, NetworkxDiGraph};
+use crate::networkx::{
+    CallGraphFuncWithMetadata, CallGraphNodeFeatureType, CallGraphTypes, NetworkxDiGraph,
+};
 use anyhow::Result;
 use indicatif::ParallelProgressIterator;
 use itertools::Itertools;
@@ -285,6 +287,7 @@ pub struct CGCorpus {
     pub filepaths: Vec<String>,
     pub output_path: String,
     pub filepath_format: String,
+    pub node_type: CallGraphNodeFeatureType,
 }
 
 impl CGCorpus {
@@ -292,6 +295,7 @@ impl CGCorpus {
         directory: &String,
         output_path: &String,
         filepath_format: &String,
+        node_type: CallGraphNodeFeatureType,
     ) -> Result<CGCorpus> {
         if !Path::new(output_path).exists() {
             fs::create_dir(output_path).expect("Failed to create output directory!");
@@ -322,6 +326,7 @@ impl CGCorpus {
             filepaths,
             output_path: output_path.to_string(),
             filepath_format: filepath_format.to_string(),
+            node_type,
         })
     }
 
@@ -331,10 +336,8 @@ impl CGCorpus {
         s.finish()
     }
 
-    fn dedup_corpus<N: Hash>(
-        data: &mut Vec<Option<NetworkxDiGraph<N>>>,
-        filepaths: &mut Vec<String>,
-    ) {
+    //fn dedup_corpus<N: Hash>(data: &mut Vec<Option<CallGraphTypes>>, filepaths: &mut Vec<String>) {
+    fn dedup_corpus(data: &mut Vec<Option<CallGraphTypes>>, filepaths: &mut Vec<String>) {
         debug!("Creating the removal index");
 
         let mut seen = HashSet::new();
@@ -407,24 +410,28 @@ impl CGCorpus {
         unique_binaries_fps
     }
 
-    fn load_subset(
-        &self,
-        fp_subset: &Vec<String>,
-    ) -> Vec<Option<NetworkxDiGraph<CallGraphFuncWithMetadata>>> {
+    fn load_subset(&self, fp_subset: &Vec<String>) -> Vec<Option<CallGraphTypes>> {
         let mut subset_loaded_data = Vec::new();
         for ele in fp_subset.iter() {
             let data = read_to_string(ele).expect(&format!("Unable to read file - {:?}", ele));
-            let json: NetworkxDiGraph<CallGraphFuncWithMetadata> =
-                serde_json::from_str::<NetworkxDiGraph<CallGraphFuncWithMetadata>>(&data)
-                    .expect(&format!("Unable to load function data from {}", ele));
-            debug!("{:?}", json);
 
-            if !json.nodes.is_empty() {
+            let json = serde_json::from_str::<CallGraphTypes>(&data)
+                .expect(&format!("Unable to load function data from {}", ele));
+
+            let nodes_empty = match self.node_type {
+                CallGraphNodeFeatureType::CGName => json.as_cg_name().unwrap().nodes.is_empty(),
+                CallGraphNodeFeatureType::CGMeta => json.as_cg_meta().unwrap().nodes.is_empty(),
+                CallGraphNodeFeatureType::TikNib => json.as_tik_nib().unwrap().nodes.is_empty(),
+                _ => unreachable!("Invalid node type!"),
+            };
+
+            if !nodes_empty {
                 subset_loaded_data.push(Some(json))
             } else {
                 subset_loaded_data.push(None)
             }
         }
+        println!("{:?}", subset_loaded_data);
         subset_loaded_data
     }
 
@@ -440,13 +447,11 @@ impl CGCorpus {
             .progress()
             .enumerate()
             .for_each(|(idx, fp_subset)| {
-                let mut subset_loaded_data: Vec<
-                    Option<NetworkxDiGraph<CallGraphFuncWithMetadata>>,
-                > = self.load_subset(fp_subset);
-
+                let mut subset_loaded_data: Vec<Option<CallGraphTypes>> =
+                    self.load_subset(fp_subset);
                 debug!("Starting to deduplicate the corpus - {}", idx);
                 Self::dedup_corpus(&mut subset_loaded_data, fp_subset);
-                let subset_loaded_data: Vec<NetworkxDiGraph<_>> =
+                let subset_loaded_data: Vec<CallGraphTypes> =
                     subset_loaded_data.into_iter().flatten().collect();
                 debug!("Starting to save - {}", idx);
                 self.save_corpus(subset_loaded_data, fp_subset);
@@ -455,7 +460,7 @@ impl CGCorpus {
     }
     pub fn save_corpus(
         &self,
-        subset_loaded_data: Vec<NetworkxDiGraph<CallGraphFuncWithMetadata>>,
+        subset_loaded_data: Vec<CallGraphTypes>,
         fp_subset: &mut Vec<String>,
     ) {
         subset_loaded_data
@@ -500,6 +505,7 @@ mod tests {
             &"test-files/cg_dedup/to_dedup".to_string(),
             &"test-files/cg_dedup/deduped".to_string(),
             &"cisco".to_string(),
+            CallGraphNodeFeatureType::CGName,
         );
         assert_eq!(corpus.as_ref().unwrap().filepaths.len(), 12);
         assert_eq!(
@@ -515,6 +521,7 @@ mod tests {
             &"test-files/cg_dedup/to_dedup".to_string(),
             &"test-files/cg_dedup/deduped/".to_string(),
             &"cisco".to_string(),
+            CallGraphNodeFeatureType::CGName,
         );
         assert_eq!(corpus.as_ref().unwrap().filepaths.len(), 12);
         assert_eq!(
@@ -533,6 +540,7 @@ mod tests {
             &"test-files/cg_dedup/to_dedup".to_string(),
             &"test-files/cg_dedup/deduped".to_string(),
             &"cisco".to_string(),
+            CallGraphNodeFeatureType::CGMeta,
         );
 
         let fp_binaries = corpus.unwrap().extract_binary_from_fps();
@@ -562,6 +570,7 @@ mod tests {
             &"test-files/cg_dedup/to_dedup".to_string(),
             &"test-files/cg_dedup/deduped".to_string(),
             &"cisco".to_string(),
+            CallGraphNodeFeatureType::CGMeta,
         )
         .unwrap();
         let fp_binaries = corpus.extract_binary_from_fps();
@@ -578,8 +587,10 @@ mod tests {
             &"test-files/cg_dedup/to_dedup".to_string(),
             &"test-files/cg_dedup/deduped".to_string(),
             &"cisco".to_string(),
+            CallGraphNodeFeatureType::CGMeta,
         )
         .unwrap();
+
         let fp_binaries = corpus.extract_binary_from_fps();
         let unique_binary_fps = corpus.get_unique_binary_fps(fp_binaries);
 
@@ -596,6 +607,7 @@ mod tests {
             &"test-files/cg_dedup/to_dedup".to_string(),
             &"test-files/cg_dedup/deduped".to_string(),
             &"cisco".to_string(),
+            CallGraphNodeFeatureType::CGMeta,
         )
         .unwrap();
         let fp_binaries = corpus.extract_binary_from_fps();
@@ -617,7 +629,8 @@ mod tests {
 
         // Check first node - should be function name
         for (loaded_ele, filepath) in subset_loaded.iter().zip(unique_binary_fps[0].iter()) {
-            let loaded_func_name = &loaded_ele.clone().unwrap().nodes[0].func_name;
+            let inner = &loaded_ele.clone().unwrap();
+            let loaded_func_name = &inner.as_cg_meta().unwrap().nodes[0].func_name;
             let filepath_func_name: Vec<_> = Path::new(filepath)
                 .components()
                 .rev()
@@ -633,7 +646,7 @@ mod tests {
 
             assert_eq!(loaded_func_name.to_owned(), filepath_func_name)
         }
-        let subset_loaded: Vec<NetworkxDiGraph<_>> = subset_loaded.into_iter().flatten().collect();
+        let subset_loaded: Vec<CallGraphTypes> = subset_loaded.into_iter().flatten().collect();
 
         // Save corpus!
         corpus.save_corpus(subset_loaded, &mut unique_binary_fps[0]);
