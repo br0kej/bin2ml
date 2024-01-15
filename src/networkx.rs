@@ -5,7 +5,6 @@ use enum_as_inner::EnumAsInner;
 use petgraph::prelude::Graph;
 use petgraph::visit::EdgeRef;
 use serde::{Deserialize, Serialize};
-use serde_json;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,8 +47,8 @@ pub enum CallGraphNodeFeatureType {
 }
 
 impl CallGraphNodeFeatureType {
-    pub fn new(node_feature_type: &String) -> CallGraphNodeFeatureType {
-        match node_feature_type.as_str() {
+    pub fn new(node_feature_type: &str) -> CallGraphNodeFeatureType {
+        match node_feature_type {
             "cgmeta" => CallGraphNodeFeatureType::CGMeta,
             "cgname" => CallGraphNodeFeatureType::CGName,
             "tiknib" => CallGraphNodeFeatureType::TikNib,

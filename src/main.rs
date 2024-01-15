@@ -37,7 +37,7 @@ pub mod utils;
 
 use crate::dedup::{CGCorpus, EsilFuncStringCorpus};
 use crate::extract::ExtractionJobType;
-use crate::files::{AFIJFile, AGCJFile, TikNibFuncMetaFile};
+use crate::files::{AFIJFile, AGCJFile, FunctionMetadataTypes, TikNibFuncMetaFile};
 use crate::tokeniser::{train_byte_bpe_tokeniser, TokeniserType};
 use crate::utils::get_save_file_path;
 
@@ -292,7 +292,7 @@ enum Commands {
 #[derive(Subcommand, Clone)]
 enum DedupSubCommands {
     /// De-Dup generated call graphs
-    CGS {
+    Cgs {
         /// The filename to dedup
         #[arg(short, long, value_name = "FILENAME")]
         filename: String,
@@ -316,7 +316,7 @@ enum DedupSubCommands {
         node_feature_type: String,
     },
     /// De-dup generate ESIL strings
-    ESIL {
+    Esil {
         /// The filename to dedup
         #[arg(short, long, value_name = "FILENAME")]
         filename: String,
@@ -674,7 +674,7 @@ fn main() {
                                     PathBuf::from(get_save_file_path(&tup.0, output_path, Some(suffix)));
                                 if !full_output_path.is_dir() {
                                     let mut file = {
-                                        let mut metadata = None;
+                                        let metadata: Option<FunctionMetadataTypes>;
                                         if metadata_type.clone().unwrap() == *"finfo" {
                                             let mut metadata_file = AFIJFile {
                                                 filename: tup.1.clone(),
@@ -983,7 +983,7 @@ fn main() {
             );
         }
         Commands::Dedup { subcommands } => match subcommands {
-            DedupSubCommands::CGS {
+            DedupSubCommands::Cgs {
                 filename,
                 output_path,
                 num_threads,
@@ -1007,7 +1007,7 @@ fn main() {
                     error!("Filename provided does not exist! - {}", filename)
                 }
             }
-            DedupSubCommands::ESIL {
+            DedupSubCommands::Esil {
                 filename,
                 print_stats,
                 just_stats,

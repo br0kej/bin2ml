@@ -1,6 +1,4 @@
-use crate::networkx::{
-    CallGraphFuncWithMetadata, CallGraphNodeFeatureType, CallGraphTypes, NetworkxDiGraph,
-};
+use crate::networkx::{CallGraphNodeFeatureType, CallGraphTypes};
 use anyhow::Result;
 use indicatif::ParallelProgressIterator;
 use itertools::Itertools;
@@ -125,7 +123,7 @@ impl EsilFuncStringCorpus {
             }
         }
 
-        let output_path: String = if !output_path.ends_with("/") {
+        let output_path: String = if !output_path.ends_with('/') {
             format!("{}{}", output_path, "/")
         } else {
             output_path.to_string()
@@ -325,7 +323,7 @@ impl CGCorpus {
 
         info!("Returning One Hop CG Corpus Struct");
 
-        let output_path = if output_path.ends_with("/") {
+        let output_path = if output_path.ends_with('/') {
             output_path.to_owned()
         } else {
             output_path.to_owned() + &*"/".to_string()
@@ -419,7 +417,7 @@ impl CGCorpus {
         unique_binaries_fps
     }
 
-    fn load_subset(&self, fp_subset: &Vec<String>) -> Vec<Option<CallGraphTypes>> {
+    fn load_subset(&self, fp_subset: &[String]) -> Vec<Option<CallGraphTypes>> {
         let mut subset_loaded_data = Vec::new();
         for ele in fp_subset.iter() {
             let data = read_to_string(ele).expect(&format!("Unable to read file - {:?}", ele));
@@ -431,7 +429,6 @@ impl CGCorpus {
                 CallGraphNodeFeatureType::CGName => json.as_cg_name().unwrap().nodes.is_empty(),
                 CallGraphNodeFeatureType::CGMeta => json.as_cg_meta().unwrap().nodes.is_empty(),
                 CallGraphNodeFeatureType::TikNib => json.as_tik_nib().unwrap().nodes.is_empty(),
-                _ => unreachable!("Invalid node type!"),
             };
 
             if !nodes_empty {
@@ -467,11 +464,7 @@ impl CGCorpus {
                 debug!("File processing complete - {}", idx);
             });
     }
-    pub fn save_corpus(
-        &self,
-        subset_loaded_data: Vec<CallGraphTypes>,
-        fp_subset: &mut Vec<String>,
-    ) {
+    pub fn save_corpus(&self, subset_loaded_data: Vec<CallGraphTypes>, fp_subset: &mut [String]) {
         subset_loaded_data
             .iter()
             .zip(fp_subset.iter())
@@ -503,9 +496,7 @@ impl CGCorpus {
 }
 
 mod tests {
-    use super::*;
-    use crate::dedup::CGCorpus;
-    use itertools::assert_equal;
+
     // Test Dedup on typed CG's
     #[test]
     fn test_cg_corpus_gen() {
