@@ -18,6 +18,7 @@ pub enum FeatureType {
     Gemini,
     DiscovRE,
     DGIS,
+    Tiknib,
     ModelEmbedded,
     Encoded,
     Invalid,
@@ -95,6 +96,18 @@ pub struct ACFJBlock {
     pub ops: Vec<Op>,
     pub size: Option<i64>,
     pub switchop: Option<SwitchOp>,
+}
+
+// Data Transfer + Misc have been removed.
+// Paper shows its a weak feature
+pub struct TikNibFeaturesBB {
+    pub arithshift: f32,
+    pub compare: f32,
+    pub ctransfer: f32,
+    pub ctransfercond: f32,
+    pub dtransfer: f32,
+    pub float: f32,
+    pub total: f32,
 }
 
 impl FeatureType {
@@ -476,6 +489,139 @@ impl ACFJBlock {
         n_ins += self.ops.len() as u16;
 
         n_ins
+    }
+
+    pub fn get_tiknib_features(&self, architecture: &String) -> TikNibFeaturesBB {
+        let mut features = TikNibFeaturesBB {
+            arithshift: 0.0,
+            compare: 0.0,
+            ctransfer: 0.0,
+            ctransfercond: 0.0,
+            dtransfer: 0.0,
+            float: 0.0,
+            total: 0.0,
+        };
+
+        for ins in self.ops.iter() {
+            if ins.r#type != "invalid" {
+                let opcode = ins
+                    .opcode
+                    .as_ref()
+                    .unwrap()
+                    .split_whitespace()
+                    .next()
+                    .unwrap();
+                if architecture == "ARM" {
+                    // Arith + Shifts
+                    if ARM_GRP_ARITH.contains(&opcode) || ARM_GRP_SHIFT.contains(&opcode) {
+                        features.arithshift += 1.0
+                    }
+                    // Compare
+                    if ARM_GRP_CMP.contains(&opcode) || ARM_GRP_FLOAT_CMP.contains(&opcode) {
+                        features.compare += 1.0
+                    }
+                    // Call Transfer
+                    if ARM_GRP_CTRANSFER.contains(&opcode) {
+                        features.ctransfer += 1.0
+                    }
+                    // Call Transfer + Cond
+                    if ARM_GRP_CTRANSFER.contains(&opcode)
+                        || ARM_GRP_COND_CTRANSFER.contains(&opcode)
+                    {
+                        features.ctransfercond += 1.0
+                    }
+                    // Data Transfer
+                    if ARM_GRP_DTRANSFER.contains(&opcode)
+                        || ARM_GRP_FLOAT_DTRANSFER.contains(&opcode)
+                    {
+                        features.dtransfer += 1.0
+                    }
+
+                    // FLoat Operations
+                    if ARM_GRP_FLOAT_DTRANSFER.contains(&opcode)
+                        || ARM_GRP_FLOAT_CMP.contains(&opcode)
+                        || ARM_GRP_FLOAT_ARITH.contains(&opcode)
+                    {
+                        features.float += 1.0
+                    }
+                    // total
+                    features.total += 1.0
+                } else if architecture == "MIPS" {
+                    // Arith + Shifts
+                    if MIPS_GRP_ARITH.contains(&opcode) || MIPS_GRP_SHIFT.contains(&opcode) {
+                        features.arithshift += 1.0
+                    }
+                    // Compare
+                    if MIPS_GRP_CMP.contains(&opcode) || MIPS_GRP_FLOAT_CMP.contains(&opcode) {
+                        features.compare += 1.0
+                    }
+                    // Call Transfer
+                    if MIPS_GRP_CTRANSFER.contains(&opcode) {
+                        features.ctransfer += 1.0
+                    }
+                    // Call Transfer + Cond
+                    if MIPS_GRP_CTRANSFER.contains(&opcode)
+                        || MIPS_GRP_COND_CTRANSFER.contains(&opcode)
+                    {
+                        features.ctransfercond += 1.0
+                    }
+                    // Data Transfer
+                    if MIPS_GRP_DTRANSFER.contains(&opcode)
+                        || MIPS_GRP_FLOAT_DTRANSFER.contains(&opcode)
+                    {
+                        features.dtransfer += 1.0
+                    }
+
+                    // FLoat Operations
+                    if MIPS_GRP_FLOAT_DTRANSFER.contains(&opcode)
+                        || MIPS_GRP_FLOAT_CMP.contains(&opcode)
+                        || MIPS_GRP_FLOAT_ARITH.contains(&opcode)
+                    {
+                        features.float += 1.0
+                    }
+                    // total
+                    features.total += 1.0
+                } else if architecture == "X86" {
+                    // Arith + Shifts
+                    if X86_GRP_ARITH.contains(&opcode) || X86_GRP_SHIFT.contains(&opcode) {
+                        features.arithshift += 1.0
+                    }
+                    // Compare
+                    if X86_GRP_CMP.contains(&opcode) || X86_GRP_FLOAT_CMP.contains(&opcode) {
+                        features.compare += 1.0
+                    }
+                    // Call Transfer
+                    if X86_GRP_CTRANSFER.contains(&opcode) {
+                        features.ctransfer += 1.0
+                    }
+                    // Call Transfer + Cond
+                    if X86_GRP_CTRANSFER.contains(&opcode)
+                        || X86_GRP_COND_CTRANSFER.contains(&opcode)
+                    {
+                        features.ctransfercond += 1.0
+                    }
+                    // Data Transfer
+                    if X86_GRP_DTRANSFER.contains(&opcode)
+                        || X86_GRP_FLOAT_DTRANSFER.contains(&opcode)
+                    {
+                        features.dtransfer += 1.0
+                    }
+
+                    // FLoat Operations
+                    if X86_GRP_FLOAT_DTRANSFER.contains(&opcode)
+                        || X86_GRP_FLOAT_CMP.contains(&opcode)
+                        || X86_GRP_FLOAT_ARITH.contains(&opcode)
+                    {
+                        features.float += 1.0
+                    }
+                    // total
+                    features.total += 1.0
+                } else {
+                    unreachable!("The architecture provided is not possible.")
+                }
+            }
+        }
+        features
     }
 }
 

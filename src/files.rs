@@ -1,12 +1,13 @@
 use crate::afij::{AFIJFeatureSubset, AFIJFunctionInfo};
 use crate::agcj::AGCJFunctionCallGraphs;
-use crate::agfj::AGFJFunc;
+use crate::agfj::{AGFJFunc, TikNibFunc};
 use crate::bb::{FeatureType, InstructionMode};
 use crate::consts::*;
 use crate::errors::FileLoadError;
 #[cfg(feature = "inference")]
 use crate::inference::InferenceJob;
 use crate::utils::get_save_file_path;
+use enum_as_inner::EnumAsInner;
 use indicatif::ParallelProgressIterator;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator};
@@ -67,7 +68,7 @@ impl AGFJFile {
     /// Detects the architecture of a file by iterating through the functions
     /// until a call instruction type is found. Once found, the opcode is then
     /// matched with architecture specific options.
-    fn detect_architecture(&self) -> Option<String> {
+    pub fn detect_architecture(&self) -> Option<String> {
         let mut call_op: Option<String> = None;
 
         for func in self.functions.as_ref().unwrap() {
@@ -76,7 +77,6 @@ impl AGFJFile {
                     if op.r#type == "call" || op.r#type == "rcall" {
                         call_op = Some(op.disasm.as_ref().unwrap().clone())
                     }
-
                     if call_op.is_some() {
                         let opcode = call_op.as_ref().unwrap().split_whitespace().next().unwrap();
                         if X86_CALL.contains(&opcode) {
@@ -324,6 +324,26 @@ impl AGFJFile {
         });
     }
 
+    pub fn tiknib_func_level_feature_gen(self) {
+        let arch = self.detect_architecture();
+
+        let mut func_feature_vectors = Vec::new();
+
+        for func in self.functions.unwrap().iter() {
+            let feature_vec = func[0].generate_tiknib_cfg_features(arch.as_ref().unwrap());
+            func_feature_vectors.push(feature_vec);
+        }
+
+        let json = json!(&func_feature_vectors);
+        let fname_string: String = get_save_file_path(&self.filename, &self.output_path, None);
+        let fname_string = format!("{}-tiknib.json", fname_string);
+        serde_json::to_writer(
+            &File::create(fname_string).expect("Failed to create writer"),
+            &json,
+        )
+        .expect("Unable to write JSON");
+    }
+
     /// EXPERIMENTAL
     ///
     /// Generate a CFG where each basic blocks contents is embedded using a provided
@@ -347,12 +367,20 @@ impl AGFJFile {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, EnumAsInner)]
+#[serde(untagged)]
+pub enum FunctionMetadataTypes {
+    AFIJ(Vec<AFIJFeatureSubset>),
+    AGFJ(Vec<TikNibFunc>),
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AGCJFile {
     pub filename: String,
     pub function_call_graphs: Option<Vec<AGCJFunctionCallGraphs>>,
     pub output_path: String,
-    pub function_metadata: Option<Vec<AFIJFeatureSubset>>,
+    pub function_metadata: Option<FunctionMetadataTypes>,
+    pub include_unk: bool,
 }
 
 impl AGCJFile {
@@ -387,14 +415,14 @@ impl AFIJFile {
         Ok(())
     }
 
-    pub fn subset(&mut self) -> Vec<AFIJFeatureSubset> {
+    pub fn subset(&mut self) -> FunctionMetadataTypes {
         let mut func_info_subsets: Vec<AFIJFeatureSubset> = Vec::new();
         debug!("Starting to subset functions");
         for function in self.function_info.as_ref().unwrap().iter() {
             let subset = AFIJFeatureSubset::from(function);
             func_info_subsets.push(subset)
         }
-        func_info_subsets
+        FunctionMetadataTypes::AFIJ(func_info_subsets)
     }
     pub fn subset_and_save(&mut self) {
         let func_info_subsets = self.subset();
@@ -405,5 +433,29 @@ impl AFIJFile {
             &func_info_subsets,
         )
         .expect("Unable to write JSON");
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TikNibFuncMetaFile {
+    pub filename: String,
+    pub function_info: Option<Vec<TikNibFunc>>,
+    pub output_path: String,
+}
+
+impl TikNibFuncMetaFile {
+    pub fn load_and_deserialize(&mut self) -> Result<(), FileLoadError> {
+        let data = read_to_string(&self.filename)?;
+
+        #[allow(clippy::expect_fun_call)]
+        // Kept in to ensure that the JSON decode error message is printed alongside the filename
+        let json: Vec<TikNibFunc> = serde_json::from_str(&data)?;
+
+        self.function_info = Some(json);
+        Ok(())
+    }
+
+    pub fn subset(&mut self) -> FunctionMetadataTypes {
+        FunctionMetadataTypes::AGFJ(self.function_info.clone().unwrap())
     }
 }

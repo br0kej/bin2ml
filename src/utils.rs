@@ -78,6 +78,10 @@ pub fn check_or_create_dir(full_output_path: &String) {
     }
 }
 
+/// Average
+pub fn average(numbers: Vec<f32>) -> f32 {
+    numbers.iter().sum::<f32>() / numbers.len() as f32
+}
 #[cfg(test)]
 mod tests {
     use super::*;

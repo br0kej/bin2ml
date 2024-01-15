@@ -1,0 +1,383 @@
+[
+  {
+    "imports": [
+      "sym.func.1000071a9",
+      "sym.imp.setlocale",
+      "sym.imp.isatty",
+      "sym.imp.getenv",
+      "sym.imp.atoi",
+      "sym.imp.ioctl",
+      "sym.imp.getuid",
+      "sym.imp.getopt",
+      "sym.imp.setenv",
+      "sym.imp.compat_mode",
+      "sym.imp.tgetent",
+      "sym.imp.tgetstr",
+      "sym.imp.signal",
+      "sym.func.1000067f7",
+      "sym.imp.getbsize",
+      "sym.imp.sysctlbyname",
+      "sym.imp.err",
+      "sym.func.100004a3c",
+      "sym.imp.exit"
+    ],
+    "name": "main",
+    "size": 2153
+  },
+  {
+    "imports": [
+      "sym.imp.fts_open_INODE64",
+      "sym.imp.fts_children_INODE64",
+      "sym.func.100004d11",
+      "sym.imp.fts_read_INODE64",
+      "sym.imp.printf",
+      "sym.imp.compat_mode",
+      "sym.func.100007266",
+      "sym.imp.fts_set_INODE64",
+      "sym.func.100007230",
+      "sym.func.1000071fa",
+      "sym.imp.__error",
+      "sym.imp.fts_close_INODE64",
+      "sym.func.1000071d0",
+      "sym.func.1000071e5"
+    ],
+    "name": "sym.func.100004a3c",
+    "size": 594
+  },
+  {
+    "imports": [
+      "sym.imp.getenv",
+      "sym.imp.strlen",
+      "sym.imp.malloc",
+      "sym.imp.sscanf",
+      "sym.func.100006de9",
+      "sym.imp.snprintf",
+      "sym.imp.user_from_uid",
+      "sym.imp.group_from_gid",
+      "sym.imp.fflagstostr",
+      "sym.imp.free",
+      "sym.imp.strdup",
+      "sym.imp.calloc",
+      "sym.imp.strcpy",
+      "sym.imp.listxattr",
+      "sym.imp.reallocf",
+      "sym.imp.getxattr",
+      "sym.imp.acl_get_link_np",
+      "sym.imp.acl_get_entry",
+      "sym.imp.acl_free",
+      "sym.func.1000072cc",
+      "unk.0x100008530",
+      "sym.imp.__stack_chk_fail",
+      "sym.func.1000072b7",
+      "sym.func.1000072a2",
+      "sym.func.10000730a"
+    ],
+    "name": "sym.func.100004d11",
+    "size": 2507
+  },
+  {
+    "imports": [
+      "sym.imp.strerror",
+      "sym.imp.warnx"
+    ],
+    "name": "sym.func.100007266",
+    "size": 60
+  },
+  {
+    "imports": [
+      "sym.imp.strerror",
+      "sym.imp.warnx"
+    ],
+    "name": "sym.func.100007230",
+    "size": 54
+  },
+  {
+    "imports": [
+      "sym.imp.warnx",
+      "sym.imp.compat_mode"
+    ],
+    "name": "sym.func.1000071fa",
+    "size": 54
+  },
+  {
+    "imports": [
+      "sym.imp.err"
+    ],
+    "name": "sym.func.1000071d0",
+    "size": 21
+  },
+  {
+    "imports": [
+      "sym.imp.err"
+    ],
+    "name": "sym.func.1000071e5",
+    "size": 21
+  },
+  {
+    "imports": [
+      "sym.imp.compat_mode",
+      "sym.imp.printf",
+      "sym.func.1000057af",
+      "sym.imp.putchar",
+      "sym.func.10000731f"
+    ],
+    "name": "sym.func.100005700",
+    "size": 175
+  },
+  {
+    "imports": [
+      "sym.imp.printf",
+      "sym.func.1000062a8",
+      "sym.func.100006368",
+      "sym.imp.tputs",
+      "sym.func.10000639e"
+    ],
+    "name": "sym.func.1000057af",
+    "size": 281
+  },
+  {
+    "imports": [
+      "sym.imp.printf",
+      "sym.imp.strmode",
+      "sym.func.100006100",
+      "sym.func.100006168",
+      "sym.func.1000062a8",
+      "sym.func.100006368",
+      "sym.imp.tputs",
+      "sym.func.10000639e",
+      "sym.imp.snprintf",
+      "sym.imp.readlink",
+      "sym.imp.__error",
+      "sym.imp.strerror",
+      "sym.imp.fprintf",
+      "sym.imp.putchar",
+      "sym.imp.strlen",
+      "sym.imp.acl_get_entry",
+      "sym.imp.acl_get_tag_type",
+      "sym.imp.acl_get_flagset_np",
+      "sym.imp.acl_get_permset",
+      "sym.imp.acl_get_qualifier",
+      "sym.imp.malloc",
+      "sym.imp.mbr_identifier_translate",
+      "sym.imp.uuid_unparse_upper",
+      "sym.imp.acl_free",
+      "sym.imp.acl_get_flag_np",
+      "sym.imp.free",
+      "sym.imp.acl_get_perm_np",
+      "sym.imp.__stack_chk_fail",
+      "sym.func.100007342"
+    ],
+    "name": "sym.func.1000058c8",
+    "size": 2104
+  },
+  {
+    "imports": [
+      "sym.imp.humanize_number",
+      "sym.imp.printf"
+    ],
+    "name": "sym.func.100006100",
+    "size": 104
+  },
+  {
+    "imports": [
+      "sym.imp.nl_langinfo",
+      "sym.imp.time",
+      "sym.imp.compat_mode",
+      "sym.imp.localtime",
+      "sym.imp.strftime",
+      "sym.imp.fputs",
+      "sym.imp.__stack_chk_fail"
+    ],
+    "name": "sym.func.100006168",
+    "size": 320
+  },
+  {
+    "imports": [
+      "sym.func.100006a30"
+    ],
+    "name": "sym.func.1000062a8",
+    "size": 143
+  },
+  {
+    "imports": [
+      "sym.imp.putchar"
+    ],
+    "name": "sym.func.10000639e",
+    "size": 130
+  },
+  {
+    "imports": [
+      "sym.imp.strlen",
+      "sym.imp.putchar",
+      "sym.func.1000057af",
+      "sym.imp.printf"
+    ],
+    "name": "sym.func.10000644c",
+    "size": 200
+  },
+  {
+    "imports": [
+      "sym.imp.realloc",
+      "sym.imp.__bzero",
+      "sym.imp.printf",
+      "sym.func.1000057af",
+      "sym.imp.putchar",
+      "sym.imp.warn",
+      "sym.func.10000737a",
+      "sym.func.100007357"
+    ],
+    "name": "sym.func.100006514",
+    "size": 739
+  },
+  {
+    "imports": [
+      "sym.imp.strlen",
+      "sym.imp.fwrite",
+      "sym.imp.__tolower",
+      "sym.imp.fprintf"
+    ],
+    "name": "sym.func.1000067f7",
+    "size": 412
+  },
+  {
+    "imports": [
+      "sym.imp.tputs",
+      "sym.imp.signal",
+      "sym.imp.getpid"
+    ],
+    "name": "sym.func.100006993",
+    "size": 106
+  },
+  {
+    "imports": [
+      "sym.imp.write"
+    ],
+    "name": "sym.func.1000069fd",
+    "size": 38
+  },
+  {
+    "imports": [
+      "sym.imp.putchar"
+    ],
+    "name": "sym.func.100006a23",
+    "size": 13
+  },
+  {
+    "imports": [
+      "sym.imp.tputs",
+      "sym.imp.tgoto"
+    ],
+    "name": "sym.func.100006a30",
+    "size": 167
+  },
+  {
+    "imports": [
+      "sym.imp.mbrtowc",
+      "sym.imp.putchar",
+      "sym.imp.__maskrune",
+      "sym.imp.wcwidth",
+      "sym.imp.printf",
+      "sym.imp.__stack_chk_fail"
+    ],
+    "name": "sym.func.100006ad7",
+    "size": 398
+  },
+  {
+    "imports": [
+      "sym.imp.mbrtowc",
+      "sym.imp.putchar",
+      "sym.imp.__maskrune",
+      "sym.imp.wcwidth",
+      "sym.imp.__stack_chk_fail"
+    ],
+    "name": "sym.func.100006c65",
+    "size": 388
+  },
+  {
+    "imports": [
+      "sym.imp.mbrtowc",
+      "sym.imp.__maskrune",
+      "sym.imp.__stack_chk_fail"
+    ],
+    "name": "sym.func.100006de9",
+    "size": 342
+  },
+  {
+    "imports": [
+      "sym.imp.mbrtowc",
+      "sym.imp.strlen",
+      "sym.imp.__maskrune",
+      "sym.imp.memchr",
+      "sym.imp.putchar",
+      "sym.imp.wcwidth",
+      "sym.imp.__stack_chk_fail"
+    ],
+    "name": "sym.func.100006f3f",
+    "size": 618
+  },
+  {
+    "imports": [
+      "sym.imp.fprintf",
+      "sym.imp.exit"
+    ],
+    "name": "sym.func.1000071a9",
+    "size": 38
+  },
+  {
+    "imports": [
+      "sym.imp.err"
+    ],
+    "name": "sym.func.1000072a2",
+    "size": 21
+  },
+  {
+    "imports": [
+      "sym.imp.err"
+    ],
+    "name": "sym.func.1000072b7",
+    "size": 21
+  },
+  {
+    "imports": [
+      "sym.imp.strerror",
+      "sym.imp.warnx"
+    ],
+    "name": "sym.func.1000072cc",
+    "size": 62
+  },
+  {
+    "imports": [
+      "sym.imp.err"
+    ],
+    "name": "sym.func.10000730a",
+    "size": 21
+  },
+  {
+    "imports": [
+      "sym.imp.__assert_rtn"
+    ],
+    "name": "sym.func.10000731f",
+    "size": 35
+  },
+  {
+    "imports": [
+      "sym.imp.err"
+    ],
+    "name": "sym.func.100007342",
+    "size": 21
+  },
+  {
+    "imports": [
+      "sym.imp.__assert_rtn"
+    ],
+    "name": "sym.func.100007357",
+    "size": 35
+  },
+  {
+    "imports": [
+      "sym.imp.__assert_rtn"
+    ],
+    "name": "sym.func.10000737a",
+    "size": 35
+  }
+]

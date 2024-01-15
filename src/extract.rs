@@ -63,37 +63,37 @@ impl std::fmt::Display for ExtractionJob {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AFLJFuncDetails {
-    pub offset: i64,
+    pub offset: u64,
     pub name: String,
-    pub size: i64,
+    pub size: u64,
     #[serde(rename = "is-pure")]
     pub is_pure: String,
-    pub realsz: i64,
+    pub realsz: u64,
     pub noreturn: bool,
-    pub stackframe: i64,
+    pub stackframe: u64,
     pub calltype: String,
-    pub cost: i64,
-    pub cc: i64,
-    pub bits: i64,
+    pub cost: u64,
+    pub cc: u64,
+    pub bits: u64,
     #[serde(rename = "type")]
     pub type_field: String,
-    pub nbbs: i64,
+    pub nbbs: u64,
     #[serde(rename = "is-lineal")]
     pub is_lineal: bool,
-    pub ninstrs: i64,
-    pub edges: i64,
-    pub ebbs: i64,
+    pub ninstrs: u64,
+    pub edges: u64,
+    pub ebbs: u64,
     pub signature: String,
     pub minbound: i64,
-    pub maxbound: i64,
+    pub maxbound: u64,
     #[serde(default)]
     pub callrefs: Vec<Callref>,
     #[serde(default)]
     pub datarefs: Vec<DataRef>,
-    pub indegree: Option<i64>,
-    pub outdegree: Option<i64>,
-    pub nlocals: Option<i64>,
-    pub nargs: Option<i64>,
+    pub indegree: Option<u64>,
+    pub outdegree: Option<u64>,
+    pub nlocals: Option<u64>,
+    pub nargs: Option<u64>,
     pub bpvars: Option<Vec<Bpvar>>,
     pub spvars: Option<Vec<Value>>,
     pub regvars: Option<Vec<Regvar>>,
@@ -101,7 +101,7 @@ pub struct AFLJFuncDetails {
     #[serde(default)]
     pub codexrefs: Option<Vec<Codexref>>,
     #[serde(default)]
-    pub dataxrefs: Option<Vec<i64>>,
+    pub dataxrefs: Option<Vec<u64>>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -113,10 +113,10 @@ pub struct DataRef {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Callref {
-    pub addr: i128,
+    pub addr: u64,
     #[serde(rename = "type")]
     pub type_field: String,
-    pub at: i64,
+    pub at: u64,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -151,10 +151,10 @@ pub struct Regvar {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Codexref {
-    pub addr: i64,
+    pub addr: u64,
     #[serde(rename = "type")]
     pub type_field: String,
-    pub at: i64,
+    pub at: u64,
 }
 
 // Structs related to AEAFJ
@@ -437,16 +437,18 @@ impl FileToBeProcessed {
 
     fn get_function_name_list(&self, r2p: &mut R2Pipe) -> Vec<AFLJFuncDetails> {
         info!("Getting function information from binary");
-        let json = r2p.cmd("aflj").expect("aflj command failed");
-        let json_obj: Vec<AFLJFuncDetails> =
-            serde_json::from_str(&json).expect("Unable to convert to JSON object!");
+        let json = r2p
+            .cmd("aflj")
+            .expect(&format!("aflj command failed for {}", self.file_path));
+        let json_obj: Vec<AFLJFuncDetails> = serde_json::from_str(&json)
+            .expect(&format!("Unable to convert to JSON object! - {}", json));
 
         json_obj
     }
 
     fn get_function_xref_details(
         &self,
-        function_addr: i64,
+        function_addr: u64,
         r2p: &mut R2Pipe,
     ) -> Vec<FunctionXrefDetails> {
         info!("Getting function xref details");
@@ -471,11 +473,11 @@ impl FileToBeProcessed {
         json_obj
     }
 
-    fn get_function_info(&self, function_addr: i64, r2p: &mut R2Pipe) -> Vec<AFIJFunctionInfo> {
+    fn get_function_info(&self, function_addr: u64, r2p: &mut R2Pipe) -> Vec<AFIJFunctionInfo> {
         Self::go_to_address(r2p, function_addr);
         let json = r2p.cmd("afij").expect("afij command failed");
-        let json_obj: Vec<AFIJFunctionInfo> =
-            serde_json::from_str(&json).expect("Unable to convert to JSON object!");
+        let json_obj: Vec<AFIJFunctionInfo> = serde_json::from_str(&json)
+            .expect(&format!("Unable to convert to JSON object! - {}", json));
         json_obj
     }
 
@@ -497,7 +499,7 @@ impl FileToBeProcessed {
         .unwrap_or_else(|_| panic!("the world is ending: {}", f_name));
     }
 
-    fn go_to_address(r2p: &mut R2Pipe, function_addr: i64) {
+    fn go_to_address(r2p: &mut R2Pipe, function_addr: u64) {
         r2p.cmd(format!("s @ {}", function_addr).as_str())
             .expect("failed to seek addr");
     }

@@ -1,4 +1,4 @@
-use crate::networkx::{CallGraphFuncWithMetadata, NetworkxDiGraph};
+use crate::networkx::{CallGraphNodeFeatureType, CallGraphTypes};
 use anyhow::Result;
 use indicatif::ParallelProgressIterator;
 use itertools::Itertools;
@@ -13,7 +13,6 @@ use std::fs::{read_to_string, File};
 use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::string::String;
-
 
 use std::{fs, vec};
 use walkdir::{DirEntry, WalkDir};
@@ -90,11 +89,12 @@ pub struct EsilFuncStringCorpus {
     pub binary_name_index: Vec<String>,
     pub uniq_binaries: Vec<String>,
     pub arch_index: Vec<String>,
+    pub output_path: String,
 }
 
 /// A collection of processed Esil Function String files
 impl EsilFuncStringCorpus {
-    pub fn new(directory: &String) -> Result<EsilFuncStringCorpus> {
+    pub fn new(directory: &String, output_path: &String) -> Result<EsilFuncStringCorpus> {
         let mut filepaths = Vec::new();
         let mut binary_name_index = Vec::new();
         let mut uniq_binaries = Vec::new();
@@ -122,12 +122,20 @@ impl EsilFuncStringCorpus {
                 }
             }
         }
+
+        let output_path: String = if !output_path.ends_with('/') {
+            format!("{}{}", output_path, "/")
+        } else {
+            output_path.to_string()
+        };
+
         Ok(EsilFuncStringCorpus {
             loaded_data: None,
             filepaths,
             binary_name_index,
             uniq_binaries,
             arch_index,
+            output_path,
         })
     }
 
@@ -270,7 +278,7 @@ impl EsilFuncStringCorpus {
 
         if !just_stats {
             let uniques_to_drop = json!(unique_func_hash_tuples);
-            let fname_string = format!("{}-dedup.json", &target_binary_name);
+            let fname_string = format!("{}{}-dedup.json", self.output_path, &target_binary_name);
             serde_json::to_writer(
                 &File::create(fname_string).expect("Failed to create writer"),
                 &uniques_to_drop,
@@ -280,14 +288,22 @@ impl EsilFuncStringCorpus {
     }
 }
 
+/// Struct and Impl for de-duplicating Call Graph Corpus's
 #[derive(Debug)]
-pub struct OneHopCGCorpus {
+pub struct CGCorpus {
     pub filepaths: Vec<String>,
     pub output_path: String,
+    pub filepath_format: String,
+    pub node_type: CallGraphNodeFeatureType,
 }
 
-impl OneHopCGCorpus {
-    pub fn new(directory: &String, output_path: &String) -> Result<OneHopCGCorpus> {
+impl CGCorpus {
+    pub fn new(
+        directory: &String,
+        output_path: &String,
+        filepath_format: &String,
+        node_type: CallGraphNodeFeatureType,
+    ) -> Result<CGCorpus> {
         if !Path::new(output_path).exists() {
             fs::create_dir(output_path).expect("Failed to create output directory!");
             info!("Output path not found - Creating {}", output_path)
@@ -307,9 +323,17 @@ impl OneHopCGCorpus {
 
         info!("Returning One Hop CG Corpus Struct");
 
-        Ok(OneHopCGCorpus {
+        let output_path = if output_path.ends_with('/') {
+            output_path.to_owned()
+        } else {
+            output_path.to_owned() + &*"/".to_string()
+        };
+
+        Ok(CGCorpus {
             filepaths,
             output_path: output_path.to_string(),
+            filepath_format: filepath_format.to_string(),
+            node_type,
         })
     }
 
@@ -319,14 +343,8 @@ impl OneHopCGCorpus {
         s.finish()
     }
 
-    // This is very slow O(N)^2
-    fn dedup_corpus(
-        data: &mut Vec<Option<NetworkxDiGraph<CallGraphFuncWithMetadata>>>,
-        mut filepaths: Vec<String>,
-    ) -> (
-        Vec<Option<NetworkxDiGraph<CallGraphFuncWithMetadata>>>,
-        Vec<String>,
-    ) {
+    //fn dedup_corpus<N: Hash>(data: &mut Vec<Option<CallGraphTypes>>, filepaths: &mut Vec<String>) {
+    fn dedup_corpus(data: &mut Vec<Option<CallGraphTypes>>, filepaths: &mut Vec<String>) {
         debug!("Creating the removal index");
 
         let mut seen = HashSet::new();
@@ -345,75 +363,108 @@ impl OneHopCGCorpus {
             data.remove(*ele);
             filepaths.remove(*ele);
         }
-        (data.to_vec(), filepaths)
     }
 
-    pub fn process_corpus(self) {
+    fn get_binary_name_cisco(filepath: &String) -> String {
+        // Example: x86-gcc-9-O3_nping_cg-onehopcgcallers-meta
+        let binary_intermediate = Path::new(filepath).parent().unwrap().file_name().unwrap();
+        binary_intermediate
+            .to_string_lossy()
+            .split('_')
+            .nth(1)
+            .unwrap()
+            .to_string()
+    }
+    fn get_binary_name_binkit(filepath: &String) -> String {
+        // Example: tar-1.34_gcc-8.2.0_x86_32_O3_rmt_cg-onehopcgcallers-meta
+        let binary_intermediate = Path::new(filepath).parent().unwrap().file_name().unwrap();
+        binary_intermediate
+            .to_string_lossy()
+            .split('_')
+            .rev()
+            .nth(1)
+            .unwrap()
+            .to_string()
+    }
+
+    fn extract_binary_from_fps(&self) -> Vec<String> {
         let mut fp_binaries = Vec::new();
         // Process the file paths to get the associated binary of each path
         info!("Processing Filepaths to get binaries");
         for file in &self.filepaths {
-            let binary_intermediate = Path::new(file).parent().unwrap().file_name().unwrap();
-            let binary = binary_intermediate
-                .to_string_lossy()
-                .split('_')
-                .nth(1)
-                .unwrap()
-                .to_string();
-
+            let binary = match self.filepath_format.as_str() {
+                "cisco" => Self::get_binary_name_cisco(file),
+                "binkit" => Self::get_binary_name_binkit(file),
+                "trex" => Self::get_binary_name_binkit(file),
+                _ => unreachable!(),
+            };
+            trace!("Extracted Binary Name: {:?} from {:?}", binary, file);
             fp_binaries.push(binary)
         }
+        fp_binaries
+    }
 
+    fn get_unique_binary_fps(&self, fp_binaries: Vec<String>) -> Vec<Vec<String>> {
         // Generate binary specific filepath vectors
-        let unqiue_binaries: Vec<_> = fp_binaries.iter().unique().collect();
-        let mut unique_binaries_fps: Vec<Vec<String>> = vec![Vec::new(); unqiue_binaries.len()];
+        let unique_binaries: Vec<_> = fp_binaries.iter().unique().collect();
+        let mut unique_binaries_fps: Vec<Vec<String>> = vec![Vec::new(); unique_binaries.len()];
 
         for (file, binary) in self.filepaths.iter().zip(fp_binaries.iter()) {
-            unique_binaries_fps
-                [unqiue_binaries.iter().position(|&x| x == binary).unwrap()]
+            unique_binaries_fps[unique_binaries.iter().position(|&x| x == binary).unwrap()]
                 .push(file.clone());
         }
 
+        unique_binaries_fps
+    }
+
+    fn load_subset(&self, fp_subset: &[String]) -> Vec<Option<CallGraphTypes>> {
+        let mut subset_loaded_data = Vec::new();
+        for ele in fp_subset.iter() {
+            let data = read_to_string(ele).expect(&format!("Unable to read file - {:?}", ele));
+
+            let json = serde_json::from_str::<CallGraphTypes>(&data)
+                .expect(&format!("Unable to load function data from {}", ele));
+
+            let nodes_empty = match self.node_type {
+                CallGraphNodeFeatureType::CGName => json.as_cg_name().unwrap().nodes.is_empty(),
+                CallGraphNodeFeatureType::CGMeta => json.as_cg_meta().unwrap().nodes.is_empty(),
+                CallGraphNodeFeatureType::TikNib => json.as_tik_nib().unwrap().nodes.is_empty(),
+            };
+
+            if !nodes_empty {
+                subset_loaded_data.push(Some(json))
+            } else {
+                subset_loaded_data.push(None)
+            }
+        }
+        println!("{:?}", subset_loaded_data);
+        subset_loaded_data
+    }
+
+    pub fn process_corpus(self) {
+        let fp_binaries = self.extract_binary_from_fps();
+
+        // Generate binary specific filepath vectors
+        let mut unique_binaries_fps = self.get_unique_binary_fps(fp_binaries);
+
         info!("Loading the filepaths");
         unique_binaries_fps
-            .par_iter()
+            .par_iter_mut()
             .progress()
             .enumerate()
             .for_each(|(idx, fp_subset)| {
-                let mut subset_loaded_data = Vec::new();
-
-                for ele in fp_subset.iter() {
-                    let data =
-                        read_to_string(ele).expect(&format!("Unable to read file - {:?}", ele));
-
-                    let json: NetworkxDiGraph<CallGraphFuncWithMetadata> =
-                        serde_json::from_str(&data)
-                            .expect(&format!("Unable to load function data from {}", ele));
-
-                    if !json.nodes.is_empty() {
-                        subset_loaded_data.push(Some(json))
-                    } else {
-                        subset_loaded_data.push(None)
-                    }
-                }
-
-                subset_loaded_data.retain(|c| c.is_some());
-
-                info!("Starting to deduplicate the corpus - {}", idx);
-                let (subset_loaded_data, fp_subset) =
-                    Self::dedup_corpus(&mut subset_loaded_data, fp_subset.to_vec());
-                let subset_loaded_data: Vec<NetworkxDiGraph<_>> =
+                let mut subset_loaded_data: Vec<Option<CallGraphTypes>> =
+                    self.load_subset(fp_subset);
+                debug!("Starting to deduplicate the corpus - {}", idx);
+                Self::dedup_corpus(&mut subset_loaded_data, fp_subset);
+                let subset_loaded_data: Vec<CallGraphTypes> =
                     subset_loaded_data.into_iter().flatten().collect();
-                info!("Starting to save - {}", idx);
+                debug!("Starting to save - {}", idx);
                 self.save_corpus(subset_loaded_data, fp_subset);
-                info!("File processing complete - {}", idx);
+                debug!("File processing complete - {}", idx);
             });
     }
-    pub fn save_corpus(
-        &self,
-        subset_loaded_data: Vec<NetworkxDiGraph<CallGraphFuncWithMetadata>>,
-        fp_subset: Vec<String>,
-    ) {
+    pub fn save_corpus(&self, subset_loaded_data: Vec<CallGraphTypes>, fp_subset: &mut [String]) {
         subset_loaded_data
             .iter()
             .zip(fp_subset.iter())
@@ -423,22 +474,308 @@ impl OneHopCGCorpus {
                     .rev()
                     .take(2)
                     .collect::<Vec<_>>();
-
+                trace!("Fixed Path (First Pass): {:?}", fixed_path);
                 let fixed_path = fixed_path
                     .iter()
                     .map(|c| c.as_os_str().to_string_lossy().to_string())
                     .rev()
                     .collect::<Vec<String>>();
-
+                trace!("Fixed Path (Second Pass): {:?}", fixed_path);
                 let dirs = format!("{}{}", self.output_path, fixed_path[0]);
                 fs::create_dir_all(&dirs).expect("Failed to create output directory!");
 
                 let fixed_path = format!("{}/{}", dirs, fixed_path[1]);
+                trace!("Fixed Path (Final Pass): {:?}", fixed_path);
                 serde_json::to_writer(
                     &File::create(fixed_path).expect("Failed to create writer"),
                     &data_ele,
                 )
                 .expect("Unable to write JSON");
             });
+    }
+}
+
+mod tests {
+
+    // Test Dedup on typed CG's
+    #[test]
+    fn test_cg_corpus_gen() {
+        // CG Corpus Generation
+        let corpus = CGCorpus::new(
+            &"test-files/cg_dedup/to_dedup".to_string(),
+            &"test-files/cg_dedup/deduped".to_string(),
+            &"cisco".to_string(),
+            CallGraphNodeFeatureType::CGName,
+        );
+        assert_eq!(corpus.as_ref().unwrap().filepaths.len(), 12);
+        assert_eq!(
+            corpus.as_ref().unwrap().output_path,
+            "test-files/cg_dedup/deduped/".to_string()
+        );
+        assert_eq!(
+            corpus.as_ref().unwrap().filepath_format,
+            "cisco".to_string()
+        );
+
+        let corpus = CGCorpus::new(
+            &"test-files/cg_dedup/to_dedup".to_string(),
+            &"test-files/cg_dedup/deduped/".to_string(),
+            &"cisco".to_string(),
+            CallGraphNodeFeatureType::CGName,
+        );
+        assert_eq!(corpus.as_ref().unwrap().filepaths.len(), 12);
+        assert_eq!(
+            corpus.as_ref().unwrap().output_path,
+            "test-files/cg_dedup/deduped/".to_string()
+        );
+        assert_eq!(
+            corpus.as_ref().unwrap().filepath_format,
+            "cisco".to_string()
+        );
+    }
+
+    #[test]
+    fn test_extract_binary_from_fps() {
+        let corpus = CGCorpus::new(
+            &"test-files/cg_dedup/to_dedup".to_string(),
+            &"test-files/cg_dedup/deduped".to_string(),
+            &"cisco".to_string(),
+            CallGraphNodeFeatureType::CGMeta,
+        );
+
+        let fp_binaries = corpus.unwrap().extract_binary_from_fps();
+        assert_eq!(fp_binaries.len(), 12);
+        assert_eq!(
+            fp_binaries,
+            vec![
+                "testbin".to_string(),
+                "testbin".to_string(),
+                "testbin".to_string(),
+                "testbin".to_string(),
+                "testbin".to_string(),
+                "testbin".to_string(),
+                "testbin".to_string(),
+                "testbin".to_string(),
+                "testbin2".to_string(),
+                "testbin2".to_string(),
+                "testbin2".to_string(),
+                "testbin2".to_string(),
+            ]
+        )
+    }
+
+    #[test]
+    fn test_get_unique_binary_fps() {
+        let corpus = CGCorpus::new(
+            &"test-files/cg_dedup/to_dedup".to_string(),
+            &"test-files/cg_dedup/deduped".to_string(),
+            &"cisco".to_string(),
+            CallGraphNodeFeatureType::CGMeta,
+        )
+        .unwrap();
+        let fp_binaries = corpus.extract_binary_from_fps();
+        let unique_binary_fps = corpus.get_unique_binary_fps(fp_binaries);
+
+        assert_eq!(unique_binary_fps.len(), 2);
+        assert_eq!(unique_binary_fps[0].len(), 8);
+        assert_eq!(unique_binary_fps[1].len(), 4);
+    }
+
+    #[test]
+    fn test_processing_unique_binary_collection() {
+        let corpus = CGCorpus::new(
+            &"test-files/cg_dedup/to_dedup".to_string(),
+            &"test-files/cg_dedup/deduped".to_string(),
+            &"cisco".to_string(),
+            CallGraphNodeFeatureType::CGMeta,
+        )
+        .unwrap();
+
+        let fp_binaries = corpus.extract_binary_from_fps();
+        let unique_binary_fps = corpus.get_unique_binary_fps(fp_binaries);
+
+        // Load the first collection which has dups
+        let mut subset_loaded = corpus.load_subset(&unique_binary_fps[0]);
+        assert_eq!(subset_loaded.len(), 8);
+        subset_loaded.retain(|c| c.is_some());
+        assert_eq!(subset_loaded.len(), 8);
+    }
+
+    #[test]
+    fn test_dedup_binary_subset() {
+        let corpus = CGCorpus::new(
+            &"test-files/cg_dedup/to_dedup".to_string(),
+            &"test-files/cg_dedup/deduped".to_string(),
+            &"cisco".to_string(),
+            CallGraphNodeFeatureType::CGMeta,
+        )
+        .unwrap();
+        let fp_binaries = corpus.extract_binary_from_fps();
+        let mut unique_binary_fps = corpus.get_unique_binary_fps(fp_binaries);
+
+        // Load the first collection which has dups
+        let mut subset_loaded = corpus.load_subset(&unique_binary_fps[0]);
+        subset_loaded.retain(|c| c.is_some());
+
+        // Prior to dedup
+        assert_eq!(subset_loaded.len(), 8);
+        CGCorpus::dedup_corpus(&mut subset_loaded, &mut unique_binary_fps[0]);
+
+        // Subset
+        assert_eq!(subset_loaded.len(), 4);
+
+        // Filepaths
+        assert_eq!(unique_binary_fps[0].len(), 4);
+
+        // Check first node - should be function name
+        for (loaded_ele, filepath) in subset_loaded.iter().zip(unique_binary_fps[0].iter()) {
+            let inner = &loaded_ele.clone().unwrap();
+            let loaded_func_name = &inner.as_cg_meta().unwrap().nodes[0].func_name;
+            let filepath_func_name: Vec<_> = Path::new(filepath)
+                .components()
+                .rev()
+                .take(1)
+                .collect::<Vec<_>>();
+
+            let filepath_func_name = filepath_func_name[0]
+                .as_os_str()
+                .to_string_lossy()
+                .to_string();
+
+            let filepath_func_name = filepath_func_name.split("-").next().unwrap();
+
+            assert_eq!(loaded_func_name.to_owned(), filepath_func_name)
+        }
+        let subset_loaded: Vec<CallGraphTypes> = subset_loaded.into_iter().flatten().collect();
+
+        // Save corpus!
+        corpus.save_corpus(subset_loaded, &mut unique_binary_fps[0]);
+
+        // Check the files saved!
+        for file in WalkDir::new(&corpus.output_path)
+            .into_iter()
+            .filter_map(|file| file.ok())
+        {
+            if file.path().to_string_lossy().ends_with(".json") {
+                let data = read_to_string(file.path())
+                    .expect(&format!("Unable to read file - {:?}", file));
+                let json: NetworkxDiGraph<CallGraphFuncWithMetadata> =
+                    serde_json::from_str::<NetworkxDiGraph<CallGraphFuncWithMetadata>>(&data)
+                        .expect(&format!("Unable to load function data from {:?}", file));
+
+                let filepath_func_name: Vec<_> = Path::new(file.file_name())
+                    .components()
+                    .rev()
+                    .take(1)
+                    .collect::<Vec<_>>();
+
+                let filepath_func_name = filepath_func_name[0]
+                    .as_os_str()
+                    .to_string_lossy()
+                    .to_string();
+
+                let filepath_func_name = filepath_func_name.split("-").next().unwrap();
+
+                assert_eq!(json.nodes[0].func_name, filepath_func_name)
+            }
+        }
+
+        // clean up
+        fs::remove_dir_all(&corpus.output_path).expect("Unable to remove directory!");
+    }
+
+    // Test binary name extraction
+    #[test]
+    fn test_binkit_binary_extraction() {
+        assert_eq!(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
+                &"which-2.21_gcc-9.4.0_arm_32_O2_which_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
+".to_string()
+            ),
+            "which"
+        );
+        assert_eq!(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
+                &"recutils-1.9_gcc-11.2.0_mips_64_O3_recins_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
+".to_string()
+            ),
+            "recins"
+        );
+        assert_eq!(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
+                &"recutils-1.9_gcc-11.2.0_mips_64_O3_recsel_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
+".to_string(),
+            ),
+            "recsel",
+        );
+    }
+
+    #[test]
+    fn test_cisco_binary_extraction() {
+        assert_eq!(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
+                &"arm64-clang-9-Os_curl_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json".to_string()
+            ),
+            "curl"
+        );
+        assert_eq!(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
+                &"x86-clang-9-Os_libcrypto.so.3_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
+".to_string()
+            ),
+            "libcrypto.so.3"
+        );
+        assert_eq!(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
+                &"x86-gcc-9-O3_unrar_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
+".to_string(),
+            ),
+            "unrar",
+        );
+        assert_eq!(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
+                &"/random/path/before/x86-gcc-9-O3_unrar_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
+".to_string(),
+            ),
+            "unrar",
+        );
+    }
+
+    #[test]
+    fn test_trex_binary_extraction() {
+        assert_eq!(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
+                &"arm-32_binutils-2.34-O0_elfedit_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json".to_string()
+            ),
+            "elfedit"
+        );
+
+        assert_eq!(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
+                &"arm-32_binutils-2.34-O0_objdump_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json".to_string()
+            ),
+            "objdump"  
+        );
+        assert_eq!(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
+                &"arm-32_binutils-2.34-O0_nm-new_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json".to_string()
+            ),
+            "nm-new"
+        );
+        // __ for c++ bins that sometimes crop up
+        assert_eq!(
+            crate::dedup::CGCorpus::get_binary_name_binkit(
+                &"arm-32_binutils-2.34-O0_nm-new_cg-onehopcgcallers-meta/sym.dummy___func__-onehopcgcallers-meta.json".to_string()
+            ),
+            "nm-new"
+        );
+
+        assert_eq!(
+            crate::dedup::CGCorpus::get_binary_name_binkit(&"fast-disk/Dataset-2/cgs/x86-32_coreutils-8.32-O1_stat_cg-onehopcgcallers-meta/main-onehopcgcallers-meta.json".to_string()),
+            "stat"
+        );
+
+        assert_eq!(crate::dedup::CGCorpus::get_binary_name_binkit(&"/fast-disk/processed_datasets/Dataset-2/arm-32_binutils-2.34-O0_addr2line_cg-onehopcgcallers-meta/sym.adjust_relative_path-onehopcgcallers-meta.json".to_string()),
+        "addr2line")
     }
 }
