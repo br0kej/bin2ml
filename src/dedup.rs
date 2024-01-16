@@ -437,7 +437,6 @@ impl CGCorpus {
                 subset_loaded_data.push(None)
             }
         }
-        println!("{:?}", subset_loaded_data);
         subset_loaded_data
     }
 
