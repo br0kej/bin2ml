@@ -308,22 +308,30 @@ impl FileToBeProcessed {
         info!("Starting register behaviour extraction");
         let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
         let function_details = self.get_function_name_list(&mut r2p);
-        let mut register_behaviour_vec: HashMap<String, AEAFJRegisterBehaviour> = HashMap::new();
-        info!("Executing aeafj for each function");
-        for function in function_details.iter() {
-            r2p.cmd(format!("s @ {}", &function.name).as_str())
-                .expect("Command failed..");
-            let json = r2p.cmd("aeafj").expect("Command failed..");
-            let json_obj: AEAFJRegisterBehaviour =
-                serde_json::from_str(&json).expect("Unable to convert to JSON object!");
-            register_behaviour_vec.insert(function.name.clone(), json_obj);
-        }
-        info!("All functions processed");
-        r2p.close();
-        info!("r2p closed");
+        if function_details.is_ok() {
+            let mut register_behaviour_vec: HashMap<String, AEAFJRegisterBehaviour> =
+                HashMap::new();
+            info!("Executing aeafj for each function");
+            for function in function_details.unwrap().iter() {
+                r2p.cmd(format!("s @ {}", &function.name).as_str())
+                    .expect("Command failed..");
+                let json = r2p.cmd("aeafj").expect("Command failed..");
+                let json_obj: AEAFJRegisterBehaviour =
+                    serde_json::from_str(&json).expect("Unable to convert to JSON object!");
+                register_behaviour_vec.insert(function.name.clone(), json_obj);
+            }
+            info!("All functions processed");
+            r2p.close();
+            info!("r2p closed");
 
-        info!("Writing extracted data to file");
-        self.write_to_json(&json!(register_behaviour_vec))
+            info!("Writing extracted data to file");
+            self.write_to_json(&json!(register_behaviour_vec))
+        } else {
+            error!(
+                "Failed to extract function register - Error in r2 extraction for {:?}",
+                self.file_path
+            )
+        }
     }
 
     // TODO: Refactor this so it uses the AGFJ struct
@@ -396,16 +404,23 @@ impl FileToBeProcessed {
         let function_details = self.get_function_name_list(&mut r2p);
         let mut function_xrefs: HashMap<String, Vec<FunctionXrefDetails>> = HashMap::new();
         info!("Extracting xrefs for each function");
-        for function in function_details.iter() {
-            let ret = self.get_function_xref_details(function.offset, &mut r2p);
-            function_xrefs.insert(function.name.clone(), ret);
-        }
-        info!("All functions processed");
-        r2p.close();
-        info!("r2p closed");
+        if function_details.is_ok() {
+            for function in function_details.unwrap().iter() {
+                let ret = self.get_function_xref_details(function.offset, &mut r2p);
+                function_xrefs.insert(function.name.clone(), ret);
+            }
+            info!("All functions processed");
+            r2p.close();
+            info!("r2p closed");
 
-        info!("Writing extracted data to file");
-        self.write_to_json(&json!(function_xrefs))
+            info!("Writing extracted data to file");
+            self.write_to_json(&json!(function_xrefs))
+        } else {
+            error!(
+                "Failed to extract function xrefs - Error in r2 extraction for {:?}",
+                self.file_path
+            )
+        }
     }
 
     pub fn extract_function_info(&self, debug: &bool) {
@@ -421,38 +436,44 @@ impl FileToBeProcessed {
         let f_name = format!("{:?}/{}.json", self.output_path, fp_filename);
         if !Path::new(&f_name).exists() {
             let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
-            let function_details = self.get_function_name_list(&mut r2p);
-            let mut function_info: Vec<Vec<AFIJFunctionInfo>> = Vec::new();
-            info!("Extracting function metadata");
-            for function in function_details.iter() {
-                debug!("Processing {}", function.name);
-                let ret = self.get_function_info(function.offset, &mut r2p);
-                debug!("Metadata Collected: {:?}", ret);
-                function_info.push(ret);
-            }
-            info!("All functions processed");
-            r2p.close();
-            info!("r2p closed");
 
-            info!("Writing extracted data to file");
-            self.write_to_json(&json!(function_info
-                .into_iter()
-                .flatten()
-                .collect::<Vec<AFIJFunctionInfo>>()))
+            let function_details: Result<Vec<AFIJFunctionInfo>, r2pipe::Error> =
+                self.get_function_name_list(&mut r2p);
+
+            if function_details.is_err() {
+                error!("Unable to extract function info for {:?}", self.file_path);
+                r2p.close();
+                info!("r2p closed");
+            } else {
+                r2p.close();
+                info!("r2p closed");
+
+                info!("Writing extracted data to file");
+                self.write_to_json(&json!(function_details.unwrap()))
+            }
         }
     }
 
     // r2 commands to structs
 
-    fn get_function_name_list(&self, r2p: &mut R2Pipe) -> Vec<AFLJFuncDetails> {
+    fn get_function_name_list(
+        &self,
+        r2p: &mut R2Pipe,
+    ) -> Result<Vec<AFIJFunctionInfo>, r2pipe::Error> {
         info!("Getting function information from binary");
-        let json = r2p
-            .cmd("aflj")
-            .expect(&format!("aflj command failed for {:?}", self.file_path));
-        let json_obj: Vec<AFLJFuncDetails> = serde_json::from_str(&json)
-            .expect(&format!("Unable to convert to JSON object! - {}", json));
+        let json = r2p.cmd("aflj");
 
-        json_obj
+        if json.is_ok() {
+            let json_obj: Vec<AFIJFunctionInfo> = serde_json::from_str(&json.as_ref().unwrap())
+                .expect(&format!(
+                    "Unable to convert to JSON object! - {}",
+                    json.unwrap()
+                ));
+
+            Ok(json_obj)
+        } else {
+            Err(json.unwrap_err())
+        }
     }
 
     fn get_function_xref_details(
@@ -482,12 +503,24 @@ impl FileToBeProcessed {
         json_obj
     }
 
-    fn get_function_info(&self, function_addr: u64, r2p: &mut R2Pipe) -> Vec<AFIJFunctionInfo> {
+    fn get_function_info(
+        &self,
+        function_addr: u64,
+        r2p: &mut R2Pipe,
+    ) -> Result<Vec<AFIJFunctionInfo>, r2pipe::Error> {
         Self::go_to_address(r2p, function_addr);
-        let json = r2p.cmd("afij").expect("afij command failed");
-        let json_obj: Vec<AFIJFunctionInfo> = serde_json::from_str(&json)
-            .expect(&format!("Unable to convert to JSON object! - {}", json));
-        json_obj
+        let json = r2p.cmd("afij");
+        if json.is_ok() {
+            let json_obj: Vec<AFIJFunctionInfo> = serde_json::from_str(&json.as_ref().unwrap())
+                .expect(&format!(
+                    "Unable to convert to JSON object! - {}",
+                    json.unwrap()
+                ));
+
+            Ok(json_obj)
+        } else {
+            Err(json.unwrap_err())
+        }
     }
 
     // Helper Functions
@@ -501,12 +534,17 @@ impl FileToBeProcessed {
             .to_string();
 
         fp_filename = fp_filename + "_" + &self.job_type_suffix.clone();
-        let f_name = format!("{:?}/{}.json", self.output_path, fp_filename);
+
+        let mut output_filepath = PathBuf::new();
+        output_filepath.push(self.output_path.clone());
+        output_filepath.push(fp_filename);
+        debug!("Save filename: {:?}", output_filepath);
+
         serde_json::to_writer(
-            &File::create(&f_name).expect("Unable to create file!"),
+            &File::create(&output_filepath).expect("Unable to create file!"),
             &json_obj,
         )
-        .unwrap_or_else(|_| panic!("the world is ending: {}", f_name));
+        .unwrap_or_else(|_| panic!("the world is ending: {:?}", output_filepath));
     }
 
     fn go_to_address(r2p: &mut R2Pipe, function_addr: u64) {

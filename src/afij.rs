@@ -5,26 +5,26 @@ use serde_json::Value;
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AFIJFunctionInfo {
-    pub offset: i64,
+    pub offset: u64,
     pub name: String,
     pub size: i128,
     #[serde(rename = "is-pure")]
     pub is_pure: String,
-    pub realsz: i64,
+    pub realsz: u64,
     pub noreturn: bool,
-    pub stackframe: i64,
+    pub stackframe: u64,
     pub calltype: String,
-    pub cost: i64,
-    pub cc: i64,
-    pub bits: i64,
+    pub cost: u64,
+    pub cc: u64,
+    pub bits: u64,
     #[serde(rename = "type")]
     pub type_field: String,
-    pub nbbs: i64,
+    pub nbbs: u64,
     #[serde(rename = "is-lineal")]
     pub is_lineal: bool,
     pub ninstrs: i64,
     pub edges: i64,
-    pub ebbs: i64,
+    pub ebbs: u64,
     pub signature: String,
     pub minbound: u64,
     pub maxbound: i128,
