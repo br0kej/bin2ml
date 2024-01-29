@@ -60,19 +60,12 @@ impl CallGraphNodeFeatureType {
 #[serde(rename_all = "camelCase")]
 pub struct GeminiNode {
     pub id: i64,
-    #[serde(rename = "num calls")]
     pub num_calls: f64,
-    #[serde(rename = "num transfer")]
     pub num_transfer: f64,
-    #[serde(rename = "num arith")]
     pub num_arith: f64,
-    #[serde(rename = "num ins")]
     pub num_ins: f64,
-    #[serde(rename = "numeric consts")]
     pub numeric_consts: f64,
-    #[serde(rename = "string consts")]
     pub string_consts: f64,
-    #[serde(rename = "num offspring")]
     pub num_offspring: f64,
 }
 
@@ -95,21 +88,13 @@ impl From<(i64, &Vec<f64>)> for GeminiNode {
 #[serde(rename_all = "camelCase")]
 pub struct DGISNode {
     pub id: i64,
-    #[serde(rename = "num stack ops")]
     pub num_stack_ops: f64,
-    #[serde(rename = "num arith ops")]
     pub num_arith_ops: f64,
-    #[serde(rename = "num logic ops")]
     pub num_logic_ops: f64,
-    #[serde(rename = "num cmp ops")]
     pub num_cmp_ops: f64,
-    #[serde(rename = "num lib calls")]
     pub num_lib_calls: f64,
-    #[serde(rename = "num uncon jumps")]
     pub num_uncon_jumps: f64,
-    #[serde(rename = "num con jumps")]
     pub num_con_jumps: f64,
-    #[serde(rename = "num generic ins")]
     pub num_generic_ins: f64,
 }
 
@@ -133,17 +118,11 @@ impl From<(i64, &Vec<f64>)> for DGISNode {
 #[serde(rename_all = "camelCase")]
 pub struct DiscovreNode {
     pub id: i64,
-    #[serde(rename = "num calls")]
     pub num_calls: f64,
-    #[serde(rename = "num transfer")]
     pub num_transfer: f64,
-    #[serde(rename = "num arith")]
     pub num_arith: f64,
-    #[serde(rename = "num ins")]
     pub num_ins: f64,
-    #[serde(rename = "numeric consts")]
     pub numeric_consts: f64,
-    #[serde(rename = "string consts")]
     pub string_consts: f64,
 }
 
