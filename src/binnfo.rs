@@ -1,10 +1,9 @@
 use goblin::{error, Object};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-pub fn goblin_info(fpath: &str) -> error::Result<()> {
-    let path = Path::new(fpath);
-    let buffer = fs::read(path)?;
+pub fn goblin_info(fpath: &PathBuf) -> error::Result<()> {
+    let buffer = fs::read(fpath)?;
     match Object::parse(&buffer)? {
         Object::Elf(elf) => {
             println!("elf: {:#?}", &elf);

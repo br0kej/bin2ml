@@ -11,7 +11,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::fs::{read_to_string, File};
 use std::hash::{Hash, Hasher};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::string::String;
 
 use std::{fs, vec};
@@ -89,12 +89,12 @@ pub struct EsilFuncStringCorpus {
     pub binary_name_index: Vec<String>,
     pub uniq_binaries: Vec<String>,
     pub arch_index: Vec<String>,
-    pub output_path: String,
+    pub output_path: PathBuf,
 }
 
 /// A collection of processed Esil Function String files
 impl EsilFuncStringCorpus {
-    pub fn new(directory: &String, output_path: &String) -> Result<EsilFuncStringCorpus> {
+    pub fn new(directory: &PathBuf, output_path: &PathBuf) -> Result<EsilFuncStringCorpus> {
         let mut filepaths = Vec::new();
         let mut binary_name_index = Vec::new();
         let mut uniq_binaries = Vec::new();
@@ -123,10 +123,9 @@ impl EsilFuncStringCorpus {
             }
         }
 
-        let output_path: String = if !output_path.ends_with('/') {
-            format!("{}{}", output_path, "/")
-        } else {
-            output_path.to_string()
+        let mut output_path = output_path.to_owned();
+        if !output_path.to_string_lossy().to_string().ends_with("/") {
+            output_path.push("/");
         };
 
         Ok(EsilFuncStringCorpus {
@@ -135,7 +134,7 @@ impl EsilFuncStringCorpus {
             binary_name_index,
             uniq_binaries,
             arch_index,
-            output_path,
+            output_path: output_path.to_owned(),
         })
     }
 
@@ -278,7 +277,7 @@ impl EsilFuncStringCorpus {
 
         if !just_stats {
             let uniques_to_drop = json!(unique_func_hash_tuples);
-            let fname_string = format!("{}{}-dedup.json", self.output_path, &target_binary_name);
+            let fname_string = format!("{:?}{}-dedup.json", self.output_path, &target_binary_name);
             serde_json::to_writer(
                 &File::create(fname_string).expect("Failed to create writer"),
                 &uniques_to_drop,
@@ -291,25 +290,25 @@ impl EsilFuncStringCorpus {
 /// Struct and Impl for de-duplicating Call Graph Corpus's
 #[derive(Debug)]
 pub struct CGCorpus {
-    pub filepaths: Vec<String>,
-    pub output_path: String,
+    pub filepaths: Vec<PathBuf>,
+    pub output_path: PathBuf,
     pub filepath_format: String,
     pub node_type: CallGraphNodeFeatureType,
 }
 
 impl CGCorpus {
     pub fn new(
-        directory: &String,
-        output_path: &String,
+        directory: &PathBuf,
+        output_path: &PathBuf,
         filepath_format: &String,
         node_type: CallGraphNodeFeatureType,
     ) -> Result<CGCorpus> {
-        if !Path::new(output_path).exists() {
+        if output_path.exists() {
             fs::create_dir(output_path).expect("Failed to create output directory!");
-            info!("Output path not found - Creating {}", output_path)
+            info!("Output path not found - Creating {:?}", output_path)
         }
 
-        let mut filepaths = Vec::new();
+        let mut filepaths: Vec<PathBuf> = Vec::new();
 
         // Load all JSON filepaths
         for file in WalkDir::new(directory)
@@ -317,21 +316,16 @@ impl CGCorpus {
             .filter_map(|file| file.ok())
         {
             if file.path().to_string_lossy().ends_with(".json") {
-                filepaths.push(file.clone().path().to_string_lossy().to_string());
+                filepaths.push(PathBuf::from(file.clone().path()));
             }
         }
 
         info!("Returning One Hop CG Corpus Struct");
-
-        let output_path = if output_path.ends_with('/') {
-            output_path.to_owned()
-        } else {
-            output_path.to_owned() + &*"/".to_string()
-        };
+        let output_path = output_path.to_owned();
 
         Ok(CGCorpus {
             filepaths,
-            output_path: output_path.to_string(),
+            output_path: output_path,
             filepath_format: filepath_format.to_string(),
             node_type,
         })
@@ -344,7 +338,7 @@ impl CGCorpus {
     }
 
     //fn dedup_corpus<N: Hash>(data: &mut Vec<Option<CallGraphTypes>>, filepaths: &mut Vec<String>) {
-    fn dedup_corpus(data: &mut Vec<Option<CallGraphTypes>>, filepaths: &mut Vec<String>) {
+    fn dedup_corpus(data: &mut Vec<Option<CallGraphTypes>>, filepaths: &mut Vec<PathBuf>) {
         debug!("Creating the removal index");
 
         let mut seen = HashSet::new();
@@ -365,29 +359,31 @@ impl CGCorpus {
         }
     }
 
-    fn get_binary_name_cisco(filepath: &String) -> String {
+    fn get_binary_name_cisco(filepath: &PathBuf) -> PathBuf {
         // Example: x86-gcc-9-O3_nping_cg-onehopcgcallers-meta
         let binary_intermediate = Path::new(filepath).parent().unwrap().file_name().unwrap();
-        binary_intermediate
-            .to_string_lossy()
-            .split('_')
-            .nth(1)
-            .unwrap()
-            .to_string()
+        PathBuf::from(
+            binary_intermediate
+                .to_string_lossy()
+                .split('_')
+                .nth(1)
+                .unwrap(),
+        )
     }
-    fn get_binary_name_binkit(filepath: &String) -> String {
+    fn get_binary_name_binkit(filepath: &PathBuf) -> PathBuf {
         // Example: tar-1.34_gcc-8.2.0_x86_32_O3_rmt_cg-onehopcgcallers-meta
         let binary_intermediate = Path::new(filepath).parent().unwrap().file_name().unwrap();
-        binary_intermediate
-            .to_string_lossy()
-            .split('_')
-            .rev()
-            .nth(1)
-            .unwrap()
-            .to_string()
+        PathBuf::from(
+            binary_intermediate
+                .to_string_lossy()
+                .split('_')
+                .rev()
+                .nth(1)
+                .unwrap(),
+        )
     }
 
-    fn extract_binary_from_fps(&self) -> Vec<String> {
+    fn extract_binary_from_fps(&self) -> Vec<PathBuf> {
         let mut fp_binaries = Vec::new();
         // Process the file paths to get the associated binary of each path
         info!("Processing Filepaths to get binaries");
@@ -404,10 +400,10 @@ impl CGCorpus {
         fp_binaries
     }
 
-    fn get_unique_binary_fps(&self, fp_binaries: Vec<String>) -> Vec<Vec<String>> {
+    fn get_unique_binary_fps(&self, fp_binaries: Vec<PathBuf>) -> Vec<Vec<PathBuf>> {
         // Generate binary specific filepath vectors
-        let unique_binaries: Vec<_> = fp_binaries.iter().unique().collect();
-        let mut unique_binaries_fps: Vec<Vec<String>> = vec![Vec::new(); unique_binaries.len()];
+        let unique_binaries: Vec<&PathBuf> = fp_binaries.iter().unique().collect();
+        let mut unique_binaries_fps: Vec<Vec<PathBuf>> = vec![Vec::new(); unique_binaries.len()];
 
         for (file, binary) in self.filepaths.iter().zip(fp_binaries.iter()) {
             unique_binaries_fps[unique_binaries.iter().position(|&x| x == binary).unwrap()]
@@ -417,13 +413,13 @@ impl CGCorpus {
         unique_binaries_fps
     }
 
-    fn load_subset(&self, fp_subset: &[String]) -> Vec<Option<CallGraphTypes>> {
+    fn load_subset(&self, fp_subset: &Vec<PathBuf>) -> Vec<Option<CallGraphTypes>> {
         let mut subset_loaded_data = Vec::new();
         for ele in fp_subset.iter() {
             let data = read_to_string(ele).expect(&format!("Unable to read file - {:?}", ele));
 
             let json = serde_json::from_str::<CallGraphTypes>(&data)
-                .expect(&format!("Unable to load function data from {}", ele));
+                .expect(&format!("Unable to load function data from {:?}", ele));
 
             let nodes_empty = match self.node_type {
                 CallGraphNodeFeatureType::CGName => json.as_cg_name().unwrap().nodes.is_empty(),
@@ -437,11 +433,10 @@ impl CGCorpus {
                 subset_loaded_data.push(None)
             }
         }
-        println!("{:?}", subset_loaded_data);
         subset_loaded_data
     }
 
-    pub fn process_corpus(self) {
+    pub fn process_corpus(&self) {
         let fp_binaries = self.extract_binary_from_fps();
 
         // Generate binary specific filepath vectors
@@ -464,30 +459,32 @@ impl CGCorpus {
                 debug!("File processing complete - {}", idx);
             });
     }
-    pub fn save_corpus(&self, subset_loaded_data: Vec<CallGraphTypes>, fp_subset: &mut [String]) {
+
+    fn generate_dedup_filepath(output_path: &PathBuf, filepath: &PathBuf) -> PathBuf {
+        let first_two = filepath.components().rev().take(2).collect::<Vec<_>>();
+        let first_two: PathBuf = first_two.iter().rev().collect();
+        let output = output_path.clone();
+        let mut final_path = PathBuf::new();
+        final_path.push(output);
+        final_path.push(first_two);
+
+        final_path
+    }
+    pub fn save_corpus(
+        &self,
+        subset_loaded_data: Vec<CallGraphTypes>,
+        fp_subset: &mut Vec<PathBuf>,
+    ) {
         subset_loaded_data
             .iter()
             .zip(fp_subset.iter())
             .for_each(|(data_ele, filepath)| {
-                let fixed_path: Vec<_> = Path::new(filepath)
-                    .components()
-                    .rev()
-                    .take(2)
-                    .collect::<Vec<_>>();
-                trace!("Fixed Path (First Pass): {:?}", fixed_path);
-                let fixed_path = fixed_path
-                    .iter()
-                    .map(|c| c.as_os_str().to_string_lossy().to_string())
-                    .rev()
-                    .collect::<Vec<String>>();
-                trace!("Fixed Path (Second Pass): {:?}", fixed_path);
-                let dirs = format!("{}{}", self.output_path, fixed_path[0]);
+                let save_path = Self::generate_dedup_filepath(&self.output_path, filepath);
+                let dirs = save_path.parent().unwrap_or(Path::new(""));
                 fs::create_dir_all(&dirs).expect("Failed to create output directory!");
 
-                let fixed_path = format!("{}/{}", dirs, fixed_path[1]);
-                trace!("Fixed Path (Final Pass): {:?}", fixed_path);
                 serde_json::to_writer(
-                    &File::create(fixed_path).expect("Failed to create writer"),
+                    &File::create(save_path).expect("Failed to create writer"),
                     &data_ele,
                 )
                 .expect("Unable to write JSON");
@@ -502,7 +499,7 @@ mod tests {
     };
     use std::fs;
     use std::fs::read_to_string;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
     use walkdir::WalkDir;
 
     // Test Dedup on typed CG's
@@ -510,15 +507,15 @@ mod tests {
     fn test_cg_corpus_gen() {
         // CG Corpus Generation
         let corpus = CGCorpus::new(
-            &"test-files/cg_dedup/to_dedup".to_string(),
-            &"test-files/cg_dedup/deduped".to_string(),
+            &PathBuf::from("test-files/cg_dedup/to_dedup"),
+            &mut PathBuf::from("test-files/cg_dedup/deduped"),
             &"cisco".to_string(),
             CallGraphNodeFeatureType::CGName,
         );
         assert_eq!(corpus.as_ref().unwrap().filepaths.len(), 12);
         assert_eq!(
             corpus.as_ref().unwrap().output_path,
-            "test-files/cg_dedup/deduped/".to_string()
+            PathBuf::from("test-files/cg_dedup/deduped/")
         );
         assert_eq!(
             corpus.as_ref().unwrap().filepath_format,
@@ -526,15 +523,15 @@ mod tests {
         );
 
         let corpus = CGCorpus::new(
-            &"test-files/cg_dedup/to_dedup".to_string(),
-            &"test-files/cg_dedup/deduped/".to_string(),
+            &PathBuf::from("test-files/cg_dedup/to_dedup"),
+            &PathBuf::from("test-files/cg_dedup/deduped/"),
             &"cisco".to_string(),
             CallGraphNodeFeatureType::CGName,
         );
         assert_eq!(corpus.as_ref().unwrap().filepaths.len(), 12);
         assert_eq!(
             corpus.as_ref().unwrap().output_path,
-            "test-files/cg_dedup/deduped/".to_string()
+            PathBuf::from("test-files/cg_dedup/deduped/")
         );
         assert_eq!(
             corpus.as_ref().unwrap().filepath_format,
@@ -545,8 +542,8 @@ mod tests {
     #[test]
     fn test_extract_binary_from_fps() {
         let corpus = CGCorpus::new(
-            &"test-files/cg_dedup/to_dedup".to_string(),
-            &"test-files/cg_dedup/deduped".to_string(),
+            &PathBuf::from("test-files/cg_dedup/to_dedup"),
+            &PathBuf::from("test-files/cg_dedup/deduped"),
             &"cisco".to_string(),
             CallGraphNodeFeatureType::CGMeta,
         );
@@ -556,18 +553,18 @@ mod tests {
         assert_eq!(
             fp_binaries,
             vec![
-                "testbin".to_string(),
-                "testbin".to_string(),
-                "testbin".to_string(),
-                "testbin".to_string(),
-                "testbin".to_string(),
-                "testbin".to_string(),
-                "testbin".to_string(),
-                "testbin".to_string(),
-                "testbin2".to_string(),
-                "testbin2".to_string(),
-                "testbin2".to_string(),
-                "testbin2".to_string(),
+                PathBuf::from("testbin"),
+                PathBuf::from("testbin"),
+                PathBuf::from("testbin"),
+                PathBuf::from("testbin"),
+                PathBuf::from("testbin"),
+                PathBuf::from("testbin"),
+                PathBuf::from("testbin"),
+                PathBuf::from("testbin"),
+                PathBuf::from("testbin2"),
+                PathBuf::from("testbin2"),
+                PathBuf::from("testbin2"),
+                PathBuf::from("testbin2"),
             ]
         )
     }
@@ -575,8 +572,8 @@ mod tests {
     #[test]
     fn test_get_unique_binary_fps() {
         let corpus = CGCorpus::new(
-            &"test-files/cg_dedup/to_dedup".to_string(),
-            &"test-files/cg_dedup/deduped".to_string(),
+            &PathBuf::from("test-files/cg_dedup/to_dedup"),
+            &mut PathBuf::from("test-files/cg_dedup/deduped"),
             &"cisco".to_string(),
             CallGraphNodeFeatureType::CGMeta,
         )
@@ -592,8 +589,8 @@ mod tests {
     #[test]
     fn test_processing_unique_binary_collection() {
         let corpus = CGCorpus::new(
-            &"test-files/cg_dedup/to_dedup".to_string(),
-            &"test-files/cg_dedup/deduped".to_string(),
+            &PathBuf::from("test-files/cg_dedup/to_dedup"),
+            &mut PathBuf::from("test-files/cg_dedup/deduped"),
             &"cisco".to_string(),
             CallGraphNodeFeatureType::CGMeta,
         )
@@ -612,8 +609,8 @@ mod tests {
     #[test]
     fn test_dedup_binary_subset() {
         let corpus = CGCorpus::new(
-            &"test-files/cg_dedup/to_dedup".to_string(),
-            &"test-files/cg_dedup/deduped".to_string(),
+            &PathBuf::from("test-files/cg_dedup/to_dedup"),
+            &mut PathBuf::from("test-files/cg_dedup/deduped"),
             &"cisco".to_string(),
             CallGraphNodeFeatureType::CGMeta,
         )
@@ -689,7 +686,9 @@ mod tests {
         }
 
         // clean up
-        fs::remove_dir_all(&corpus.output_path).expect("Unable to remove directory!");
+        if corpus.output_path.is_dir() {
+            fs::remove_dir_all(&corpus.output_path).expect("Unable to remove directory!");
+        }
     }
 
     // Test binary name extraction
@@ -697,24 +696,24 @@ mod tests {
     fn test_binkit_binary_extraction() {
         assert_eq!(
             crate::dedup::CGCorpus::get_binary_name_binkit(
-                &"which-2.21_gcc-9.4.0_arm_32_O2_which_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
-".to_string()
+                &PathBuf::from("which-2.21_gcc-9.4.0_arm_32_O2_which_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
+")
             ),
-            "which"
+            PathBuf::from("which")
         );
         assert_eq!(
             crate::dedup::CGCorpus::get_binary_name_binkit(
-                &"recutils-1.9_gcc-11.2.0_mips_64_O3_recins_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
-".to_string()
+                &PathBuf::from("recutils-1.9_gcc-11.2.0_mips_64_O3_recins_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
+")
             ),
-            "recins"
+            PathBuf::from("recins")
         );
         assert_eq!(
             crate::dedup::CGCorpus::get_binary_name_binkit(
-                &"recutils-1.9_gcc-11.2.0_mips_64_O3_recsel_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
-".to_string(),
+                &PathBuf::from("recutils-1.9_gcc-11.2.0_mips_64_O3_recsel_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
+"),
             ),
-            "recsel",
+            PathBuf::from("recsel"),
         );
     }
 
@@ -722,30 +721,30 @@ mod tests {
     fn test_cisco_binary_extraction() {
         assert_eq!(
             crate::dedup::CGCorpus::get_binary_name_binkit(
-                &"arm64-clang-9-Os_curl_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json".to_string()
+                &PathBuf::from("arm64-clang-9-Os_curl_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json")
             ),
-            "curl"
+            PathBuf::from("curl")
         );
         assert_eq!(
             crate::dedup::CGCorpus::get_binary_name_binkit(
-                &"x86-clang-9-Os_libcrypto.so.3_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
-".to_string()
+                &PathBuf::from("x86-clang-9-Os_libcrypto.so.3_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
+")
             ),
-            "libcrypto.so.3"
+            PathBuf::from("libcrypto.so.3")
         );
         assert_eq!(
             crate::dedup::CGCorpus::get_binary_name_binkit(
-                &"x86-gcc-9-O3_unrar_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
-".to_string(),
+                &PathBuf::from("x86-gcc-9-O3_unrar_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
+"),
             ),
-            "unrar",
+            PathBuf::from("unrar"),
         );
         assert_eq!(
             crate::dedup::CGCorpus::get_binary_name_binkit(
-                &"/random/path/before/x86-gcc-9-O3_unrar_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
-".to_string(),
+                &PathBuf::from("/random/path/before/x86-gcc-9-O3_unrar_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json
+"),
             ),
-            "unrar",
+            PathBuf::from("unrar"),
         );
     }
 
@@ -753,37 +752,37 @@ mod tests {
     fn test_trex_binary_extraction() {
         assert_eq!(
             crate::dedup::CGCorpus::get_binary_name_binkit(
-                &"arm-32_binutils-2.34-O0_elfedit_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json".to_string()
+                &PathBuf::from("arm-32_binutils-2.34-O0_elfedit_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json")
             ),
-            "elfedit"
+            PathBuf::from("elfedit")
         );
 
         assert_eq!(
             crate::dedup::CGCorpus::get_binary_name_binkit(
-                &"arm-32_binutils-2.34-O0_objdump_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json".to_string()
+                &PathBuf::from("arm-32_binutils-2.34-O0_objdump_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json")
             ),
-            "objdump"  
+            PathBuf::from("objdump")  
         );
         assert_eq!(
             crate::dedup::CGCorpus::get_binary_name_binkit(
-                &"arm-32_binutils-2.34-O0_nm-new_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json".to_string()
+                &PathBuf::from("arm-32_binutils-2.34-O0_nm-new_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json")
             ),
-            "nm-new"
+            PathBuf::from("nm-new")
         );
         // __ for c++ bins that sometimes crop up
         assert_eq!(
             crate::dedup::CGCorpus::get_binary_name_binkit(
-                &"arm-32_binutils-2.34-O0_nm-new_cg-onehopcgcallers-meta/sym.dummy___func__-onehopcgcallers-meta.json".to_string()
+                &PathBuf::from("arm-32_binutils-2.34-O0_nm-new_cg-onehopcgcallers-meta/sym.dummy___func__-onehopcgcallers-meta.json")
             ),
-            "nm-new"
+            PathBuf::from("nm-new")
         );
 
         assert_eq!(
-            crate::dedup::CGCorpus::get_binary_name_binkit(&"fast-disk/Dataset-2/cgs/x86-32_coreutils-8.32-O1_stat_cg-onehopcgcallers-meta/main-onehopcgcallers-meta.json".to_string()),
-            "stat"
+            crate::dedup::CGCorpus::get_binary_name_binkit(&PathBuf::from("fast-disk/Dataset-2/cgs/x86-32_coreutils-8.32-O1_stat_cg-onehopcgcallers-meta/main-onehopcgcallers-meta.json")),
+            PathBuf::from("stat")
         );
 
-        assert_eq!(crate::dedup::CGCorpus::get_binary_name_binkit(&"/fast-disk/processed_datasets/Dataset-2/arm-32_binutils-2.34-O0_addr2line_cg-onehopcgcallers-meta/sym.adjust_relative_path-onehopcgcallers-meta.json".to_string()),
-        "addr2line")
+        assert_eq!(crate::dedup::CGCorpus::get_binary_name_binkit(&PathBuf::from("/fast-disk/processed_datasets/Dataset-2/arm-32_binutils-2.34-O0_addr2line_cg-onehopcgcallers-meta/sym.adjust_relative_path-onehopcgcallers-meta.json")),
+                   PathBuf::from("addr2line"))
     }
 }

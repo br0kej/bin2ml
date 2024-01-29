@@ -16,7 +16,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::fs::{read_to_string, File};
 use std::io::{BufWriter, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::string::String;
 use std::sync::mpsc::channel;
 #[cfg(feature = "inference")]
@@ -24,9 +24,9 @@ use std::sync::Arc;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AGFJFile {
-    pub filename: String,
+    pub filename: PathBuf,
     pub functions: Option<Vec<Vec<AGFJFunc>>>,
-    pub output_path: String,
+    pub output_path: PathBuf,
     pub min_blocks: u16,
     pub feature_type: Option<FeatureType>,
     pub architecture: Option<String>,
@@ -54,7 +54,7 @@ impl AGFJFile {
         #[allow(clippy::expect_fun_call)]
         // Kept in to ensure that the JSON decode error message is printed alongside the filename
         let json: Vec<Vec<AGFJFunc>> = serde_json::from_str(&data).expect(&format!(
-            "Unable to load function data from {}",
+            "Unable to load function data from {:?}",
             self.filename
         ));
 
@@ -139,11 +139,11 @@ impl AGFJFile {
     /// It is *not* suitable for doing any other sort of tasks such as Next Sentence
     /// Prediction (NSP) as there is not indication of where a basic block starts or ends.
     pub fn generate_random_bb_walk(mut self, esil: bool, pairs: bool) {
-        let fname_string: String = get_save_file_path(&self.filename, &self.output_path, None);
+        let fname_string: PathBuf = get_save_file_path(&self.filename, &self.output_path, None);
         let fname_string = if esil {
-            format!("{}-esil-singles-rwdfs.txt", fname_string)
+            format!("{:?}-esil-singles-rwdfs.txt", fname_string)
         } else {
-            format!("{}-dis-singles-rwdfs.txt", fname_string)
+            format!("{:?}-dis-singles-rwdfs.txt", fname_string)
         };
 
         if !Path::new(&fname_string).exists() {
@@ -189,8 +189,8 @@ impl AGFJFile {
     /// Generates a single string which contains the ESIL representation of every
     /// instruction within a function
     pub fn generate_esil_func_strings(mut self) {
-        let fname_string: String = get_save_file_path(&self.filename, &self.output_path, None);
-        let fname_string = format!("{}-efs.json", fname_string);
+        let fname_string: PathBuf = get_save_file_path(&self.filename, &self.output_path, None);
+        let fname_string = format!("{:?}-efs.json", fname_string);
 
         if !Path::new(&fname_string).exists() {
             self.load_and_deserialize()
@@ -229,8 +229,8 @@ impl AGFJFile {
     pub fn generate_disasm_func_strings(mut self) {
         // This needs to be amended so that there is a AGFJFunc function
         // that returns a function as a func string.
-        let fname_string: String = get_save_file_path(&self.filename, &self.output_path, None);
-        let fname_string = format!("{}-dfs.json", fname_string);
+        let fname_string: PathBuf = get_save_file_path(&self.filename, &self.output_path, None);
+        let fname_string = format!("{:?}-dfs.json", fname_string);
 
         if !Path::new(&fname_string).exists() {
             self.load_and_deserialize()
@@ -254,9 +254,9 @@ impl AGFJFile {
                 let map: HashMap<_, _> = fixed.into_iter().collect();
 
                 let json = json!(map);
-                let fname_string: String =
+                let fname_string: PathBuf =
                     get_save_file_path(&self.filename, &self.output_path, None);
-                let fname_string = format!("{}-dfs.json", fname_string);
+                let fname_string = format!("{:?}-dfs.json", fname_string);
 
                 serde_json::to_writer(
                     &File::create(fname_string).expect("Failed to create writer"),
@@ -273,11 +273,11 @@ impl AGFJFile {
     /// This ignores control flow and simple iterates the JSON objects from the top to
     /// the bottom.
     pub fn generate_linear_bb_walk(mut self, esil: bool) {
-        let fname_string: String = get_save_file_path(&self.filename, &self.output_path, None);
+        let fname_string: PathBuf = get_save_file_path(&self.filename, &self.output_path, None);
         let fname_string = if esil {
-            format!("{}-esil-singles.txt", fname_string)
+            format!("{:?}-esil-singles.txt", fname_string)
         } else {
-            format!("{}-dis-singles.txt", fname_string)
+            format!("{:?}-dis-singles.txt", fname_string)
         };
 
         if !Path::new(&fname_string).exists() {
@@ -335,8 +335,8 @@ impl AGFJFile {
         }
 
         let json = json!(&func_feature_vectors);
-        let fname_string: String = get_save_file_path(&self.filename, &self.output_path, None);
-        let fname_string = format!("{}-tiknib.json", fname_string);
+        let fname_string: PathBuf = get_save_file_path(&self.filename, &self.output_path, None);
+        let fname_string = format!("{:?}-tiknib.json", fname_string);
         serde_json::to_writer(
             &File::create(fname_string).expect("Failed to create writer"),
             &json,
@@ -376,9 +376,9 @@ pub enum FunctionMetadataTypes {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AGCJFile {
-    pub filename: String,
+    pub filename: PathBuf,
     pub function_call_graphs: Option<Vec<AGCJFunctionCallGraphs>>,
-    pub output_path: String,
+    pub output_path: PathBuf,
     pub function_metadata: Option<FunctionMetadataTypes>,
     pub include_unk: bool,
 }
@@ -398,9 +398,9 @@ impl AGCJFile {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AFIJFile {
-    pub filename: String,
+    pub filename: PathBuf,
     pub function_info: Option<Vec<AFIJFunctionInfo>>,
-    pub output_path: String,
+    pub output_path: PathBuf,
 }
 
 impl AFIJFile {
@@ -426,8 +426,8 @@ impl AFIJFile {
     }
     pub fn subset_and_save(&mut self) {
         let func_info_subsets = self.subset();
-        let fname_string: String = get_save_file_path(&self.filename, &self.output_path, None);
-        let filename = format!("{}-finfo-subset.json", fname_string);
+        let fname_string: PathBuf = get_save_file_path(&self.filename, &self.output_path, None);
+        let filename = format!("{:?}-finfo-subset.json", fname_string);
         serde_json::to_writer(
             &File::create(filename).expect("Failed to create writer"),
             &func_info_subsets,
@@ -438,9 +438,9 @@ impl AFIJFile {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TikNibFuncMetaFile {
-    pub filename: String,
+    pub filename: PathBuf,
     pub function_info: Option<Vec<TikNibFunc>>,
-    pub output_path: String,
+    pub output_path: PathBuf,
 }
 
 impl TikNibFuncMetaFile {

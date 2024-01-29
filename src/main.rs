@@ -93,7 +93,7 @@ enum GenerateSubCommands {
     Graphs {
         /// The path to a JSON file extracted using the <EXTRACT> command
         #[arg(short, long, value_name = "FILENAME")]
-        path: String,
+        path: PathBuf,
 
         /// The target data type
         #[arg(short, long, value_name = "DATA_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["cfg", "cg", "onehopcg", "cgcallers", "onehopcgcallers"])
@@ -102,7 +102,7 @@ enum GenerateSubCommands {
 
         /// The output path for the processed Networkx graphs (1 per function)
         #[arg(short, long, value_name = "OUTPUT")]
-        output_path: String,
+        output_path: PathBuf,
 
         /// The type of features to generate per basic block (node)
         #[arg(short, long, value_name = "FEATURE_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["gemini", "discovre", "dgis"])
@@ -143,7 +143,7 @@ enum GenerateSubCommands {
 
         /// Filepath to the AFIJ function metadata (For call graphs)
         #[arg(long)]
-        metadata_path: Option<String>,
+        metadata_path: Option<PathBuf>,
 
         /// Include unknown functions (For call graphs)
         #[arg(long, default_value = "false")]
@@ -158,7 +158,7 @@ enum GenerateSubCommands {
     Nlp {
         /// The path to a JSON file extracted using the <EXTRACT> command
         #[arg(short, long, value_name = "FILENAME")]
-        path: String,
+        path: PathBuf,
 
         /// The type of data to be generated
         #[arg(short, long, value_name = "DATA_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["esil", "disasm"])
@@ -171,7 +171,7 @@ enum GenerateSubCommands {
 
         /// The output path for the processed data
         #[arg(short, long, value_name = "OUTPUT_PATH")]
-        data_out_path: String,
+        data_out_path: PathBuf,
 
         /// The format of the output data
         #[arg(short, long, value_name = "FORMAT", value_parser = clap::builder::PossibleValuesParser::new(["single", "funcstring"])
@@ -194,10 +194,10 @@ enum GenerateSubCommands {
     Metadata {
         /// The path to an afji JSON file extracted using the <EXTRACT> command
         #[arg(short, long, value_name = "INPUT_PATH")]
-        input_path: String,
+        input_path: PathBuf,
         /// The path for the generated output
         #[arg(short, long, value_name = "OUTPUT_PATH")]
-        output_path: String,
+        output_path: PathBuf,
         /// Data Source Type
         #[arg(short, long, value_parser = clap::builder::PossibleValuesParser::new(["finfo", "agfj"])
             .map(|s| s.parse::<String>().unwrap()))]
@@ -231,7 +231,7 @@ enum Commands {
     Info {
         /// The path to the target binary
         #[arg(short, long, value_name = "FILENAME")]
-        path: Option<String>,
+        path: Option<PathBuf>,
     },
     /// Generate processed data from extracted raw data
     Generate {
@@ -242,11 +242,11 @@ enum Commands {
     Extract {
         /// The path to the dir or binary to be processed
         #[arg(short, long, value_name = "DIR")]
-        fpath: String,
+        fpath: PathBuf,
 
         /// The path for the output directory
         #[arg(short, long, value_name = "DIR")]
-        output_dir: String,
+        output_dir: PathBuf,
 
         /// The extraction mode
         #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "reg", "cfg", "xrefs","cg"])
@@ -295,11 +295,11 @@ enum DedupSubCommands {
     Cgs {
         /// The filename to dedup
         #[arg(short, long, value_name = "FILENAME")]
-        filename: String,
+        filename: PathBuf,
 
         /// Output path to save dedup corpus
         #[arg(short, long, value_name = "OUTPUT_PATH")]
-        output_path: String,
+        output_path: PathBuf,
 
         /// Number of threads to use with Rayon
         #[arg(short, long, value_name = "NUM_THREADS", default_value = "2")]
@@ -319,11 +319,11 @@ enum DedupSubCommands {
     Esil {
         /// The filename to dedup
         #[arg(short, long, value_name = "FILENAME")]
-        filename: String,
+        filename: PathBuf,
 
         /// Output path to save dedup corpus
         #[arg(short, long, value_name = "OUTPUT_PATH")]
-        output_path: String,
+        output_path: PathBuf,
 
         /// Toggle to print statistics of number of functions before and after dedup
         #[arg(long, default_value = "false")]
@@ -397,8 +397,8 @@ fn main() {
                     warn!("The 'with_features' toggle is set but is not support for CFG generation. Will ignore.")
                 };
 
-                if !Path::new(path).exists() {
-                    error!("{} does not exist!", path);
+                if path.exists() {
+                    error!("{:?} does not exist!", path);
                     exit(1)
                 }
                 info!("Chosen Graph Type: {}", graph_data_type);
@@ -441,7 +441,7 @@ fn main() {
                                 {
                                     if file.path().to_string_lossy().ends_with(".json") {
                                         agfj_graph_statistical_features(
-                                            file.path().to_str().unwrap(),
+                                            file.path(),
                                             &min_blocks.unwrap(),
                                             output_path,
                                             feature_vec_type,
@@ -483,26 +483,26 @@ fn main() {
                                 exit(1)
                             };
                             let mut metadata = AFIJFile {
-                                filename: metadata_path.clone().unwrap(),
+                                filename: metadata_path.clone().unwrap().to_path_buf(),
                                 function_info: None,
-                                output_path: "".to_string(),
+                                output_path: PathBuf::new(),
                             };
                             metadata
                                 .load_and_deserialize()
                                 .expect("Unable to load file");
                             let metadata_subset = metadata.subset();
                             AGCJFile {
-                                filename: path.to_owned(),
+                                filename: (*path).clone(),
                                 function_call_graphs: None,
-                                output_path: output_path.to_owned(),
+                                output_path: (*output_path).clone(),
                                 function_metadata: Some(metadata_subset),
                                 include_unk: *include_unk,
                             }
                         } else {
                             AGCJFile {
-                                filename: path.to_owned(),
+                                filename: (*path).clone(),
                                 function_call_graphs: None,
-                                output_path: output_path.to_owned(),
+                                output_path: (*output_path).clone(),
                                 function_metadata: None,
                                 include_unk: *include_unk,
                             }
@@ -573,20 +573,20 @@ fn main() {
                             debug!("Creating call graphs without any node features");
                             file_paths_vec.par_iter().progress().for_each(|path| {
                                 let suffix = graph_type.to_owned().to_string();
-                                let full_output_path = PathBuf::from(get_save_file_path(
-                                    path,
+                                let full_output_path = get_save_file_path(
+                                    &PathBuf::from(path),
                                     output_path,
                                     Some(suffix),
-                                ));
+                                );
                                 if !full_output_path.is_dir() {
                                     let mut file = AGCJFile {
-                                        filename: path.to_owned(),
+                                        filename: path.to_owned().parse().unwrap(),
                                         function_call_graphs: None,
                                         output_path: output_path.to_owned(),
                                         function_metadata: None,
                                         include_unk: *include_unk,
                                     };
-                                    debug!("Proceissing {}", file.filename);
+                                    debug!("Proceissing {:?}", file.filename);
                                     file.load_and_deserialize()
                                         .expect("Unable to load and desearilize JSON");
 
@@ -668,29 +668,28 @@ fn main() {
                                 .zip(metadata_paths_vec)
                                 .collect::<Vec<_>>();
 
-                            combined_cgs_metadata.par_iter().progress().for_each(|tup| {
+                            combined_cgs_metadata.par_iter().progress().for_each(|(filepath, metapath)| {
                                 let suffix = format!("{}-meta", graph_type.to_owned());
-                                let full_output_path =
-                                    PathBuf::from(get_save_file_path(&tup.0, output_path, Some(suffix)));
+                                let full_output_path = get_save_file_path(&PathBuf::from(filepath), output_path, Some(suffix));
                                 if !full_output_path.is_dir() {
                                     let mut file = {
                                         let metadata: Option<FunctionMetadataTypes>;
                                         if metadata_type.clone().unwrap() == *"finfo" {
                                             let mut metadata_file = AFIJFile {
-                                                filename: tup.1.clone(),
+                                                filename: PathBuf::from(metapath),
                                                 function_info: None,
-                                                output_path: "".to_string(),
+                                                output_path: PathBuf::new(),
                                             };
-                                            debug!("Attempting to load metadata file: {}", tup.1);
+                                            debug!("Attempting to load metadata file: {}", metapath);
                                             metadata_file
                                                 .load_and_deserialize()
                                                 .expect("Unable to load associated metadata file");
                                             metadata = Some(metadata_file.subset());
                                         } else if metadata_type.clone().unwrap() == *"tiknib" {
                                             let mut metadata_file = TikNibFuncMetaFile {
-                                                filename: tup.1.clone(),
+                                                filename: PathBuf::from(metapath),
                                                 function_info: None,
-                                                output_path: "".to_string(),
+                                                output_path: PathBuf::new(),
                                             };
 
                                             metadata_file.load_and_deserialize().expect("Unable to load associated metadata file");
@@ -700,14 +699,14 @@ fn main() {
                                         }
 
                                         AGCJFile {
-                                            filename: tup.0.to_owned(),
+                                            filename: PathBuf::from(filepath),
                                             function_call_graphs: None,
                                             output_path: output_path.to_owned(),
                                             function_metadata: metadata,
                                             include_unk: *include_unk,
                                         }
                                     };
-                                    debug!("Attempting to load {}", file.filename);
+                                    debug!("Attempting to load {:?}", file.filename);
                                     file.load_and_deserialize()
                                         .expect("Unable to load and desearilize JSON");
 
@@ -753,7 +752,7 @@ fn main() {
                                         );
                                     }
                                 }
-                                debug!("Finished generating cgs + metadata for {}", file.filename);
+                                debug!("Finished generating cgs + metadata for {:?}", file.filename);
                             } else {
                                     info!("Skipping {} as already exists", full_output_path.to_string_lossy())
                                 }});
@@ -783,7 +782,7 @@ fn main() {
                     let mut file = AGFJFile {
                         functions: None,
                         filename: input_path.to_owned(),
-                        output_path: output_path.to_string(),
+                        output_path: output_path.to_owned(),
                         min_blocks: 1, // Dummy
                         feature_type: None,
                         architecture: None,
@@ -831,7 +830,7 @@ fn main() {
                     let file = AGFJFile {
                         functions: None,
                         filename: path.to_owned(),
-                        output_path: data_out_path.to_string(),
+                        output_path: data_out_path.to_owned(),
                         min_blocks: *min_blocks,
                         feature_type: None,
                         architecture: None,
@@ -849,8 +848,8 @@ fn main() {
                     for file in file_paths_vec.iter().progress() {
                         let file = AGFJFile {
                             functions: None,
-                            filename: file.to_string(),
-                            output_path: data_out_path.to_string(),
+                            filename: PathBuf::from(file),
+                            output_path: data_out_path.to_owned(),
                             min_blocks: *min_blocks,
                             feature_type: None,
                             architecture: None,
@@ -964,7 +963,7 @@ fn main() {
                     info!("Extraction Job type: Function Info");
                     job.files_to_be_processed[0].extract_function_info(debug)
                 }
-                info!("Extraction complete for {}", fpath)
+                info!("Extraction complete for {:?}", fpath)
             }
         }
 
@@ -1004,7 +1003,7 @@ fn main() {
                             .unwrap();
                     corpus.process_corpus();
                 } else {
-                    error!("Filename provided does not exist! - {}", filename)
+                    error!("Filename provided does not exist! - {:?}", filename)
                 }
             }
             DedupSubCommands::Esil {

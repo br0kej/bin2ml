@@ -7,6 +7,7 @@ use itertools::Itertools;
 use petgraph::prelude::Graph;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
+use std::path::PathBuf;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -27,8 +28,8 @@ pub struct AGCJParsedObjects {
 impl AGCJFunctionCallGraphs {
     fn graph_to_json_func_node(
         &self,
-        binary_name: &str,
-        output_path: &String,
+        binary_name: &PathBuf,
+        output_path: &PathBuf,
         networkx_graph: NetworkxDiGraph<CallGraphFuncNameNode>,
         type_suffix: &str,
     ) {
@@ -44,7 +45,7 @@ impl AGCJFunctionCallGraphs {
         }
 
         let filename = format!(
-            "{}/{}-{}.json",
+            "{:?}/{}-{}.json",
             full_output_path, function_name, type_suffix
         );
 
@@ -57,8 +58,8 @@ impl AGCJFunctionCallGraphs {
 
     fn graph_to_json_func_metadata_tiknib(
         &self,
-        binary_name: &str,
-        output_path: &String,
+        binary_name: &PathBuf,
+        output_path: &PathBuf,
         networkx_graph: NetworkxDiGraph<CallGraphTikNibFeatures>,
         type_suffix: &str,
     ) {
@@ -74,7 +75,7 @@ impl AGCJFunctionCallGraphs {
         }
 
         let filename = format!(
-            "{}/{}-{}.json",
+            "{:?}/{}-{}.json",
             full_output_path, function_name, type_suffix
         );
 
@@ -87,8 +88,8 @@ impl AGCJFunctionCallGraphs {
 
     fn graph_to_json_func_metadata_finfo(
         &self,
-        binary_name: &str,
-        output_path: &String,
+        binary_name: &PathBuf,
+        output_path: &PathBuf,
         networkx_graph: NetworkxDiGraph<CallGraphFuncWithMetadata>,
         type_suffix: &str,
     ) {
@@ -104,7 +105,7 @@ impl AGCJFunctionCallGraphs {
         }
 
         let filename = format!(
-            "{}/{}-{}.json",
+            "{:?}/{}-{}.json",
             full_output_path, function_name, type_suffix
         );
 
@@ -226,8 +227,8 @@ impl AGCJFunctionCallGraphs {
     pub fn to_petgraph(
         &self,
         global_cg: &AGCJFile,
-        output_path: &String,
-        binary_name: &str,
+        output_path: &PathBuf,
+        binary_name: &PathBuf,
         with_metadata: &bool,
         include_unk: &bool,
         node_feature_type: Option<String>,
@@ -250,8 +251,8 @@ impl AGCJFunctionCallGraphs {
     pub fn one_hop_to_petgraph(
         &self,
         global_cg: &AGCJFile,
-        output_path: &String,
-        binary_name: &str,
+        output_path: &PathBuf,
+        binary_name: &PathBuf,
         with_metadata: &bool,
         include_unk: &bool,
         node_feature_type: Option<String>,
@@ -273,8 +274,8 @@ impl AGCJFunctionCallGraphs {
     pub fn to_petgraph_with_callers(
         &self,
         global_cg: &AGCJFile,
-        output_path: &String,
-        binary_name: &str,
+        output_path: &PathBuf,
+        binary_name: &PathBuf,
         with_metadata: &bool,
         include_unk: &bool,
         node_feature_type: Option<String>,
@@ -296,8 +297,8 @@ impl AGCJFunctionCallGraphs {
     pub fn one_hop_to_petgraph_with_callers(
         &self,
         global_cg: &AGCJFile,
-        output_path: &String,
-        binary_name: &str,
+        output_path: &PathBuf,
+        binary_name: &PathBuf,
         with_metadata: &bool,
         include_unk: &bool,
         node_feature_type: Option<String>,
@@ -327,8 +328,8 @@ impl AGCJFunctionCallGraphs {
         &self,
         graph: Graph<String, u32>,
         global_cg: &AGCJFile,
-        binary_name: &str,
-        output_path: &String,
+        binary_name: &PathBuf,
+        output_path: &PathBuf,
         with_metadata: &bool,
         node_feature_type: Option<String>,
         type_suffix: &str,
@@ -384,13 +385,13 @@ impl AGCJFunctionCallGraphs {
 #[cfg(test)]
 mod tests {
     use crate::files::AGCJFile;
-    use env_logger;
+    use std::path::PathBuf;
 
     fn return_test_file_oject() -> AGCJFile {
         let mut call_graph_file = AGCJFile {
-            filename: "test-files/ls_cg.json".to_string(),
+            filename: PathBuf::from("test-files/ls_cg.json"),
             function_call_graphs: None,
-            output_path: "".to_string(),
+            output_path: PathBuf::new(),
             function_metadata: None,
             include_unk: false,
         };
@@ -402,7 +403,7 @@ mod tests {
     }
     #[test]
     fn test_function_call_graph_without_unks() {
-        let mut call_graph_file = return_test_file_oject();
+        let call_graph_file = return_test_file_oject();
 
         // Get main function - No Unks
         let raw_call_graph_data = &call_graph_file.function_call_graphs.clone().unwrap()[0];
@@ -417,7 +418,7 @@ mod tests {
 
     #[test]
     fn test_function_call_graph_with_callees_without_unks() {
-        let mut call_graph_file = return_test_file_oject();
+        let call_graph_file = return_test_file_oject();
 
         // Unk False
         let raw_call_graph_data = &call_graph_file.function_call_graphs.clone().unwrap()[0];
@@ -452,7 +453,7 @@ mod tests {
 
     #[test]
     fn test_function_call_graph_with_callees_with_unks() {
-        let mut call_graph_file = return_test_file_oject();
+        let call_graph_file = return_test_file_oject();
 
         // sym.func.100004d11 - One unknown
         let raw_call_graph_data = &call_graph_file.function_call_graphs.clone().unwrap()[2];
@@ -471,7 +472,7 @@ mod tests {
 
     #[test]
     fn test_function_call_graph_callees_and_callers_with_unks() {
-        let mut call_graph_file = return_test_file_oject();
+        let call_graph_file = return_test_file_oject();
 
         // sym.func.100004d11 - One unknown
         let raw_call_graph_data = &call_graph_file.function_call_graphs.clone().unwrap()[2];

@@ -6,6 +6,7 @@ use crate::files::AGFJFile;
 #[cfg(feature = "inference")]
 use crate::inference::InferenceJob;
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 #[cfg(feature = "inference")]
 use std::process::exit;
 #[cfg(feature = "inference")]
@@ -41,9 +42,9 @@ struct EdgePair {
 #[allow(clippy::too_many_arguments)]
 #[cfg(feature = "inference")]
 pub fn agfj_graph_embedded_feats(
-    path: &str,
+    path: &Path,
     min_blocks: &u16,
-    output_path: &str,
+    output_path: &Path,
     feature_type: FeatureType,
     tokeniser_fp: &Option<String>,
     model_fp: &Option<String>,
@@ -53,7 +54,7 @@ pub fn agfj_graph_embedded_feats(
     let file = AGFJFile {
         functions: None,
         filename: path.to_owned(),
-        output_path: output_path.to_string(),
+        output_path: output_path.to_owned(),
         min_blocks: *min_blocks,
         feature_type: Some(feature_type),
         architecture: None,
@@ -86,15 +87,15 @@ pub fn agfj_graph_embedded_feats(
 }
 
 pub fn agfj_graph_statistical_features(
-    path: &str,
+    path: &Path,
     min_blocks: &u16,
-    output_path: &str,
+    output_path: &PathBuf,
     feature_type: FeatureType,
 ) {
     let mut file = AGFJFile {
         functions: None,
         filename: path.to_owned(),
-        output_path: output_path.to_string(),
+        output_path: output_path.to_owned(),
         min_blocks: *min_blocks,
         feature_type: Some(feature_type),
         architecture: None,

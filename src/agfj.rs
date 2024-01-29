@@ -9,8 +9,10 @@ use petgraph::prelude::Graph;
 use petgraph::visit::Dfs;
 use serde::{Deserialize, Serialize};
 use serde_json;
+#[cfg(feature = "inference")]
+use serde_json::{Map, Value};
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 #[cfg(feature = "inference")]
 use std::process::exit;
 #[cfg(feature = "inference")]
@@ -239,9 +241,9 @@ impl AGFJFunc {
     #[cfg(feature = "inference")]
     pub fn generate_embedded_cfg(
         &self,
-        path: &str,
+        path: &PathBuf,
         min_blocks: &u16,
-        output_path: &String,
+        output_path: &PathBuf,
         feature_type: FeatureType,
         inference_job: &Option<Arc<InferenceJob>>,
     ) {
@@ -303,11 +305,11 @@ impl AGFJFunc {
                     )
                 };
 
-                let file_name = path.split('/').last().unwrap();
+                let file_name = path.file_name().unwrap();
                 let binary_name: Vec<_> = file_name.split(".j").collect();
 
                 let fname_string = format!(
-                    "{}/{}-{}.json",
+                    "{:?}/{:?}-{}.json",
                     &full_output_path, binary_name[0], self.name
                 );
                 serde_json::to_writer(
@@ -323,16 +325,18 @@ impl AGFJFunc {
 
     pub fn generate_attributed_cfg(
         &self,
-        path: &str,
+        path: &PathBuf,
         min_blocks: &u16,
-        output_path: &String,
+        output_path: &PathBuf,
         feature_type: FeatureType,
         architecture: &String,
     ) {
         let full_output_path = get_save_file_path(path, output_path, None);
         check_or_create_dir(&full_output_path);
-        let file_name = path.split('/').last().unwrap();
-        let binary_name: Vec<_> = file_name.split(".j").collect();
+        let file_name = path.file_name().unwrap();
+        let binding = file_name.to_string_lossy().to_string();
+
+        let binary_name: Vec<_> = binding.split(".j").collect();
 
         let function_name = if self.name.chars().count() > 100 {
             &self.name[..75]
@@ -341,7 +345,7 @@ impl AGFJFunc {
         };
 
         let fname_string = format!(
-            "{}/{}-{}.json",
+            "{:?}/{:?}-{}.json",
             &full_output_path, binary_name[0], function_name
         );
 
@@ -541,6 +545,7 @@ impl From<(&String, Vec<TikNibFeaturesBB>)> for TikNibFunc {
 #[cfg(test)]
 mod tests {
     use crate::bb::FeatureType;
+    use std::path::PathBuf;
 
     use crate::AGFJFile;
 
@@ -551,11 +556,11 @@ mod tests {
 
     #[test]
     fn file_struct_creation() {
-        let file_path = "../sample-tool-outputs/r2/example_agfj@@F_output.json".to_string();
+        let file_path = PathBuf::from("../sample-tool-outputs/r2/example_agfj@@F_output.json");
         let file = AGFJFile {
             functions: None,
             filename: file_path.to_owned(),
-            output_path: "output.json".to_string(),
+            output_path: PathBuf::from("output.json"),
             min_blocks: 5,
             feature_type: Some(crate::bb::FeatureType::Gemini),
             architecture: None,
@@ -565,20 +570,20 @@ mod tests {
         assert!(file.functions.is_none());
         assert_eq!(
             file.filename,
-            "../sample-tool-outputs/r2/example_agfj@@F_output.json".to_string()
+            PathBuf::from("../sample-tool-outputs/r2/example_agfj@@F_output.json")
         );
-        assert_eq!(file.output_path, "output.json".to_string());
+        assert_eq!(file.output_path, PathBuf::from("output.json"));
         assert_eq!(file.min_blocks, 5);
         assert_eq!(file.feature_type, Some(FeatureType::Gemini));
     }
 
     #[test]
     fn test_file_load_and_desearlize() {
-        let file_path = "test-files/r2-output-samples/example_agfj@@F_output.json".to_string();
+        let file_path = PathBuf::from("test-files/r2-output-samples/example_agfj@@F_output.json");
         let mut file = AGFJFile {
             functions: None,
             filename: file_path.to_owned(),
-            output_path: "output.json".to_string(),
+            output_path: PathBuf::from("output.json"),
             min_blocks: 5,
             feature_type: Some(crate::bb::FeatureType::Gemini),
             architecture: None,
@@ -653,11 +658,11 @@ mod tests {
 
     #[test]
     fn test_func_edge_list_generation() {
-        let file_path = "test-files/r2-output-samples/test_bin_agfj.json".to_string();
+        let file_path = PathBuf::from("test-files/r2-output-samples/test_bin_agfj.json");
         let mut file = AGFJFile {
             functions: None,
             filename: file_path.to_owned(),
-            output_path: "output.json".to_string(),
+            output_path: PathBuf::from("output.json"),
             min_blocks: 5,
             feature_type: Some(crate::bb::FeatureType::Gemini),
             architecture: None,
