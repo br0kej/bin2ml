@@ -333,12 +333,12 @@ impl AGFJFunc {
         check_or_create_dir(&full_output_path);
         let file_name = path.split('/').last().unwrap();
         let binary_name: Vec<_> = file_name.split(".j").collect();
-        let mut function_name = self.name.clone();
 
-        // This is a pretty dirty fix and may break things
-        if function_name.chars().count() > 100 {
-            function_name = self.name[..75].to_string();
-        }
+        let function_name = if self.name.chars().count() > 100 {
+            &self.name[..75]
+        } else {
+            &self.name
+        };
 
         let fname_string = format!(
             "{}/{}-{}.json",
