@@ -218,15 +218,13 @@ impl ExtractionJob {
     ) -> Result<ExtractionJob, Error> {
         fn get_path_type(bin_path: &PathBuf) -> PathType {
             let fpath_md = fs::metadata(bin_path).unwrap();
-            let p_type: PathType;
             if fpath_md.is_file() {
-                p_type = PathType::File;
+                PathType::File
             } else if fpath_md.is_dir() {
-                p_type = PathType::Dir;
+                PathType::Dir
             } else {
-                p_type = PathType::Unk;
+                PathType::Unk
             }
-            p_type
         }
 
         // This functionality is currently not being used!
