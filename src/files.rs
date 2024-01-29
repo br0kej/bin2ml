@@ -51,18 +51,18 @@ impl AGFJFile {
     pub fn load_and_deserialize(&mut self) -> Result<(), ()> {
         let data = read_to_string(&self.filename).expect("Unable to read file");
 
-        #[allow(clippy::expect_fun_call)]
         // Kept in to ensure that the JSON decode error message is printed alongside the filename
-        let json: Vec<Vec<AGFJFunc>> = serde_json::from_str(&data).expect(&format!(
-            "Unable to load function data from {:?}",
-            self.filename
-        ));
+        let json = serde_json::from_str(&data);
 
-        self.functions = Some(json);
+        if json.is_ok() {
+            self.functions = Some(json.unwrap());
 
-        self.architecture = self.detect_architecture();
+            self.architecture = self.detect_architecture();
 
-        Ok(())
+            Ok(())
+        } else {
+            Err(())
+        }
     }
 
     /// Detects the architecture of a file by iterating through the functions
