@@ -397,7 +397,7 @@ fn main() {
                     warn!("The 'with_features' toggle is set but is not support for CFG generation. Will ignore.")
                 };
 
-                if path.exists() {
+                if !path.exists() {
                     error!("{:?} does not exist!", path);
                     exit(1)
                 }
