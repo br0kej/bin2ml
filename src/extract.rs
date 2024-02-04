@@ -533,7 +533,7 @@ impl FileToBeProcessed {
             .to_string_lossy()
             .to_string();
 
-        fp_filename = fp_filename + "_" + &self.job_type_suffix.clone();
+        fp_filename = fp_filename + "_" + &self.job_type_suffix.clone() + ".json";
 
         let mut output_filepath = PathBuf::new();
         output_filepath.push(self.output_path.clone());
