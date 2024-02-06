@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
-use std::fs::{read_to_string, File};
+use std::fs::{read_dir, read_to_string, File};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::string::String;
@@ -497,6 +497,31 @@ impl CGCorpus {
                 debug!("Starting to deduplicate the corpus - {}", idx);
                 Self::dedup_corpus_inplace(&mut subset_loaded_data, fp_subset);
             });
+
+        Self::clean_up_empty_dirs(&self.output_path);
+    }
+
+    fn clean_up_empty_dirs(output_path: &PathBuf) {
+        for dir in WalkDir::new(output_path)
+            .into_iter()
+            .filter_map(|file| file.ok())
+        {
+            if dir.path().is_dir() {
+                let path = dir.path();
+                let dir_ret = read_dir(path);
+                if dir_ret.is_ok() {
+                    let is_empty = dir_ret.unwrap().next().is_none();
+                    if is_empty {
+                        let ret = fs::remove_dir(dir.path());
+                        if ret.is_ok() {
+                            debug!("Successfully removed {:?}", dir.path());
+                        } else {
+                            error!("Tried to remove {:?} but failed", dir.path());
+                        }
+                    };
+                }
+            }
+        }
     }
 
     fn generate_dedup_filepath(output_path: &PathBuf, filepath: &PathBuf) -> PathBuf {
