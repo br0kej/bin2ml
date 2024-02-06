@@ -491,10 +491,10 @@ impl CGCorpus {
             .enumerate()
             .for_each(|(idx, fp_subset)| {
                 debug!("Subset Length: {}", fp_subset.len());
-                if fp_subset.len() > 2500000 {
+                if fp_subset.len() > 3500000 {
                     info!("Encountered a binary subset with more than 2.5M graphs. Chunking. Will have to repeat!");
                     let mut chunked: Vec<_> = fp_subset
-                        .chunks(1000000)
+                        .chunks(2000000)
                         .map(|s| {
                             let mut inner_vec = Vec::new();
                             for ele in s {
@@ -504,9 +504,8 @@ impl CGCorpus {
                         })
                         .collect();
 
-                    info!("Created {} chunks of 1M (approx.)", chunked.len());
+                    info!("Created {} chunks of 2M (approx.)", chunked.len());
                     for (i, ele) in chunked.iter_mut().enumerate() {
-                        info!("Processing Chunk {}", i);
                         let mut subset_loaded_data: Vec<Option<CallGraphTypes>> =
                             self.load_subset(ele);
                         debug!("Starting to deduplicate the corpus - {}", idx);
