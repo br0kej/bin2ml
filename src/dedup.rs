@@ -360,8 +360,6 @@ impl CGCorpus {
     }
 
     fn dedup_corpus_inplace(data: &mut Vec<Option<CallGraphTypes>>, filepaths: &mut Vec<PathBuf>) {
-        info!("Deduplicating inplace!");
-
         let mut seen = HashSet::new();
         for (i, data_ele) in data.iter().enumerate() {
             let hash_value = Self::calculate_hash(&data_ele);
@@ -369,7 +367,7 @@ impl CGCorpus {
             if seen.contains(&hash_value) {
                 let ret = fs::remove_file(&filepaths[i]);
                 if ret.is_ok() {
-                    debug!("Sucessfully removed {:?}", ret.unwrap())
+                    debug!("Sucessfully removed graph");
                 } else {
                     error!("Unable to remove - {:?}", ret);
                 }
@@ -492,10 +490,34 @@ impl CGCorpus {
             .progress()
             .enumerate()
             .for_each(|(idx, fp_subset)| {
-                let mut subset_loaded_data: Vec<Option<CallGraphTypes>> =
-                    self.load_subset(fp_subset);
-                debug!("Starting to deduplicate the corpus - {}", idx);
-                Self::dedup_corpus_inplace(&mut subset_loaded_data, fp_subset);
+                debug!("Subset Length: {}", fp_subset.len());
+                if fp_subset.len() > 2500000 {
+                    info!("Encountered a binary subset with more than 2.5M graphs. Chunking. Will have to repeat!");
+                    let mut chunked: Vec<_> = fp_subset
+                        .chunks(1000000)
+                        .map(|s| {
+                            let mut inner_vec = Vec::new();
+                            for ele in s {
+                                inner_vec.push(ele.to_owned());
+                            }
+                            inner_vec
+                        })
+                        .collect();
+
+                    info!("Created {} chunks of 1M (approx.)", chunked.len());
+                    for (i, ele) in chunked.iter_mut().enumerate() {
+                        info!("Processing Chunk {}", i);
+                        let mut subset_loaded_data: Vec<Option<CallGraphTypes>> =
+                            self.load_subset(ele);
+                        debug!("Starting to deduplicate the corpus - {}", idx);
+                        Self::dedup_corpus_inplace(&mut subset_loaded_data, ele);
+                    }
+                } else {
+                    let mut subset_loaded_data: Vec<Option<CallGraphTypes>> =
+                        self.load_subset(fp_subset);
+                    debug!("Starting to deduplicate the corpus - {}", idx);
+                    Self::dedup_corpus_inplace(&mut subset_loaded_data, fp_subset);
+                }
             });
 
         Self::clean_up_empty_dirs(&self.output_path);

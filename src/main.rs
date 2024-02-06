@@ -999,7 +999,6 @@ fn main() {
                     .build_global()
                     .unwrap();
 
-                warn!("This only supports the Cisco Talos Binary Sim Dataset naming convention");
                 if Path::new(filename).exists() {
                     let node_feature_type = CallGraphNodeFeatureType::new(node_feature_type);
                     info!("Starting duplication process for One Hop Call Graphs");
