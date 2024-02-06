@@ -303,7 +303,7 @@ impl CGCorpus {
         filepath_format: &String,
         node_type: CallGraphNodeFeatureType,
     ) -> Result<CGCorpus> {
-        if output_path.exists() {
+        if !output_path.exists() {
             fs::create_dir(output_path).expect("Failed to create output directory!");
             info!("Output path not found - Creating {:?}", output_path)
         }
@@ -356,6 +356,26 @@ impl CGCorpus {
         for ele in indices_to_remove.iter().rev() {
             data.remove(*ele);
             filepaths.remove(*ele);
+        }
+    }
+
+    fn dedup_corpus_inplace(data: &mut Vec<Option<CallGraphTypes>>, filepaths: &mut Vec<PathBuf>) {
+        info!("Deduplicating inplace!");
+
+        let mut seen = HashSet::new();
+        for (i, data_ele) in data.iter().enumerate() {
+            let hash_value = Self::calculate_hash(&data_ele);
+
+            if seen.contains(&hash_value) {
+                let ret = fs::remove_file(&filepaths[i]);
+                if ret.is_ok() {
+                    debug!("Sucessfully removed {:?}", ret.unwrap())
+                } else {
+                    error!("Unable to remove - {:?}", ret);
+                }
+            } else {
+                seen.insert(hash_value);
+            }
         }
     }
 
@@ -460,6 +480,25 @@ impl CGCorpus {
             });
     }
 
+    pub fn process_corpus_inplace(&self) {
+        let fp_binaries = self.extract_binary_from_fps();
+
+        // Generate binary specific filepath vectors
+        let mut unique_binaries_fps = self.get_unique_binary_fps(fp_binaries);
+
+        info!("Loading the filepaths");
+        unique_binaries_fps
+            .par_iter_mut()
+            .progress()
+            .enumerate()
+            .for_each(|(idx, fp_subset)| {
+                let mut subset_loaded_data: Vec<Option<CallGraphTypes>> =
+                    self.load_subset(fp_subset);
+                debug!("Starting to deduplicate the corpus - {}", idx);
+                Self::dedup_corpus_inplace(&mut subset_loaded_data, fp_subset);
+            });
+    }
+
     fn generate_dedup_filepath(output_path: &PathBuf, filepath: &PathBuf) -> PathBuf {
         let first_two = filepath.components().rev().take(2).collect::<Vec<_>>();
         let first_two: PathBuf = first_two.iter().rev().collect();
@@ -522,12 +561,18 @@ mod tests {
             "cisco".to_string()
         );
 
+        // clean up
+        if corpus.unwrap().output_path.is_dir() {
+            fs::remove_dir_all(&corpus.unwrap().output_path).expect("Unable to remove directory!");
+        };
+
         let corpus = CGCorpus::new(
             &PathBuf::from("test-files/cg_dedup/to_dedup"),
             &PathBuf::from("test-files/cg_dedup/deduped/"),
             &"cisco".to_string(),
             CallGraphNodeFeatureType::CGName,
         );
+
         assert_eq!(corpus.as_ref().unwrap().filepaths.len(), 12);
         assert_eq!(
             corpus.as_ref().unwrap().output_path,
@@ -537,6 +582,10 @@ mod tests {
             corpus.as_ref().unwrap().filepath_format,
             "cisco".to_string()
         );
+        // clean up
+        if corpus.unwrap().output_path.is_dir() {
+            fs::remove_dir_all(&corpus.unwrap().output_path).expect("Unable to remove directory!");
+        }
     }
 
     #[test]
@@ -566,7 +615,11 @@ mod tests {
                 PathBuf::from("testbin2"),
                 PathBuf::from("testbin2"),
             ]
-        )
+        );
+        // clean up
+        if corpus.unwrap().output_path.is_dir() {
+            fs::remove_dir_all(&corpus.unwrap().output_path).expect("Unable to remove directory!");
+        }
     }
 
     #[test]
@@ -578,12 +631,18 @@ mod tests {
             CallGraphNodeFeatureType::CGMeta,
         )
         .unwrap();
+
         let fp_binaries = corpus.extract_binary_from_fps();
         let unique_binary_fps = corpus.get_unique_binary_fps(fp_binaries);
 
         assert_eq!(unique_binary_fps.len(), 2);
         assert_eq!(unique_binary_fps[0].len(), 8);
         assert_eq!(unique_binary_fps[1].len(), 4);
+
+        // clean up
+        if corpus.output_path.is_dir() {
+            fs::remove_dir_all(&corpus.output_path).expect("Unable to remove directory!");
+        }
     }
 
     #[test]
@@ -604,6 +663,11 @@ mod tests {
         assert_eq!(subset_loaded.len(), 8);
         subset_loaded.retain(|c| c.is_some());
         assert_eq!(subset_loaded.len(), 8);
+
+        // clean up
+        if corpus.output_path.is_dir() {
+            fs::remove_dir_all(&corpus.output_path).expect("Unable to remove directory!");
+        }
     }
 
     #[test]

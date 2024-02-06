@@ -314,6 +314,10 @@ enum DedupSubCommands {
         #[arg(long,value_parser = clap::builder::PossibleValuesParser::new(["cgmeta", "cgname", "tiknib"])
         .map(|s| s.parse::<String>().unwrap()), required = true)]
         node_feature_type: String,
+
+        /// Toggle to remove inplace (i.e delete duplicates)
+        #[arg(long)]
+        inplace: bool,
     },
     /// De-dup generate ESIL strings
     Esil {
@@ -988,6 +992,7 @@ fn main() {
                 num_threads,
                 filepath_format,
                 node_feature_type,
+                inplace,
             } => {
                 rayon::ThreadPoolBuilder::new()
                     .num_threads(*num_threads)
@@ -1001,7 +1006,11 @@ fn main() {
                     let corpus =
                         CGCorpus::new(filename, output_path, filepath_format, node_feature_type)
                             .unwrap();
-                    corpus.process_corpus();
+                    if *inplace {
+                        corpus.process_corpus_inplace();
+                    } else {
+                        corpus.process_corpus();
+                    }
                 } else {
                     error!("Filename provided does not exist! - {:?}", filename)
                 }
