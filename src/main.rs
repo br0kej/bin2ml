@@ -787,18 +787,39 @@ fn main() {
                     info!("Generation complete");
                 } else if data_source_type == "agfj" {
                     warn!("This currently only supports making TikNib features for single files");
-                    let mut file = AGFJFile {
-                        functions: None,
-                        filename: input_path.to_owned(),
-                        output_path: output_path.to_owned(),
-                        min_blocks: 1, // Dummy
-                        feature_type: None,
-                        architecture: None,
-                        reg_norm: false, // Dummy
-                    };
 
-                    file.load_and_deserialize().expect("Unable to load data");
-                    file.tiknib_func_level_feature_gen()
+                    if input_path.is_file() {
+                        let mut file = AGFJFile {
+                            functions: None,
+                            filename: input_path.to_owned(),
+                            output_path: output_path.to_owned(),
+                            min_blocks: 1, // Dummy
+                            feature_type: None,
+                            architecture: None,
+                            reg_norm: false, // Dummy
+                        };
+
+                        file.load_and_deserialize().expect("Unable to load data");
+                        file.tiknib_func_level_feature_gen()
+                    } else {
+                        let mut file_paths_vec =
+                            get_json_paths_from_dir(input_path, Some("_cfg".to_string()));
+
+                        file_paths_vec.par_iter().for_each(|filepath| {
+                            let mut file = AGFJFile {
+                                functions: None,
+                                filename: filepath.to_owned().parse().unwrap(),
+                                output_path: output_path.to_owned(),
+                                min_blocks: 1, // Dummy
+                                feature_type: None,
+                                architecture: None,
+                                reg_norm: false, // Dummy
+                            };
+
+                            file.load_and_deserialize().expect("Unable to load data");
+                            file.tiknib_func_level_feature_gen()
+                        });
+                    }
                 }
             }
             GenerateSubCommands::Nlp {
