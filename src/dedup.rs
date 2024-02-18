@@ -436,19 +436,23 @@ impl CGCorpus {
         for ele in fp_subset.iter() {
             let data = read_to_string(ele).expect(&format!("Unable to read file - {:?}", ele));
 
-            let json = serde_json::from_str::<CallGraphTypes>(&data)
-                .expect(&format!("Unable to load function data from {:?}", ele));
+            let json = serde_json::from_str::<CallGraphTypes>(&data);
 
-            let nodes_empty = match self.node_type {
-                CallGraphNodeFeatureType::CGName => json.as_cg_name().unwrap().nodes.is_empty(),
-                CallGraphNodeFeatureType::CGMeta => json.as_cg_meta().unwrap().nodes.is_empty(),
-                CallGraphNodeFeatureType::TikNib => json.as_tik_nib().unwrap().nodes.is_empty(),
-            };
+            if json.is_ok() {
+                let json = json.unwrap();
+                let nodes_empty = match self.node_type {
+                    CallGraphNodeFeatureType::CGName => json.as_cg_name().unwrap().nodes.is_empty(),
+                    CallGraphNodeFeatureType::CGMeta => json.as_cg_meta().unwrap().nodes.is_empty(),
+                    CallGraphNodeFeatureType::TikNib => json.as_tik_nib().unwrap().nodes.is_empty(),
+                };
 
-            if !nodes_empty {
-                subset_loaded_data.push(Some(json))
+                if !nodes_empty {
+                    subset_loaded_data.push(Some(json))
+                } else {
+                    subset_loaded_data.push(None)
+                }
             } else {
-                subset_loaded_data.push(None)
+                error!("Unable to load {:?}", ele);
             }
         }
         subset_loaded_data
