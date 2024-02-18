@@ -336,7 +336,7 @@ impl AGFJFile {
 
         let json = json!(&func_feature_vectors);
         let fname_string: PathBuf = get_save_file_path(&self.filename, &self.output_path, None);
-        let fname_string = format!("{:?}-tiknib.json", fname_string);
+        let fname_string = format!("{}-tiknib.json", fname_string.to_string_lossy());
         serde_json::to_writer(
             &File::create(fname_string).expect("Failed to create writer"),
             &json,
