@@ -509,7 +509,7 @@ impl CGCorpus {
                         .collect();
 
                     info!("Created {} chunks of 2M (approx.)", chunked.len());
-                    for (i, ele) in chunked.iter_mut().enumerate() {
+                    for (_i, ele) in chunked.iter_mut().enumerate() {
                         let mut subset_loaded_data: Vec<Option<CallGraphTypes>> =
                             self.load_subset(ele);
                         debug!("Starting to deduplicate the corpus - {}", idx);
@@ -582,14 +582,12 @@ impl CGCorpus {
 }
 
 mod tests {
-    use crate::dedup::CGCorpus;
-    use crate::networkx::{
-        CallGraphFuncWithMetadata, CallGraphNodeFeatureType, CallGraphTypes, NetworkxDiGraph,
-    };
-    use std::fs;
-    use std::fs::read_to_string;
-    use std::path::{Path, PathBuf};
-    use walkdir::WalkDir;
+    
+    
+    
+    
+    
+    
 
     // Test Dedup on typed CG's
     #[test]
