@@ -1,4 +1,4 @@
-use crate::afij::{AFIJFeatureSubset, AFIJFunctionInfo};
+use crate::afij::{AFIJFeatureSubset, AFIJFeatureSubsetExtended, AFIJFunctionInfo};
 use crate::agcj::AGCJFunctionCallGraphs;
 use crate::agfj::{AGFJFunc, TikNibFunc};
 use crate::bb::{FeatureType, InstructionMode};
@@ -371,6 +371,7 @@ impl AGFJFile {
 #[serde(untagged)]
 pub enum FunctionMetadataTypes {
     AFIJ(Vec<AFIJFeatureSubset>),
+    AFIJExtended(Vec<AFIJFeatureSubsetExtended>),
     AGFJ(Vec<TikNibFunc>),
 }
 
@@ -415,19 +416,29 @@ impl AFIJFile {
         Ok(())
     }
 
-    pub fn subset(&mut self) -> FunctionMetadataTypes {
-        let mut func_info_subsets: Vec<AFIJFeatureSubset> = Vec::new();
-        debug!("Starting to subset functions");
-        for function in self.function_info.as_ref().unwrap().iter() {
-            let subset = AFIJFeatureSubset::from(function);
-            func_info_subsets.push(subset)
+    pub fn subset(&mut self, extended: bool) -> FunctionMetadataTypes {
+        if extended {
+            let mut func_info_subsets_extended: Vec<AFIJFeatureSubsetExtended> = Vec::new();
+            debug!("Starting to subset functions");
+            for function in self.function_info.as_ref().unwrap().iter() {
+                let subset = AFIJFeatureSubsetExtended::from(function);
+                func_info_subsets_extended.push(subset)
+            }
+            FunctionMetadataTypes::AFIJExtended(func_info_subsets_extended)
+        } else {
+            let mut func_info_subsets: Vec<AFIJFeatureSubset> = Vec::new();
+            debug!("Starting to subset functions");
+            for function in self.function_info.as_ref().unwrap().iter() {
+                let subset = AFIJFeatureSubset::from(function);
+                func_info_subsets.push(subset)
+            }
+            FunctionMetadataTypes::AFIJ(func_info_subsets)
         }
-        FunctionMetadataTypes::AFIJ(func_info_subsets)
     }
-    pub fn subset_and_save(&mut self) {
-        let func_info_subsets = self.subset();
+    pub fn subset_and_save(&mut self, extended: bool) {
+        let func_info_subsets = self.subset(extended);
         let fname_string: PathBuf = get_save_file_path(&self.filename, &self.output_path, None);
-        let filename = format!("{:?}-finfo-subset.json", fname_string);
+        let filename = format!("{}-finfo-subset.json", fname_string.to_string_lossy());
         serde_json::to_writer(
             &File::create(filename).expect("Failed to create writer"),
             &func_info_subsets,

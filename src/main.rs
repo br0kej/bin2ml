@@ -202,6 +202,9 @@ enum GenerateSubCommands {
         #[arg(short, long, value_parser = clap::builder::PossibleValuesParser::new(["finfo", "agfj"])
             .map(|s| s.parse::<String>().unwrap()))]
         data_source_type: String,
+        /// Toggle for extended version of finfo
+        #[arg(short, long)]
+        extended: bool,
     },
     /// Generate tokenisers from extracted data
     Tokeniser {
@@ -494,7 +497,7 @@ fn main() {
                             metadata
                                 .load_and_deserialize()
                                 .expect("Unable to load file");
-                            let metadata_subset = metadata.subset();
+                            let metadata_subset = metadata.subset(false);
                             AGCJFile {
                                 filename: (*path).clone(),
                                 function_call_graphs: None,
@@ -688,7 +691,7 @@ fn main() {
                                             metadata_file
                                                 .load_and_deserialize()
                                                 .expect("Unable to load associated metadata file");
-                                            metadata = Some(metadata_file.subset());
+                                            metadata = Some(metadata_file.subset(false));
                                         } else if metadata_type.clone().unwrap() == *"tiknib" {
                                             let mut metadata_file = TikNibFuncMetaFile {
                                                 filename: PathBuf::from(metapath),
@@ -768,6 +771,7 @@ fn main() {
                 input_path,
                 output_path,
                 data_source_type,
+                extended,
             } => {
                 if data_source_type == "finfo" {
                     let mut file = AFIJFile {
@@ -779,7 +783,7 @@ fn main() {
                     file.load_and_deserialize()
                         .expect("Unable to load and desearilize JSON");
                     info!("Successfully loaded JSON");
-                    file.subset_and_save();
+                    file.subset_and_save(*extended);
                     info!("Generation complete");
                 } else if data_source_type == "agfj" {
                     warn!("This currently only supports making TikNib features for single files");

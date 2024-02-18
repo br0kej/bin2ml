@@ -1,3 +1,4 @@
+use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 use serde_json::Value;
@@ -122,6 +123,37 @@ impl From<&AFIJFunctionInfo> for AFIJFeatureSubset {
             nlocals: src.nlocals.unwrap_or(0),
             nargs: src.nargs.unwrap_or(0),
             signature: src.signature.clone(),
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Hash, Serialize, Deserialize)]
+pub struct AFIJFeatureSubsetExtended {
+    pub name: String,
+    pub ninstrs: i64,
+    pub edges: i64,
+    pub indegree: i64,
+    pub outdegree: i64,
+    pub nlocals: i64,
+    pub nargs: i64,
+    pub nbbs: u64,
+    pub avg_ins_bb: OrderedFloat<f32>,
+}
+
+impl From<&AFIJFunctionInfo> for AFIJFeatureSubsetExtended {
+    fn from(src: &AFIJFunctionInfo) -> AFIJFeatureSubsetExtended {
+        let avg_ins_bbs = OrderedFloat::from(src.ninstrs as f32 / src.nbbs as f32);
+
+        AFIJFeatureSubsetExtended {
+            name: src.name.clone(),
+            ninstrs: src.ninstrs,
+            edges: src.edges,
+            indegree: src.indegree.unwrap_or(0),
+            outdegree: src.outdegree.unwrap_or(0),
+            nlocals: src.nlocals.unwrap_or(0),
+            nargs: src.nargs.unwrap_or(0),
+            nbbs: src.nbbs,
+            avg_ins_bb: avg_ins_bbs,
         }
     }
 }
