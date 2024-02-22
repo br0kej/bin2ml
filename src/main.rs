@@ -259,6 +259,9 @@ enum Commands {
 
         #[arg(long, default_value = "false")]
         debug: bool,
+
+        #[arg(long, default_value = "false")]
+        extended_analysis: bool,
     },
     /// Generate single embeddings on the fly
     ///
@@ -895,6 +898,7 @@ fn main() {
             mode,
             num_threads,
             debug,
+            extended_analysis,
         } => {
             info!("Creating extraction job");
             let job = ExtractionJob::new(fpath, output_dir, mode).unwrap();
@@ -915,7 +919,7 @@ fn main() {
                     job.files_to_be_processed
                         .par_iter()
                         .progress()
-                        .for_each(|path| path.extract_func_cfgs(debug));
+                        .for_each(|path| path.extract_func_cfgs(debug, extended_analysis));
                 } else if job.job_type == ExtractionJobType::RegisterBehaviour {
                     info!("Extraction Job Type: Register Behaviour");
                     info!("Starting Parallel generation.");
@@ -923,7 +927,7 @@ fn main() {
                     job.files_to_be_processed
                         .par_iter()
                         .progress()
-                        .for_each(|path| path.extract_register_behaviour(debug));
+                        .for_each(|path| path.extract_register_behaviour(debug, extended_analysis));
                 } else if job.job_type == ExtractionJobType::FunctionXrefs {
                     info!("Extraction Job Type: Function Xrefs");
                     info!("Starting Parallel generation.");
@@ -931,7 +935,7 @@ fn main() {
                     job.files_to_be_processed
                         .par_iter()
                         .progress()
-                        .for_each(|path| path.extract_function_xrefs(debug));
+                        .for_each(|path| path.extract_function_xrefs(debug, extended_analysis));
                 } else if job.job_type == ExtractionJobType::CallGraphs {
                     info!("Extraction Job Type: Call Graphs");
                     info!("Starting Parallel generation.");
@@ -939,7 +943,7 @@ fn main() {
                     job.files_to_be_processed
                         .par_iter()
                         .progress()
-                        .for_each(|path| path.extract_function_call_graphs(debug));
+                        .for_each(|path| path.extract_function_call_graphs(debug, extended_analysis));
                 } else if job.job_type == ExtractionJobType::FuncInfo {
                     info!("Extraction Job Type: Function Info");
                     info!("Starting Parallel generation.");
@@ -947,25 +951,25 @@ fn main() {
                     job.files_to_be_processed
                         .par_iter()
                         .progress()
-                        .for_each(|path| path.extract_function_info(debug));
+                        .for_each(|path| path.extract_function_info(debug, extended_analysis));
                 }
             } else if job.input_path_type == PathType::File {
                 info!("Single file found");
                 if job.job_type == ExtractionJobType::CFG {
                     info!("Extraction Job Type: CFG");
-                    job.files_to_be_processed[0].extract_func_cfgs(debug);
+                    job.files_to_be_processed[0].extract_func_cfgs(debug, extended_analysis);
                 } else if job.job_type == ExtractionJobType::RegisterBehaviour {
                     info!("Extraction Job Type: Register Behaviour");
-                    job.files_to_be_processed[0].extract_register_behaviour(debug)
+                    job.files_to_be_processed[0].extract_register_behaviour(debug, extended_analysis)
                 } else if job.job_type == ExtractionJobType::FunctionXrefs {
                     info!("Extraction Job type: Function Xrefs");
-                    job.files_to_be_processed[0].extract_function_xrefs(debug)
+                    job.files_to_be_processed[0].extract_function_xrefs(debug, extended_analysis)
                 } else if job.job_type == ExtractionJobType::CallGraphs {
                     info!("Extraction Job type: Function Call Graphs");
-                    job.files_to_be_processed[0].extract_function_call_graphs(debug)
+                    job.files_to_be_processed[0].extract_function_call_graphs(debug, extended_analysis)
                 } else if job.job_type == ExtractionJobType::FuncInfo {
                     info!("Extraction Job type: Function Info");
-                    job.files_to_be_processed[0].extract_function_info(debug)
+                    job.files_to_be_processed[0].extract_function_info(debug, extended_analysis)
                 }
                 info!("Extraction complete for {:?}", fpath)
             }

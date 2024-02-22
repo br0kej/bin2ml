@@ -304,9 +304,9 @@ impl ExtractionJob {
 }
 
 impl FileToBeProcessed {
-    pub fn extract_register_behaviour(&self, debug: &bool) {
+    pub fn extract_register_behaviour(&self, debug: &bool, extended_analysis: &bool) {
         info!("Starting register behaviour extraction");
-        let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
+        let mut r2p = self.setup_r2_pipe(&self.file_path, debug, extended_analysis);
         let function_details = self.get_function_name_list(&mut r2p);
         if function_details.is_ok() {
             let mut register_behaviour_vec: HashMap<String, AEAFJRegisterBehaviour> =
@@ -335,7 +335,7 @@ impl FileToBeProcessed {
     }
 
     // TODO: Refactor this so it uses the AGFJ struct
-    pub fn extract_func_cfgs(&self, debug: &bool) {
+    pub fn extract_func_cfgs(&self, debug: &bool, extended_analysis: &bool) {
         let mut fp_filename = Path::new(&self.file_path)
             .file_name()
             .expect("Unable to get filename")
@@ -347,7 +347,7 @@ impl FileToBeProcessed {
             info!("{} not found. Continuing processing.", f_name);
             // This creates HUGE JSON files for each files
             // Approximately 40x file size to JSON
-            let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
+            let mut r2p = self.setup_r2_pipe(&self.file_path, debug, extended_analysis);
             info!("Executing agfj @@f on {:?}", self.file_path);
             let mut json = r2p.cmd("agfj @@f").expect("Command failed..");
 
@@ -385,9 +385,9 @@ impl FileToBeProcessed {
         }
     }
 
-    pub fn extract_function_call_graphs(&self, debug: &bool) {
+    pub fn extract_function_call_graphs(&self, debug: &bool, extended_analysis: &bool) {
         info!("Starting function call graph extraction");
-        let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
+        let mut r2p = self.setup_r2_pipe(&self.file_path, debug, extended_analysis);
         let json = r2p.cmd("agCj").expect("agCj command failed to execute");
         let function_call_graphs: Vec<AGCJFunctionCallGraphs> =
             serde_json::from_str(&json).expect("Unable to convert to JSON object!");
@@ -399,8 +399,8 @@ impl FileToBeProcessed {
         self.write_to_json(&json!(function_call_graphs))
     }
 
-    pub fn extract_function_xrefs(&self, debug: &bool) {
-        let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
+    pub fn extract_function_xrefs(&self, debug: &bool, extended_analysis: &bool) {
+        let mut r2p = self.setup_r2_pipe(&self.file_path, debug, extended_analysis);
         let function_details = self.get_function_name_list(&mut r2p);
         let mut function_xrefs: HashMap<String, Vec<FunctionXrefDetails>> = HashMap::new();
         info!("Extracting xrefs for each function");
@@ -423,7 +423,7 @@ impl FileToBeProcessed {
         }
     }
 
-    pub fn extract_function_info(&self, debug: &bool) {
+    pub fn extract_function_info(&self, debug: &bool, extended_analysis: &bool) {
         info!("Starting function metdata extraction");
         let mut fp_filename = self
             .file_path
@@ -435,7 +435,7 @@ impl FileToBeProcessed {
         fp_filename = fp_filename + "_" + &self.job_type_suffix.clone();
         let f_name = format!("{:?}/{}.json", self.output_path, fp_filename);
         if !Path::new(&f_name).exists() {
-            let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
+            let mut r2p = self.setup_r2_pipe(&self.file_path, debug, extended_analysis);
 
             let function_details: Result<Vec<AFIJFunctionInfo>, r2pipe::Error> =
                 self.get_function_name_list(&mut r2p);
@@ -552,7 +552,7 @@ impl FileToBeProcessed {
             .expect("failed to seek addr");
     }
 
-    fn setup_r2_pipe(&self, s: &PathBuf, debug: &bool) -> R2Pipe {
+    fn setup_r2_pipe(&self, s: &PathBuf, debug: &bool, extended_analysis: &bool) -> R2Pipe {
         // Setup R2 pipe with options and return it
         // Could be extended to include toggling of options
         // + more args?
@@ -576,11 +576,18 @@ impl FileToBeProcessed {
                 R2Pipe::spawn(s.to_str().unwrap(), Some(opts)).expect("Failed to spawn new R2Pipe")
             }
         };
+        if *extended_analysis {
+            debug!("Executing 'aaa' r2 command for {:?}", s);
+            r2p.cmd("aaa")
+                .expect("Unable to complete standard analysis!");
+            debug!("'aaa' r2 command complete for {:?}", s);
+        } else {
 
         debug!("Executing 'aa' r2 command for {:?}", s);
         r2p.cmd("aa")
             .expect("Unable to complete standard analysis!");
         debug!("'aa' r2 command complete for {:?}", s);
+    }
         r2p
     }
 }
