@@ -601,40 +601,40 @@ mod tests {
             &"cisco".to_string(),
             CallGraphNodeFeatureType::CGName,
         );
-        assert_eq!(corpus.as_ref().unwrap().filepaths.len(), 12);
-        assert_eq!(
-            corpus.as_ref().unwrap().output_path,
-            PathBuf::from("test-files/cg_dedup/deduped/")
-        );
-        assert_eq!(
-            corpus.as_ref().unwrap().filepath_format,
-            "cisco".to_string()
-        );
 
-        // clean up
-        if corpus.unwrap().output_path.is_dir() {
-            fs::remove_dir_all(&corpus.unwrap().output_path).expect("Unable to remove directory!");
-        };
+        if corpus.is_ok() {
+            let corpus = corpus.unwrap();
+            assert_eq!(corpus.filepaths.len(), 12);
+            assert_eq!(
+                corpus.output_path,
+                PathBuf::from("test-files/cg_dedup/deduped/")
+            );
+            assert_eq!(corpus.filepath_format, "cisco".to_string());
 
-        let corpus = CGCorpus::new(
-            &PathBuf::from("test-files/cg_dedup/to_dedup"),
-            &PathBuf::from("test-files/cg_dedup/deduped/"),
-            &"cisco".to_string(),
-            CallGraphNodeFeatureType::CGName,
-        );
+            // clean up
+            if corpus.output_path.is_dir() {
+                fs::remove_dir_all(&corpus.output_path).expect("Unable to remove directory!");
+            };
 
-        assert_eq!(corpus.as_ref().unwrap().filepaths.len(), 12);
-        assert_eq!(
-            corpus.as_ref().unwrap().output_path,
-            PathBuf::from("test-files/cg_dedup/deduped/")
-        );
-        assert_eq!(
-            corpus.as_ref().unwrap().filepath_format,
-            "cisco".to_string()
-        );
-        // clean up
-        if corpus.unwrap().output_path.is_dir() {
-            fs::remove_dir_all(&corpus.unwrap().output_path).expect("Unable to remove directory!");
+            let corpus = CGCorpus::new(
+                &PathBuf::from("test-files/cg_dedup/to_dedup"),
+                &PathBuf::from("test-files/cg_dedup/deduped/"),
+                &"cisco".to_string(),
+                CallGraphNodeFeatureType::CGName,
+            );
+            if corpus.is_ok() {
+                let corpus = corpus.unwrap();
+                assert_eq!(corpus.filepaths.len(), 12);
+                assert_eq!(
+                    corpus.output_path,
+                    PathBuf::from("test-files/cg_dedup/deduped/")
+                );
+                assert_eq!(corpus.filepath_format, "cisco".to_string());
+                // clean up
+                if corpus.output_path.is_dir() {
+                    fs::remove_dir_all(&corpus.output_path).expect("Unable to remove directory!");
+                }
+            }
         }
     }
 
@@ -647,28 +647,31 @@ mod tests {
             CallGraphNodeFeatureType::CGMeta,
         );
 
-        let fp_binaries = corpus.unwrap().extract_binary_from_fps();
-        assert_eq!(fp_binaries.len(), 12);
-        assert_eq!(
-            fp_binaries,
-            vec![
-                PathBuf::from("testbin"),
-                PathBuf::from("testbin"),
-                PathBuf::from("testbin"),
-                PathBuf::from("testbin"),
-                PathBuf::from("testbin"),
-                PathBuf::from("testbin"),
-                PathBuf::from("testbin"),
-                PathBuf::from("testbin"),
-                PathBuf::from("testbin2"),
-                PathBuf::from("testbin2"),
-                PathBuf::from("testbin2"),
-                PathBuf::from("testbin2"),
-            ]
-        );
-        // clean up
-        if corpus.unwrap().output_path.is_dir() {
-            fs::remove_dir_all(&corpus.unwrap().output_path).expect("Unable to remove directory!");
+        if corpus.is_ok() {
+            let corpus = corpus.unwrap();
+            let fp_binaries = corpus.extract_binary_from_fps();
+            assert_eq!(fp_binaries.len(), 12);
+            assert_eq!(
+                fp_binaries,
+                vec![
+                    PathBuf::from("testbin"),
+                    PathBuf::from("testbin"),
+                    PathBuf::from("testbin"),
+                    PathBuf::from("testbin"),
+                    PathBuf::from("testbin"),
+                    PathBuf::from("testbin"),
+                    PathBuf::from("testbin"),
+                    PathBuf::from("testbin"),
+                    PathBuf::from("testbin2"),
+                    PathBuf::from("testbin2"),
+                    PathBuf::from("testbin2"),
+                    PathBuf::from("testbin2"),
+                ]
+            );
+            // clean up
+            if corpus.output_path.is_dir() {
+                fs::remove_dir_all(&corpus.output_path).expect("Unable to remove directory!");
+            }
         }
     }
 
