@@ -38,6 +38,7 @@ pub struct FileToBeProcessed {
     pub file_path: PathBuf,
     pub output_path: PathBuf,
     pub job_type_suffix: String,
+    pub r2p_config: R2PipeConfig,
 }
 
 #[derive(Debug)]
@@ -47,6 +48,12 @@ pub struct ExtractionJob {
     pub job_type: ExtractionJobType,
     pub files_to_be_processed: Vec<FileToBeProcessed>,
     pub output_path: PathBuf, // Remove - Kept for backwards compat
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct R2PipeConfig {
+    pub debug: bool,
+    pub extended_analysis: bool,
 }
 
 impl std::fmt::Display for ExtractionJob {
@@ -159,7 +166,6 @@ pub struct Codexref {
 
 // Structs related to AEAFJ
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct AEAFJRegisterBehaviour {
     #[serde(rename = "A")]
     pub a: Vec<String>,
@@ -200,12 +206,13 @@ impl std::fmt::Display for AFLJFuncDetails {
     }
 }
 
-impl From<(String, String, String)> for FileToBeProcessed {
-    fn from(orig: (String, String, String)) -> FileToBeProcessed {
+impl From<(String, String, String, R2PipeConfig)> for FileToBeProcessed {
+    fn from(orig: (String, String, String, R2PipeConfig)) -> FileToBeProcessed {
         FileToBeProcessed {
             file_path: PathBuf::from(orig.0),
             output_path: PathBuf::from(orig.1),
             job_type_suffix: orig.2,
+            r2p_config: orig.3.clone(),
         }
     }
 }
@@ -215,6 +222,8 @@ impl ExtractionJob {
         input_path: &PathBuf,
         output_path: &PathBuf,
         mode: &str,
+        debug: &bool,
+        extended_analysis: &bool,
     ) -> Result<ExtractionJob, Error> {
         fn get_path_type(bin_path: &PathBuf) -> PathType {
             let fpath_md = fs::metadata(bin_path).unwrap();
@@ -241,6 +250,11 @@ impl ExtractionJob {
             }
         }
 
+        let r2_handle_config = R2PipeConfig {
+            debug: *debug,
+            extended_analysis: *extended_analysis,
+        };
+
         let p_type = get_path_type(input_path);
         let job_type = extraction_job_matcher(mode).unwrap();
 
@@ -249,6 +263,7 @@ impl ExtractionJob {
                 file_path: input_path.to_owned(),
                 output_path: output_path.to_owned(),
                 job_type_suffix: (*mode).to_string(),
+                r2p_config: r2_handle_config,
             };
             Ok(ExtractionJob {
                 input_path: input_path.to_owned(),
@@ -259,13 +274,15 @@ impl ExtractionJob {
             })
         } else if p_type == PathType::Dir {
             let files = ExtractionJob::get_file_paths_dir(input_path);
-            let files_with_output_path: Vec<(String, String, String)> = files
+
+            let files_with_output_path: Vec<(String, String, String, R2PipeConfig)> = files
                 .into_iter()
                 .map(|f| {
                     (
                         f,
                         output_path.to_string_lossy().to_string(),
                         mode.to_string(),
+                        r2_handle_config,
                     )
                 })
                 .collect();
@@ -304,9 +321,9 @@ impl ExtractionJob {
 }
 
 impl FileToBeProcessed {
-    pub fn extract_register_behaviour(&self, debug: &bool, extended_analysis: &bool) {
+    pub fn extract_register_behaviour(&self) {
         info!("Starting register behaviour extraction");
-        let mut r2p = self.setup_r2_pipe(&self.file_path, debug, extended_analysis);
+        let mut r2p = self.setup_r2_pipe();
         let function_details = self.get_function_name_list(&mut r2p);
         if function_details.is_ok() {
             let mut register_behaviour_vec: HashMap<String, AEAFJRegisterBehaviour> =
@@ -335,7 +352,7 @@ impl FileToBeProcessed {
     }
 
     // TODO: Refactor this so it uses the AGFJ struct
-    pub fn extract_func_cfgs(&self, debug: &bool, extended_analysis: &bool) {
+    pub fn extract_func_cfgs(&self) {
         let mut fp_filename = Path::new(&self.file_path)
             .file_name()
             .expect("Unable to get filename")
@@ -347,7 +364,7 @@ impl FileToBeProcessed {
             info!("{} not found. Continuing processing.", f_name);
             // This creates HUGE JSON files for each files
             // Approximately 40x file size to JSON
-            let mut r2p = self.setup_r2_pipe(&self.file_path, debug, extended_analysis);
+            let mut r2p = self.setup_r2_pipe();
             info!("Executing agfj @@f on {:?}", self.file_path);
             let mut json = r2p.cmd("agfj @@f").expect("Command failed..");
 
@@ -385,9 +402,9 @@ impl FileToBeProcessed {
         }
     }
 
-    pub fn extract_function_call_graphs(&self, debug: &bool, extended_analysis: &bool) {
+    pub fn extract_function_call_graphs(&self) {
         info!("Starting function call graph extraction");
-        let mut r2p = self.setup_r2_pipe(&self.file_path, debug, extended_analysis);
+        let mut r2p = self.setup_r2_pipe();
         let json = r2p.cmd("agCj").expect("agCj command failed to execute");
         let function_call_graphs: Vec<AGCJFunctionCallGraphs> =
             serde_json::from_str(&json).expect("Unable to convert to JSON object!");
@@ -399,8 +416,8 @@ impl FileToBeProcessed {
         self.write_to_json(&json!(function_call_graphs))
     }
 
-    pub fn extract_function_xrefs(&self, debug: &bool, extended_analysis: &bool) {
-        let mut r2p = self.setup_r2_pipe(&self.file_path, debug, extended_analysis);
+    pub fn extract_function_xrefs(&self) {
+        let mut r2p = self.setup_r2_pipe();
         let function_details = self.get_function_name_list(&mut r2p);
         let mut function_xrefs: HashMap<String, Vec<FunctionXrefDetails>> = HashMap::new();
         info!("Extracting xrefs for each function");
@@ -423,7 +440,7 @@ impl FileToBeProcessed {
         }
     }
 
-    pub fn extract_function_info(&self, debug: &bool, extended_analysis: &bool) {
+    pub fn extract_function_info(&self) {
         info!("Starting function metdata extraction");
         let mut fp_filename = self
             .file_path
@@ -435,7 +452,7 @@ impl FileToBeProcessed {
         fp_filename = fp_filename + "_" + &self.job_type_suffix.clone();
         let f_name = format!("{:?}/{}.json", self.output_path, fp_filename);
         if !Path::new(&f_name).exists() {
-            let mut r2p = self.setup_r2_pipe(&self.file_path, debug, extended_analysis);
+            let mut r2p = self.setup_r2_pipe();
 
             let function_details: Result<Vec<AFIJFunctionInfo>, r2pipe::Error> =
                 self.get_function_name_list(&mut r2p);
@@ -552,42 +569,41 @@ impl FileToBeProcessed {
             .expect("failed to seek addr");
     }
 
-    fn setup_r2_pipe(&self, s: &PathBuf, debug: &bool, extended_analysis: &bool) -> R2Pipe {
-        // Setup R2 pipe with options and return it
-        // Could be extended to include toggling of options
-        // + more args?
-        let opts = if !(*debug) {
-            debug!("Creating r2 handle without debugging");
-            R2PipeSpawnOptions {
-                exepath: "r2".to_owned(),
-                args: vec!["-e bin.cache=true", "-e log.level=1", "-2"],
-            }
-        } else {
+    fn setup_r2_pipe(&self) -> R2Pipe {
+
+        let opts = if self.r2p_config.debug {
             debug!("Creating r2 handle with debugging");
             R2PipeSpawnOptions {
                 exepath: "r2".to_owned(),
                 args: vec!["-e bin.cache=true", "-e log.level=0"],
             }
+        } else {
+            debug!("Creating r2 handle without debugging");
+            R2PipeSpawnOptions {
+                exepath: "r2".to_owned(),
+                args: vec!["-e bin.cache=true", "-e log.level=1", "-2"],
+            }
         };
-        debug!("Attempting to create r2pipe using {:?}", s);
+
+        debug!("Attempting to create r2pipe using {:?}", self.file_path);
         let mut r2p = match R2Pipe::in_session() {
             Some(_) => R2Pipe::open().expect("Unable to open R2Pipe"),
             None => {
-                R2Pipe::spawn(s.to_str().unwrap(), Some(opts)).expect("Failed to spawn new R2Pipe")
+                R2Pipe::spawn(self.file_path.to_str().unwrap(), Some(opts)).expect("Failed to spawn new R2Pipe")
             }
         };
-        if *extended_analysis {
-            debug!("Executing 'aaa' r2 command for {:?}", s);
+
+        if self.r2p_config.extended_analysis {
+            debug!("Executing 'aaa' r2 command for {}", self.file_path.display());
             r2p.cmd("aaa")
                 .expect("Unable to complete standard analysis!");
-            debug!("'aaa' r2 command complete for {:?}", s);
+            debug!("'aaa' r2 command complete for {}", self.file_path.display());
         } else {
-
-        debug!("Executing 'aa' r2 command for {:?}", s);
-        r2p.cmd("aa")
-            .expect("Unable to complete standard analysis!");
-        debug!("'aa' r2 command complete for {:?}", s);
-    }
+            debug!("Executing 'aa' r2 command for {}", self.file_path.display());
+            r2p.cmd("aa")
+                .expect("Unable to complete standard analysis!");
+            debug!("'aa' r2 command complete for {:?}", self.file_path.display());
+        };
         r2p
     }
 }
