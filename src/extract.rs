@@ -345,13 +345,12 @@ impl FileToBeProcessed {
             self.write_to_json(&json!(register_behaviour_vec))
         } else {
             error!(
-                "Failed to extract function register - Error in r2 extraction for {:?}",
+                "Failed to extract function details to generate register behaviour - Error in r2 extraction for {:?}",
                 self.file_path
             )
         }
     }
 
-    // TODO: Refactor this so it uses the AGFJ struct
     pub fn extract_func_cfgs(&self) {
         let mut fp_filename = Path::new(&self.file_path)
             .file_name()
@@ -362,15 +361,11 @@ impl FileToBeProcessed {
         let f_name = format!("{:?}/{}.json", &self.output_path, fp_filename);
         if !Path::new(&f_name).exists() {
             info!("{} not found. Continuing processing.", f_name);
-            // This creates HUGE JSON files for each files
-            // Approximately 40x file size to JSON
             let mut r2p = self.setup_r2_pipe();
             info!("Executing agfj @@f on {:?}", self.file_path);
-            let mut json = r2p.cmd("agfj @@f").expect("Command failed..");
-
+            let mut json = r2p.cmd("agfj @@f").expect("Failed to extract control flow graph information.");
             info!("Closing r2p process for {:?}", self.file_path);
             r2p.close();
-
             info!("Starting JSON fixup for {:?}", self.file_path);
             // Fix JSON object
             json = json.replace("[]\n", ",");
