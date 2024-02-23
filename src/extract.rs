@@ -515,25 +515,6 @@ impl FileToBeProcessed {
         json_obj
     }
 
-    fn get_function_info(
-        &self,
-        function_addr: u64,
-        r2p: &mut R2Pipe,
-    ) -> Result<Vec<AFIJFunctionInfo>, r2pipe::Error> {
-        Self::go_to_address(r2p, function_addr);
-        let json = r2p.cmd("afij");
-        if json.is_ok() {
-            let json_obj: Vec<AFIJFunctionInfo> = serde_json::from_str(&json.as_ref().unwrap())
-                .expect(&format!(
-                    "Unable to convert to JSON object! - {}",
-                    json.unwrap()
-                ));
-
-            Ok(json_obj)
-        } else {
-            Err(json.unwrap_err())
-        }
-    }
 
     // Helper Functions
 

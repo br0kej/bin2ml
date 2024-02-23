@@ -304,8 +304,12 @@ impl CGCorpus {
         node_type: CallGraphNodeFeatureType,
     ) -> Result<CGCorpus> {
         if !output_path.exists() {
-            fs::create_dir(output_path).expect("Failed to create output directory!");
-            info!("Output path not found - Creating {:?}", output_path)
+            let ret = fs::create_dir(output_path);
+            if ret.is_ok() {
+                info!("Output path not found - Creating {:?}", output_path)
+            } else {
+                info!("Output path {:?} found", output_path)
+            }
         }
 
         let mut filepaths: Vec<PathBuf> = Vec::new();
@@ -325,7 +329,7 @@ impl CGCorpus {
 
         Ok(CGCorpus {
             filepaths,
-            output_path: output_path,
+            output_path,
             filepath_format: filepath_format.to_string(),
             node_type,
         })
@@ -512,7 +516,7 @@ impl CGCorpus {
                     for (i, ele) in chunked.iter_mut().enumerate() {
                         let mut subset_loaded_data: Vec<Option<CallGraphTypes>> =
                             self.load_subset(ele);
-                        debug!("Starting to deduplicate the corpus - {}", idx);
+                        debug!("Starting to deduplicate chunk {} for corpus {}", i, idx);
                         Self::dedup_corpus_inplace(&mut subset_loaded_data, ele);
                     }
                 } else {
