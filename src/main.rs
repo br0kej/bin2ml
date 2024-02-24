@@ -22,6 +22,7 @@ pub mod agfj;
 pub mod bb;
 #[cfg(feature = "goblin")]
 pub mod binnfo;
+mod combos;
 pub mod consts;
 pub mod dedup;
 pub mod errors;
@@ -202,6 +203,9 @@ enum GenerateSubCommands {
         #[arg(short, long, value_parser = clap::builder::PossibleValuesParser::new(["finfo", "agfj"])
             .map(|s| s.parse::<String>().unwrap()))]
         data_source_type: String,
+        /// Toggle for extended version of finfo
+        #[arg(short, long)]
+        extended: bool,
     },
     /// Generate tokenisers from extracted data
     Tokeniser {
@@ -221,6 +225,18 @@ enum GenerateSubCommands {
         /// The type of tokeniser to create
         #[arg(short, long, value_name = "BPE or Byte-BPE", default_value = "BPE")]
         tokeniser_type: String,
+    },
+    /// Generate combinations of extracted data - Primaryily metadata objects
+    Combos {
+        #[arg(short, long, value_name = "INPUT_PATH")]
+        input_path: PathBuf,
+        /// The path for the generated output
+        #[arg(short, long, value_name = "OUTPUT_PATH")]
+        output_path: PathBuf,
+        /// Combo Type
+        #[arg(short, long, value_parser = clap::builder::PossibleValuesParser::new(["finfo+tiknib", "finfoe+tiknib"])
+        .map(|s| s.parse::<String>().unwrap()))]
+        combo_type: String,
     },
 }
 
@@ -497,7 +513,7 @@ fn main() {
                             metadata
                                 .load_and_deserialize()
                                 .expect("Unable to load file");
-                            let metadata_subset = metadata.subset();
+                            let metadata_subset = metadata.subset(false);
                             AGCJFile {
                                 filename: (*path).clone(),
                                 function_call_graphs: None,
@@ -691,7 +707,7 @@ fn main() {
                                             metadata_file
                                                 .load_and_deserialize()
                                                 .expect("Unable to load associated metadata file");
-                                            metadata = Some(metadata_file.subset());
+                                            metadata = Some(metadata_file.subset(false));
                                         } else if metadata_type.clone().unwrap() == *"tiknib" {
                                             let mut metadata_file = TikNibFuncMetaFile {
                                                 filename: PathBuf::from(metapath),
@@ -771,6 +787,7 @@ fn main() {
                 input_path,
                 output_path,
                 data_source_type,
+                extended,
             } => {
                 if data_source_type == "finfo" {
                     let mut file = AFIJFile {
@@ -782,22 +799,55 @@ fn main() {
                     file.load_and_deserialize()
                         .expect("Unable to load and desearilize JSON");
                     info!("Successfully loaded JSON");
-                    file.subset_and_save();
+                    file.subset_and_save(*extended);
                     info!("Generation complete");
                 } else if data_source_type == "agfj" {
                     warn!("This currently only supports making TikNib features for single files");
-                    let mut file = AGFJFile {
-                        functions: None,
-                        filename: input_path.to_owned(),
-                        output_path: output_path.to_owned(),
-                        min_blocks: 1, // Dummy
-                        feature_type: None,
-                        architecture: None,
-                        reg_norm: false, // Dummy
-                    };
 
-                    file.load_and_deserialize().expect("Unable to load data");
-                    file.tiknib_func_level_feature_gen()
+                    if input_path.is_file() {
+                        let mut file = AGFJFile {
+                            functions: None,
+                            filename: input_path.to_owned(),
+                            output_path: output_path.to_owned(),
+                            min_blocks: 1, // Dummy
+                            feature_type: None,
+                            architecture: None,
+                            reg_norm: false, // Dummy
+                        };
+
+                        file.load_and_deserialize().expect("Unable to load data");
+                        file.tiknib_func_level_feature_gen()
+                    } else {
+                        let mut file_paths_vec =
+                            get_json_paths_from_dir(input_path, Some("_cfg".to_string()));
+
+                        file_paths_vec.par_iter().for_each(|filepath| {
+                            let mut file = AGFJFile {
+                                functions: None,
+                                filename: filepath.to_owned().parse().unwrap(),
+                                output_path: output_path.to_owned(),
+                                min_blocks: 1, // Dummy
+                                feature_type: None,
+                                architecture: None,
+                                reg_norm: false, // Dummy
+                            };
+
+                            file.load_and_deserialize().expect("Unable to load data");
+                            file.tiknib_func_level_feature_gen()
+                        });
+                    }
+                }
+            }
+            GenerateSubCommands::Combos {
+                input_path,
+                output_path,
+                combo_type,
+            } => {
+                if combo_type == "finfo+tiknib" {
+                    let mut finfo_paths =
+                        get_json_paths_from_dir(input_path, Some("_finfo".to_string()));
+                    let tiknib_paths =
+                        get_json_paths_from_dir(input_path, Some("cfg-tiknib".to_string()));
                 }
             }
             GenerateSubCommands::Nlp {

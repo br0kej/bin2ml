@@ -515,7 +515,6 @@ impl FileToBeProcessed {
         json_obj
     }
 
-
     // Helper Functions
 
     fn write_to_json(&self, json_obj: &Value) {
