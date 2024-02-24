@@ -22,6 +22,7 @@ pub mod agfj;
 pub mod bb;
 #[cfg(feature = "goblin")]
 pub mod binnfo;
+mod combos;
 pub mod consts;
 pub mod dedup;
 pub mod errors;
@@ -224,6 +225,18 @@ enum GenerateSubCommands {
         /// The type of tokeniser to create
         #[arg(short, long, value_name = "BPE or Byte-BPE", default_value = "BPE")]
         tokeniser_type: String,
+    },
+    /// Generate combinations of extracted data - Primaryily metadata objects
+    Combos {
+        #[arg(short, long, value_name = "INPUT_PATH")]
+        input_path: PathBuf,
+        /// The path for the generated output
+        #[arg(short, long, value_name = "OUTPUT_PATH")]
+        output_path: PathBuf,
+        /// Combo Type
+        #[arg(short, long, value_parser = clap::builder::PossibleValuesParser::new(["finfo+tiknib", "finfoe+tiknib"])
+        .map(|s| s.parse::<String>().unwrap()))]
+        combo_type: String,
     },
 }
 
@@ -820,6 +833,18 @@ fn main() {
                             file.tiknib_func_level_feature_gen()
                         });
                     }
+                }
+            }
+            GenerateSubCommands::Combos {
+                input_path,
+                output_path,
+                combo_type,
+            } => {
+                if combo_type == "finfo+tiknib" {
+                    let mut finfo_paths =
+                        get_json_paths_from_dir(input_path, Some("_finfo".to_string()));
+                    let tiknib_paths =
+                        get_json_paths_from_dir(input_path, Some("cfg-tiknib".to_string()));
                 }
             }
             GenerateSubCommands::Nlp {
