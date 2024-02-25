@@ -1,17 +1,27 @@
 use crate::afij::AFIJFunctionInfo;
 use crate::agcj::AGCJFunctionCallGraphs;
+use crate::extract;
+use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Error;
 use anyhow::Result;
 use r2pipe::R2Pipe;
 use r2pipe::R2PipeSpawnOptions;
+use serde::de;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 use serde_json;
+use serde_json::error;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::env;
+use std::fmt::format;
+use std::fmt::UpperHex;
 use std::fs;
 use std::fs::File;
+use std::io::copy;
+use std::os::unix::raw::gid_t;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -54,6 +64,7 @@ pub struct ExtractionJob {
 pub struct R2PipeConfig {
     pub debug: bool,
     pub extended_analysis: bool,
+    pub use_curl_pdb: bool,
 }
 
 impl std::fmt::Display for ExtractionJob {
@@ -224,6 +235,7 @@ impl ExtractionJob {
         mode: &str,
         debug: &bool,
         extended_analysis: &bool,
+        use_curl_pdb: &bool,
     ) -> Result<ExtractionJob, Error> {
         fn get_path_type(bin_path: &PathBuf) -> PathType {
             let fpath_md = fs::metadata(bin_path).unwrap();
@@ -253,6 +265,7 @@ impl ExtractionJob {
         let r2_handle_config = R2PipeConfig {
             debug: *debug,
             extended_analysis: *extended_analysis,
+            use_curl_pdb: *use_curl_pdb,
         };
 
         let p_type = get_path_type(input_path);
@@ -363,7 +376,9 @@ impl FileToBeProcessed {
             info!("{} not found. Continuing processing.", f_name);
             let mut r2p = self.setup_r2_pipe();
             info!("Executing agfj @@f on {:?}", self.file_path);
-            let mut json = r2p.cmd("agfj @@f").expect("Failed to extract control flow graph information.");
+            let mut json = r2p
+                .cmd("agfj @@f")
+                .expect("Failed to extract control flow graph information.");
             info!("Closing r2p process for {:?}", self.file_path);
             r2p.close();
             info!("Starting JSON fixup for {:?}", self.file_path);
@@ -516,7 +531,6 @@ impl FileToBeProcessed {
     }
 
     // Helper Functions
-
     fn write_to_json(&self, json_obj: &Value) {
         let mut fp_filename = self
             .file_path
@@ -544,7 +558,28 @@ impl FileToBeProcessed {
             .expect("failed to seek addr");
     }
 
+    fn handle_symbols_pdb(&self, r2p: &mut R2Pipe) -> Result<(), Error> {
+        // Download symbols if available
+        debug!("Downloading pdb file for {:?}", self.file_path);
+        let download_pdb = r2p.cmd("idpd");
+
+        debug!("Download PDB Ret: {:?}", download_pdb);
+
+        if download_pdb.unwrap().contains("success") {
+            let ret = r2p.cmd("idp");
+            debug!("Return value: {:?}", ret);
+
+            Ok(())
+        } else {
+            Err(anyhow!("Unable to download pdb"))
+        }
+    }
+
     fn setup_r2_pipe(&self) -> R2Pipe {
+        if self.r2p_config.use_curl_pdb {
+            // Docs suggest this is unsafe
+            env::set_var("R2_CURL", "1");
+        }
 
         let opts = if self.r2p_config.debug {
             debug!("Creating r2 handle with debugging");
@@ -563,13 +598,28 @@ impl FileToBeProcessed {
         debug!("Attempting to create r2pipe using {:?}", self.file_path);
         let mut r2p = match R2Pipe::in_session() {
             Some(_) => R2Pipe::open().expect("Unable to open R2Pipe"),
-            None => {
-                R2Pipe::spawn(self.file_path.to_str().unwrap(), Some(opts)).expect("Failed to spawn new R2Pipe")
-            }
+            None => R2Pipe::spawn(self.file_path.to_str().unwrap(), Some(opts))
+                .expect("Failed to spawn new R2Pipe"),
         };
 
+        let info = r2p.cmdj("ij");
+        if info.is_ok() {
+            let info = info.unwrap();
+            if info["bin"]["bintype"].as_str().unwrap() == "pe" {
+                debug!("PE file found. Handling symbol download!");
+                let ret = self.handle_symbols_pdb(&mut r2p);
+
+                if ret.is_err() {
+                    error!("Unable to get PDB info")
+                }
+            }
+        }
+
         if self.r2p_config.extended_analysis {
-            debug!("Executing 'aaa' r2 command for {}", self.file_path.display());
+            debug!(
+                "Executing 'aaa' r2 command for {}",
+                self.file_path.display()
+            );
             r2p.cmd("aaa")
                 .expect("Unable to complete standard analysis!");
             debug!("'aaa' r2 command complete for {}", self.file_path.display());
@@ -577,7 +627,10 @@ impl FileToBeProcessed {
             debug!("Executing 'aa' r2 command for {}", self.file_path.display());
             r2p.cmd("aa")
                 .expect("Unable to complete standard analysis!");
-            debug!("'aa' r2 command complete for {:?}", self.file_path.display());
+            debug!(
+                "'aa' r2 command complete for {:?}",
+                self.file_path.display()
+            );
         };
         r2p
     }

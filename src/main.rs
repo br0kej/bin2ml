@@ -278,6 +278,9 @@ enum Commands {
 
         #[arg(long, default_value = "false")]
         extended_analysis: bool,
+
+        #[arg(long, default_value ="true")]
+        use_curl_pdb: bool,
     },
     /// Generate single embeddings on the fly
     ///
@@ -949,9 +952,10 @@ fn main() {
             num_threads,
             debug,
             extended_analysis,
+            use_curl_pdb,
         } => {
             info!("Creating extraction job");
-            let job = ExtractionJob::new(fpath, output_dir, mode, debug, extended_analysis).unwrap();
+            let job = ExtractionJob::new(fpath, output_dir, mode, debug, extended_analysis, use_curl_pdb).unwrap();
 
             if job.input_path_type == PathType::Dir {
                 info!("Directory found - will parallel process");
