@@ -1,27 +1,27 @@
 use crate::afij::AFIJFunctionInfo;
 use crate::agcj::AGCJFunctionCallGraphs;
-use crate::extract;
+
 use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Error;
 use anyhow::Result;
 use r2pipe::R2Pipe;
 use r2pipe::R2PipeSpawnOptions;
-use serde::de;
-use serde::de::DeserializeOwned;
+
+
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 use serde_json;
-use serde_json::error;
+
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::env;
-use std::fmt::format;
-use std::fmt::UpperHex;
+
+
 use std::fs;
 use std::fs::File;
-use std::io::copy;
-use std::os::unix::raw::gid_t;
+
+
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -223,7 +223,7 @@ impl From<(String, String, String, R2PipeConfig)> for FileToBeProcessed {
             file_path: PathBuf::from(orig.0),
             output_path: PathBuf::from(orig.1),
             job_type_suffix: orig.2,
-            r2p_config: orig.3.clone(),
+            r2p_config: orig.3,
         }
     }
 }
@@ -491,7 +491,7 @@ impl FileToBeProcessed {
         let json = r2p.cmd("aflj");
 
         if json.is_ok() {
-            let json_obj: Vec<AFIJFunctionInfo> = serde_json::from_str(&json.as_ref().unwrap())
+            let json_obj: Vec<AFIJFunctionInfo> = serde_json::from_str(json.as_ref().unwrap())
                 .expect(&format!(
                     "Unable to convert to JSON object! - {}",
                     json.unwrap()

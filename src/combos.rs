@@ -1,6 +1,6 @@
 use crate::afij::AFIJFeatureSubset;
 use crate::agfj::TikNibFuncFeatures;
-use crate::files::FunctionMetadataTypes;
+
 use ordered_float::OrderedFloat;
 pub struct FinfoTiknib {
     pub name: String,

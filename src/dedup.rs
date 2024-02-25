@@ -124,7 +124,7 @@ impl EsilFuncStringCorpus {
         }
 
         let mut output_path = output_path.to_owned();
-        if !output_path.to_string_lossy().to_string().ends_with("/") {
+        if !output_path.to_string_lossy().to_string().ends_with('/') {
             output_path.push("/");
         };
 
@@ -574,7 +574,7 @@ impl CGCorpus {
             .for_each(|(data_ele, filepath)| {
                 let save_path = Self::generate_dedup_filepath(&self.output_path, filepath);
                 let dirs = save_path.parent().unwrap_or(Path::new(""));
-                fs::create_dir_all(&dirs).expect("Failed to create output directory!");
+                fs::create_dir_all(dirs).expect("Failed to create output directory!");
 
                 serde_json::to_writer(
                     &File::create(save_path).expect("Failed to create writer"),
@@ -586,10 +586,10 @@ impl CGCorpus {
 }
 
 mod tests {
-    use std::{fs::{self, read_to_string}, path::{Path, PathBuf}};
-    use walkdir::WalkDir;
-    use crate::networkx::{CallGraphFuncWithMetadata, CallGraphNodeFeatureType, CallGraphTypes, NetworkxDiGraph};
-    use super::CGCorpus;
+    
+    
+    
+    
     
     // Test Dedup on typed CG's
     #[test]

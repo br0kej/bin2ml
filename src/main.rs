@@ -821,7 +821,7 @@ fn main() {
                         file.load_and_deserialize().expect("Unable to load data");
                         file.tiknib_func_level_feature_gen()
                     } else {
-                        let mut file_paths_vec =
+                        let file_paths_vec =
                             get_json_paths_from_dir(input_path, Some("_cfg".to_string()));
 
                         file_paths_vec.par_iter().for_each(|filepath| {
@@ -843,13 +843,13 @@ fn main() {
             }
             GenerateSubCommands::Combos {
                 input_path,
-                output_path,
+                output_path: _,
                 combo_type,
             } => {
                 if combo_type == "finfo+tiknib" {
-                    let mut finfo_paths =
+                    let _finfo_paths =
                         get_json_paths_from_dir(input_path, Some("_finfo".to_string()));
-                    let tiknib_paths =
+                    let _tiknib_paths =
                         get_json_paths_from_dir(input_path, Some("cfg-tiknib".to_string()));
                 }
             }
