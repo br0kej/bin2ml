@@ -584,13 +584,13 @@ impl FileToBeProcessed {
         let opts = if self.r2p_config.debug {
             debug!("Creating r2 handle with debugging");
             R2PipeSpawnOptions {
-                exepath: "r2".to_owned(),
+                exepath: "radare2".to_owned(),
                 args: vec!["-e bin.cache=true", "-e log.level=0"],
             }
         } else {
             debug!("Creating r2 handle without debugging");
             R2PipeSpawnOptions {
-                exepath: "r2".to_owned(),
+                exepath: "radare2".to_owned(),
                 args: vec!["-e bin.cache=true", "-e log.level=1", "-2"],
             }
         };

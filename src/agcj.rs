@@ -33,7 +33,7 @@ impl AGCJFunctionCallGraphs {
         networkx_graph: NetworkxDiGraph<CallGraphFuncNameNode>,
         type_suffix: &str,
     ) {
-        let full_output_path =
+        let mut full_output_path =
             get_save_file_path(binary_name, output_path, Some(type_suffix.to_string()));
         check_or_create_dir(&full_output_path);
 
@@ -43,14 +43,20 @@ impl AGCJFunctionCallGraphs {
         if function_name.chars().count() > 100 {
             function_name = self.name[..75].to_string();
         }
-
+        
         let filename = format!(
-            "{:?}/{}-{}.json",
-            full_output_path, function_name, type_suffix
+            "{}-{}.json",
+            function_name, type_suffix
         );
+        
+        // Normalise string for windows
+        let filename = filename.replace(&['(', ')', ',', '\"', ';', ':', '\''][..], "");
+        full_output_path.push(filename);
+
+        debug!("Filename to save graphs to: {:?}", full_output_path);
 
         serde_json::to_writer(
-            &File::create(filename).expect("Failed to create writer"),
+            &File::create(full_output_path).expect("Failed to create writer"),
             &networkx_graph,
         )
         .expect("Unable to write JSON");
@@ -105,7 +111,8 @@ impl AGCJFunctionCallGraphs {
         }
 
         let filename = format!("{}-{}.json", function_name, type_suffix);
-
+        // Normalise string for windows
+        let filename = filename.replace(&['(', ')', ',', '\"', ';', ':', '\''][..], "");
         full_output_path.push(filename);
 
         debug!("Attempting to save to {:?}", full_output_path);
