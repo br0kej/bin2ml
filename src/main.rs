@@ -65,6 +65,7 @@ enum DataType {
     OneHopCg,
     CgWithCallers,
     OneHopCgWithcallers,
+    GlobalCg,
     Invalid,
 }
 
@@ -76,6 +77,7 @@ impl fmt::Display for DataType {
             DataType::CgWithCallers => write!(f, "Call Graph with Callers"),
             DataType::OneHopCg => write!(f, "One Hop Call Graph"),
             DataType::OneHopCgWithcallers => write!(f, "One Hop Call Graph with Callers"),
+            DataType::GlobalCg => write!(f, "Globlal Call Graph"),
             DataType::Invalid => write!(f, "Invalid"),
         }
     }
@@ -97,7 +99,7 @@ enum GenerateSubCommands {
         path: PathBuf,
 
         /// The target data type
-        #[arg(short, long, value_name = "DATA_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["cfg", "cg", "onehopcg", "cgcallers", "onehopcgcallers"])
+        #[arg(short, long, value_name = "DATA_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["cfg", "cg", "onehopcg", "cgcallers", "onehopcgcallers", "globalcg"])
         .map(|s| s.parse::<String>().unwrap()),)]
         data_type: String,
 
@@ -411,6 +413,7 @@ fn main() {
                     "onehopcg" => DataType::OneHopCg,
                     "cgcallers" => DataType::CgWithCallers,
                     "onehopcgcallers" => DataType::OneHopCgWithcallers,
+                    "globalcg" => DataType::GlobalCg,
                     _ => DataType::Invalid,
                 };
 
@@ -499,6 +502,24 @@ fn main() {
                         }
                     } else {
                         error!("--feature-type/-f is required for creating CFG's")
+                    }
+                } else if graph_data_type == DataType::GlobalCg {
+                    if Path::new(path).is_file() {
+                        let mut file = AGCJFile {
+                            filename: (*path).clone(),
+                            function_call_graphs: None,
+                            output_path: (*output_path).clone(),
+                            function_metadata: None,
+                            include_unk: *include_unk,
+                        };
+                        file.load_and_deserialize()
+                            .expect("Unable to load and desearilize JSON");
+                        let global_cg = file.build_global_call_graphs();
+                        println!("{:?}", global_cg);
+                    } else {
+                        todo!("Need to do this!");
+                        //let mut file_paths_vec =
+                        //    get_json_paths_from_dir(path, Some("_cg".to_string()));
                     }
                 } else {
                     // If its only one file

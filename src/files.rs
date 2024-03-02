@@ -9,6 +9,7 @@ use crate::inference::InferenceJob;
 use crate::utils::get_save_file_path;
 use enum_as_inner::EnumAsInner;
 use indicatif::ParallelProgressIterator;
+use petgraph::{Graph, Incoming, Outgoing};
 use rayon::iter::ParallelIterator;
 use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator};
 use serde::{Deserialize, Serialize};
@@ -21,6 +22,10 @@ use std::string::String;
 use std::sync::mpsc::channel;
 #[cfg(feature = "inference")]
 use std::sync::Arc;
+use itertools::Itertools;
+use petgraph::visit::IntoEdgesDirected;
+#[cfg(feature = "inference")]
+use tch::nn::func;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AGFJFile {
@@ -396,8 +401,55 @@ impl AGCJFile {
         Ok(())
     }
 
-    pub fn generate_global_call_graphs(&mut self){
-        todo!()
+    pub fn build_global_call_graphs(&mut self) -> Graph<String, u32> {
+        if self.function_call_graphs.is_none() {
+            let ret = self.load_and_deserialize();
+            if ret.is_err() {
+                error!("Unable to load target data file - No functions to process.")
+            }
+        }
+
+        let mut graph = Graph::<String, u32>::new();
+
+        for function in self.function_call_graphs.as_ref().unwrap().iter() {
+            let function_index_find = graph.node_indices().find(|i| &graph[*i] == &function.name);
+            let function_index = if function_index_find.is_none() {
+                graph.add_node(function.name.clone())
+            } else {
+                function_index_find.unwrap()
+            };
+
+            debug!("Function Index Find: {:?} Function Index Used: {:?}", function_index_find, function_index);
+
+            if function.imports.is_some() {
+                for import in function.imports.as_ref().unwrap().iter() {
+                    if !self.include_unk && import.starts_with("unk.") {
+                        debug!("Skipping {}", import);
+                        continue
+                    } else {
+                        let import_index_find = graph.node_indices().find(|i| &graph[*i] == import);
+                        if import_index_find.is_none() {
+                            let import_index = graph.add_node(import.clone());
+                            graph.update_edge(function_index, import_index, 0);
+                        } else {
+                            graph.update_edge(function_index, import_index_find.unwrap(), 0);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Tidy up the generated call graph to account for when
+        // calling relationships may have not be recovered and
+        // we have orphan nodes
+        for node_idx in graph.node_indices() {
+            if graph.neighbors_directed(node_idx, Outgoing).collect_vec().len() +
+                graph.neighbors_directed(node_idx, Incoming).collect_vec().len() == 0 {
+                graph.remove_node(node_idx);
+            }
+        }
+
+        graph
     }
 }
 
@@ -472,5 +524,48 @@ impl TikNibFuncMetaFile {
 
     pub fn subset(&mut self) -> FunctionMetadataTypes {
         FunctionMetadataTypes::AGFJ(self.function_info.clone().unwrap())
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+    use std::path::PathBuf;
+    use crate::files::AGCJFile;
+
+    fn return_test_file_oject() -> AGCJFile {
+        let mut call_graph_file = AGCJFile {
+            filename: PathBuf::from("test-files/ls_cg.json"),
+            function_call_graphs: None,
+            output_path: PathBuf::new(),
+            function_metadata: None,
+            include_unk: false,
+        };
+
+        call_graph_file
+            .load_and_deserialize()
+            .expect("Failed to load data");
+        call_graph_file
+    }
+
+    #[test]
+    fn test_global_call_graph_generation() {
+        let mut call_graph_file = return_test_file_oject();
+
+        let global_call_graph = call_graph_file.build_global_call_graphs();
+
+        assert_eq!(global_call_graph.node_count(), 111);
+
+        let mut node_names = Vec::new();
+
+        for node in global_call_graph.raw_nodes().iter() {
+            node_names.push(node.weight.clone())
+        }
+
+        let unique_node_names = node_names.iter()
+            .collect::<HashSet<_>>();
+
+        assert_eq!(node_names.len(), unique_node_names.len());
     }
 }
