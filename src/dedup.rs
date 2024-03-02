@@ -696,7 +696,7 @@ mod tests {
 
         // clean up
         if corpus.output_path.is_dir() {
-            fs::remove_dir_all(&corpus.output_path).expect("Unable to remove directory!");
+            let _ = fs::remove_dir_all(&corpus.output_path);
         }
     }
 
