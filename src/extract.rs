@@ -1,5 +1,5 @@
 use crate::afij::AFIJFunctionInfo;
-use crate::agcj::AGCJFunctionCallGraphs;
+use crate::agcj::AGCJFunctionCallGraph;
 
 use anyhow::anyhow;
 use anyhow::bail;
@@ -416,7 +416,7 @@ impl FileToBeProcessed {
         info!("Starting function call graph extraction");
         let mut r2p = self.setup_r2_pipe();
         let json = r2p.cmd("agCj").expect("agCj command failed to execute");
-        let function_call_graphs: Vec<AGCJFunctionCallGraphs> =
+        let function_call_graphs: Vec<AGCJFunctionCallGraph> =
             serde_json::from_str(&json).expect("Unable to convert to JSON object!");
         info!("Function call graph extracted.");
         r2p.close();

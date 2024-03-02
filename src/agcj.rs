@@ -11,7 +11,7 @@ use std::path::PathBuf;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AGCJFunctionCallGraphs {
+pub struct AGCJFunctionCallGraph {
     pub name: String,
     pub size: i64,
     pub imports: Option<Vec<String>>,
@@ -25,7 +25,7 @@ pub struct AGCJParsedObjects {
     pub nodes: Vec<String>,
 }
 
-impl AGCJFunctionCallGraphs {
+impl AGCJFunctionCallGraph {
     fn graph_to_json_func_node(
         &self,
         binary_name: &PathBuf,
@@ -156,7 +156,7 @@ impl AGCJFunctionCallGraphs {
             trace!("Imports: {:?}", self.imports);
             for import in self.imports.as_ref().unwrap().iter() {
                 trace! {"Starting to Process {:?}", import};
-                let import_object: &Vec<&AGCJFunctionCallGraphs> = &global_cg
+                let import_object: &Vec<&AGCJFunctionCallGraph> = &global_cg
                     .function_call_graphs
                     .as_ref()
                     .unwrap()

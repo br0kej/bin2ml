@@ -1,5 +1,5 @@
 use crate::afij::{AFIJFeatureSubset, AFIJFeatureSubsetExtended, AFIJFunctionInfo};
-use crate::agcj::AGCJFunctionCallGraphs;
+use crate::agcj::AGCJFunctionCallGraph;
 use crate::agfj::{AGFJFunc, TikNibFunc};
 use crate::bb::{FeatureType, InstructionMode};
 use crate::consts::*;
@@ -378,7 +378,7 @@ pub enum FunctionMetadataTypes {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AGCJFile {
     pub filename: PathBuf,
-    pub function_call_graphs: Option<Vec<AGCJFunctionCallGraphs>>,
+    pub function_call_graphs: Option<Vec<AGCJFunctionCallGraph>>,
     pub output_path: PathBuf,
     pub function_metadata: Option<FunctionMetadataTypes>,
     pub include_unk: bool,
@@ -390,10 +390,14 @@ impl AGCJFile {
 
         #[allow(clippy::expect_fun_call)]
         // Kept in to ensure that the JSON decode error message is printed alongside the filename
-        let json: Vec<AGCJFunctionCallGraphs> = serde_json::from_str(&data)?;
+        let json: Vec<AGCJFunctionCallGraph> = serde_json::from_str(&data)?;
 
         self.function_call_graphs = Some(json);
         Ok(())
+    }
+
+    pub fn generate_global_call_graphs(&mut self){
+        todo!()
     }
 }
 
