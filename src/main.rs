@@ -42,7 +42,7 @@ use crate::files::{AFIJFile, AGCJFile, FunctionMetadataTypes, TikNibFuncMetaFile
 use crate::tokeniser::{train_byte_bpe_tokeniser, TokeniserType};
 use crate::utils::get_save_file_path;
 
-use crate::networkx::{CallGraphNodeFeatureType};
+use crate::networkx::CallGraphNodeFeatureType;
 use bb::{FeatureType, InstructionMode};
 #[cfg(feature = "goblin")]
 use binnfo::goblin_info;
@@ -58,8 +58,8 @@ use utils::get_json_paths_from_dir;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-#[derive(PartialEq)]
-enum DataType {
+#[derive(PartialEq, Copy, Clone)]
+pub enum DataType {
     Cfg,
     Cg,
     OneHopCg,
@@ -526,85 +526,43 @@ fn main() {
                         todo!("Parallel generation of Global Call Graphs is currently not implemented");
                     }
                 } else {
-                    // If its only one file
                     if Path::new(path).is_file() {
-                        let mut file = if *with_features {
-                            if metadata_path.is_none() {
-                                error!("with features active - require --metadata-path argument");
-                                exit(1)
-                            };
-                            let mut metadata = AFIJFile {
-                                filename: metadata_path.clone().unwrap().to_path_buf(),
-                                function_info: None,
-                                output_path: PathBuf::new(),
-                            };
-                            metadata
-                                .load_and_deserialize()
-                                .expect("Unable to load file");
-                            let metadata_subset = metadata.subset(false);
-                            AGCJFile {
-                                filename: (*path).clone(),
-                                function_call_graphs: None,
-                                output_path: (*output_path).clone(),
-                                function_metadata: Some(metadata_subset),
-                                include_unk: *include_unk,
+                        let mut file = match with_features {
+                            true => {
+                                let mut metadata = AFIJFile {
+                                    filename: metadata_path.as_ref().unwrap().to_path_buf(),
+                                    function_info: None,
+                                    output_path: PathBuf::new(),
+                                };
+                                metadata
+                                    .load_and_deserialize()
+                                    .expect("Unable to load file");
+                                let metadata_subset = metadata.subset(false);
+                                AGCJFile {
+                                    filename: path.clone(),
+                                    function_call_graphs: None,
+                                    output_path: output_path.clone(),
+                                    function_metadata: Some(metadata_subset),
+                                    include_unk: *include_unk,
+                                }
                             }
-                        } else {
-                            AGCJFile {
-                                filename: (*path).clone(),
+                            false => AGCJFile {
+                                filename: path.clone(),
                                 function_call_graphs: None,
-                                output_path: (*output_path).clone(),
+                                output_path: output_path.clone(),
                                 function_metadata: None,
                                 include_unk: *include_unk,
-                            }
+                            },
                         };
+
                         file.load_and_deserialize()
                             .expect("Unable to load and desearilize JSON");
-                        if graph_data_type == DataType::Cg {
-                            for fcg in file.function_call_graphs.as_ref().unwrap() {
-                                fcg.to_petgraph(
-                                    &file,
-                                    &file.output_path,
-                                    &file.filename,
-                                    with_features,
-                                    &file.include_unk,
-                                    metadata_type.clone(),
-                                );
-                            }
-                        } else if graph_data_type == DataType::OneHopCg {
-                            for fcg in file.function_call_graphs.as_ref().unwrap() {
-                                fcg.one_hop_to_petgraph(
-                                    &file,
-                                    &file.output_path,
-                                    &file.filename,
-                                    with_features,
-                                    &file.include_unk,
-                                    metadata_type.clone(),
-                                );
-                            }
-                        } else if graph_data_type == DataType::CgWithCallers {
-                            for fcg in file.function_call_graphs.as_ref().unwrap() {
-                                fcg.to_petgraph_with_callers(
-                                    &file,
-                                    &file.output_path,
-                                    &file.filename,
-                                    with_features,
-                                    &file.include_unk,
-                                    metadata_type.clone(),
-                                );
-                            }
-                        } else if graph_data_type == DataType::OneHopCgWithcallers {
-                            for fcg in file.function_call_graphs.as_ref().unwrap() {
-                                fcg.one_hop_to_petgraph_with_callers(
-                                    &file,
-                                    &file.output_path,
-                                    &file.filename,
-                                    with_features,
-                                    &file.include_unk,
-                                    metadata_type.clone(),
-                                );
-                            }
-                        }
+
+                        file.process_based_on_graph_data_type(
+                            graph_data_type,
+                            with_features,
+                            metadata_type.clone(),
+                        )
                     } else {
                         debug!("Multiple files found");
 
@@ -641,52 +599,11 @@ fn main() {
                                     debug!("Proceissing {:?}", file.filename);
                                     file.load_and_deserialize()
                                         .expect("Unable to load and desearilize JSON");
-
-                                    for fcg in file.function_call_graphs.as_ref().unwrap() {
-                                        match graph_data_type {
-                                            DataType::Cg => {
-                                                fcg.to_petgraph(
-                                                    &file,
-                                                    &file.output_path,
-                                                    &file.filename,
-                                                    with_features,
-                                                    &file.include_unk,
-                                                    None,
-                                                );
-                                            }
-                                            DataType::OneHopCg => {
-                                                fcg.one_hop_to_petgraph(
-                                                    &file,
-                                                    &file.output_path,
-                                                    &file.filename,
-                                                    with_features,
-                                                    &file.include_unk,
-                                                    None,
-                                                );
-                                            }
-                                            DataType::CgWithCallers => {
-                                                fcg.to_petgraph_with_callers(
-                                                    &file,
-                                                    &file.output_path,
-                                                    &file.filename,
-                                                    with_features,
-                                                    &file.include_unk,
-                                                    None,
-                                                );
-                                            }
-                                            DataType::OneHopCgWithcallers => {
-                                                fcg.one_hop_to_petgraph_with_callers(
-                                                    &file,
-                                                    &file.output_path,
-                                                    &file.filename,
-                                                    with_features,
-                                                    &file.include_unk,
-                                                    None,
-                                                );
-                                            }
-                                            _ => unreachable!("Not possible hopefully! :O"),
-                                        }
-                                    }
+                                    file.process_based_on_graph_data_type(
+                                        graph_data_type,
+                                        with_features,
+                                        metadata_type.clone(),
+                                    );
                                 } else {
                                     info!(
                                         "Skipping {} as already exists",
@@ -720,94 +637,76 @@ fn main() {
                                 .zip(metadata_paths_vec)
                                 .collect::<Vec<_>>();
 
-                            combined_cgs_metadata.par_iter().progress().for_each(|(filepath, metapath)| {
-                                let suffix = format!("{}-meta", graph_type.to_owned());
-                                let full_output_path = get_save_file_path(&PathBuf::from(filepath), output_path, Some(suffix), None);
-                                if !full_output_path.is_dir() {
-                                    let mut file = {
-                                        let metadata: Option<FunctionMetadataTypes>;
-                                        if metadata_type.clone().unwrap() == *"finfo" {
-                                            let mut metadata_file = AFIJFile {
-                                                filename: PathBuf::from(metapath),
-                                                function_info: None,
-                                                output_path: PathBuf::new(),
-                                            };
-                                            debug!("Attempting to load metadata file: {}", metapath);
-                                            metadata_file
-                                                .load_and_deserialize()
-                                                .expect("Unable to load associated metadata file");
-                                            metadata = Some(metadata_file.subset(false));
-                                        } else if metadata_type.clone().unwrap() == *"tiknib" {
-                                            let mut metadata_file = TikNibFuncMetaFile {
-                                                filename: PathBuf::from(metapath),
-                                                function_info: None,
-                                                output_path: PathBuf::new(),
-                                            };
+                            combined_cgs_metadata.par_iter().progress().for_each(
+                                |(filepath, metapath)| {
+                                    let suffix = format!("{}-meta", graph_type.to_owned());
+                                    let full_output_path = get_save_file_path(
+                                        &PathBuf::from(filepath),
+                                        output_path,
+                                        Some(suffix),
+                                        None,
+                                    );
+                                    if !full_output_path.is_dir() {
+                                        let mut file = {
+                                            let metadata: Option<FunctionMetadataTypes>;
+                                            if metadata_type.clone().unwrap() == *"finfo" {
+                                                let mut metadata_file = AFIJFile {
+                                                    filename: PathBuf::from(metapath),
+                                                    function_info: None,
+                                                    output_path: PathBuf::new(),
+                                                };
+                                                debug!(
+                                                    "Attempting to load metadata file: {}",
+                                                    metapath
+                                                );
+                                                metadata_file.load_and_deserialize().expect(
+                                                    "Unable to load associated metadata file",
+                                                );
+                                                metadata = Some(metadata_file.subset(false));
+                                            } else if metadata_type.clone().unwrap() == *"tiknib" {
+                                                let mut metadata_file = TikNibFuncMetaFile {
+                                                    filename: PathBuf::from(metapath),
+                                                    function_info: None,
+                                                    output_path: PathBuf::new(),
+                                                };
 
-                                            metadata_file.load_and_deserialize().expect("Unable to load associated metadata file");
-                                            metadata = Some(metadata_file.subset());
-                                        }  else {
-                                            metadata = None
-                                        }
+                                                metadata_file.load_and_deserialize().expect(
+                                                    "Unable to load associated metadata file",
+                                                );
+                                                metadata = Some(metadata_file.subset());
+                                            } else {
+                                                metadata = None
+                                            }
 
-                                        AGCJFile {
-                                            filename: PathBuf::from(filepath),
-                                            function_call_graphs: None,
-                                            output_path: output_path.to_owned(),
-                                            function_metadata: metadata,
-                                            include_unk: *include_unk,
-                                        }
-                                    };
-                                    debug!("Attempting to load {:?}", file.filename);
-                                    file.load_and_deserialize()
-                                        .expect("Unable to load and desearilize JSON");
+                                            AGCJFile {
+                                                filename: PathBuf::from(filepath),
+                                                function_call_graphs: None,
+                                                output_path: output_path.to_owned(),
+                                                function_metadata: metadata,
+                                                include_unk: *include_unk,
+                                            }
+                                        };
+                                        debug!("Attempting to load {:?}", file.filename);
+                                        file.load_and_deserialize()
+                                            .expect("Unable to load and desearilize JSON");
 
-                                    if graph_data_type == DataType::Cg {
-                                        debug!("Generating call graphs using loaded cgs + metadata");
-                                        for fcg in file.function_call_graphs.as_ref().unwrap() {
-                                            fcg.to_petgraph(
-                                                &file,
-                                                &file.output_path,
-                                                &file.filename,
-                                                with_features,
-                                                &file.include_unk,
-                                                metadata_type.clone()
-                                            );
-                                        }
-                                } else if graph_data_type == DataType::OneHopCg {
-                                    debug!("Generating one hop call graphs using loaded cgs + metadata");
-                                    for fcg in file.function_call_graphs.as_ref().unwrap() {
-                                        fcg.one_hop_to_petgraph(&file, &file.output_path, &file.filename, with_features, &file.include_unk, metadata_type.clone());
-                                    }
-                                } else if graph_data_type == DataType::CgWithCallers {
-                                    debug!("Generating call graphs with callers using loaded cgs + metadata");
-                                    for fcg in file.function_call_graphs.as_ref().unwrap() {
-                                        fcg.to_petgraph_with_callers(
-                                            &file,
-                                            &file.output_path,
-                                            &file.filename,
+                                        file.process_based_on_graph_data_type(
+                                            graph_data_type,
                                             with_features,
-                                            &file.include_unk,
-                                            metadata_type.clone()
+                                            metadata_type.clone(),
                                         );
-                                    }
-                                } else if graph_data_type == DataType::OneHopCgWithcallers {
-                                    debug!("Generating one hop call graphs with callers using loaded cgs + metadata");
-                                    for fcg in file.function_call_graphs.as_ref().unwrap() {
-                                        fcg.one_hop_to_petgraph_with_callers(
-                                            &file,
-                                            &file.output_path,
-                                            &file.filename,
-                                            with_features,
-                                            &file.include_unk,
-                                            metadata_type.clone()
+                                        debug!(
+                                            "Finished generating cgs + metadata for {:?}",
+                                            file.filename
                                         );
+                                    } else {
+                                        info!(
+                                            "Skipping {} as already exists",
+                                            full_output_path.to_string_lossy()
+                                        )
                                     }
-                                }
-                                debug!("Finished generating cgs + metadata for {:?}", file.filename);
-                            } else {
-                                    info!("Skipping {} as already exists", full_output_path.to_string_lossy())
-                                }});
+                                },
+                            );
                         }
                     }
                 }
@@ -872,6 +771,7 @@ fn main() {
                 output_path: _,
                 combo_type,
             } => {
+                warn!("This feature is experimental and should be used with caution!");
                 if combo_type == "finfo+tiknib" {
                     let _finfo_paths =
                         get_json_paths_from_dir(input_path, Some("_finfo".to_string()));

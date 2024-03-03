@@ -6,12 +6,13 @@ use crate::consts::*;
 use crate::errors::FileLoadError;
 #[cfg(feature = "inference")]
 use crate::inference::InferenceJob;
-use crate::networkx::{NetworkxDiGraph};
+use crate::networkx::NetworkxDiGraph;
 use crate::utils::{check_or_create_dir, get_save_file_path};
 use enum_as_inner::EnumAsInner;
 use indicatif::ParallelProgressIterator;
 use itertools::Itertools;
 
+use crate::DataType;
 use petgraph::{Graph, Incoming, Outgoing};
 use rayon::iter::ParallelIterator;
 use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator};
@@ -407,6 +408,7 @@ impl AGCJFile {
         Ok(())
     }
 
+    // Global Call Graph Related Functions
     pub fn generate_global_call_graphs(&mut self) {
         let call_graph = self.build_global_call_graph();
         println!("Num Nodes (Default): {}", call_graph.node_count());
@@ -503,6 +505,60 @@ impl AGCJFile {
             &networkx_graph,
         )
         .expect("Unable to write JSON");
+    }
+
+    // Local Call Graph Helper Functions
+    pub fn process_based_on_graph_data_type(
+        &self,
+        graph_data_type: DataType,
+        with_features: &bool,
+        metadata_type: Option<String>,
+    ) {
+        for fcg in self.function_call_graphs.as_ref().unwrap() {
+            match graph_data_type {
+                DataType::Cg => {
+                    fcg.to_petgraph(
+                        &self,
+                        &self.output_path,
+                        &self.filename,
+                        with_features,
+                        &self.include_unk,
+                        metadata_type.clone(),
+                    );
+                }
+                DataType::OneHopCg => {
+                    fcg.one_hop_to_petgraph(
+                        &self,
+                        &self.output_path,
+                        &self.filename,
+                        with_features,
+                        &self.include_unk,
+                        metadata_type.clone(),
+                    );
+                }
+                DataType::CgWithCallers => {
+                    fcg.to_petgraph_with_callers(
+                        &self,
+                        &self.output_path,
+                        &self.filename,
+                        with_features,
+                        &self.include_unk,
+                        metadata_type.clone(),
+                    );
+                }
+                DataType::OneHopCgWithcallers => {
+                    fcg.one_hop_to_petgraph_with_callers(
+                        &self,
+                        &self.output_path,
+                        &self.filename,
+                        with_features,
+                        &self.include_unk,
+                        metadata_type.clone(),
+                    );
+                }
+                _ => unreachable!("Not possible hopefully! :O"),
+            }
+        }
     }
 }
 
