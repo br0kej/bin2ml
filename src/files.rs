@@ -6,12 +6,12 @@ use crate::consts::*;
 use crate::errors::FileLoadError;
 #[cfg(feature = "inference")]
 use crate::inference::InferenceJob;
-use crate::networkx::{CallGraphFuncNameNode, NetworkxDiGraph};
+use crate::networkx::{NetworkxDiGraph};
 use crate::utils::{check_or_create_dir, get_save_file_path};
 use enum_as_inner::EnumAsInner;
 use indicatif::ParallelProgressIterator;
 use itertools::Itertools;
-use petgraph::visit::IntoEdgesDirected;
+
 use petgraph::{Graph, Incoming, Outgoing};
 use rayon::iter::ParallelIterator;
 use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator};
@@ -426,11 +426,12 @@ impl AGCJFile {
         let mut graph = Graph::<String, u32>::new();
 
         for function in self.function_call_graphs.as_ref().unwrap().iter() {
-            let function_index_find = graph.node_indices().find(|i| &graph[*i] == &function.name);
-            let function_index = if function_index_find.is_none() {
-                graph.add_node(function.name.clone())
+            let function_index_find = graph.node_indices().find(|i| graph[*i] == function.name);
+
+            let function_index = if let Some(index) = function_index_find {
+                index
             } else {
-                function_index_find.unwrap()
+                graph.add_node(function.name.clone())
             };
 
             debug!(
@@ -445,12 +446,13 @@ impl AGCJFile {
                         continue;
                     } else {
                         let import_index_find = graph.node_indices().find(|i| &graph[*i] == import);
-                        if import_index_find.is_none() {
-                            let import_index = graph.add_node(import.clone());
-                            graph.update_edge(function_index, import_index, 0);
+                        let import_index = if let Some(index) = import_index_find {
+                            index
                         } else {
-                            graph.update_edge(function_index, import_index_find.unwrap(), 0);
-                        }
+                            graph.add_node(import.clone())
+                        };
+
+                        graph.update_edge(function_index, import_index, 0);
                     }
                 }
             }
@@ -489,7 +491,7 @@ impl AGCJFile {
         );
         check_or_create_dir(&full_output_path);
 
-        full_output_path.set_extension("json".to_string());
+        full_output_path.set_extension("json");
 
         debug!(
             "Attempting to save global call graph to: {:?}",

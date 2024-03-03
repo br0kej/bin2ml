@@ -234,7 +234,7 @@ impl EsilFuncStringCorpus {
     }
 
     /// Generate hash statistics from a func hash tuple collection
-    fn hash_stats(&self, original_len: usize, unique_func_has_tuples: &Vec<DedupEntry>) {
+    fn hash_stats(&self, original_len: usize, unique_func_has_tuples: &[DedupEntry]) {
         let unique_len = unique_func_has_tuples.len();
         let percent_difference: f32 =
             ((original_len as f32 - unique_len as f32) / original_len as f32) * 100.0;
@@ -363,7 +363,7 @@ impl CGCorpus {
         }
     }
 
-    fn dedup_corpus_inplace(data: &mut Vec<Option<CallGraphTypes>>, filepaths: &mut Vec<PathBuf>) {
+    fn dedup_corpus_inplace(data: &mut [Option<CallGraphTypes>], filepaths: &mut [PathBuf]) {
         let mut seen = HashSet::new();
         for (i, data_ele) in data.iter().enumerate() {
             let hash_value = Self::calculate_hash(&data_ele);
@@ -435,7 +435,7 @@ impl CGCorpus {
         unique_binaries_fps
     }
 
-    fn load_subset(&self, fp_subset: &Vec<PathBuf>) -> Vec<Option<CallGraphTypes>> {
+    fn load_subset(&self, fp_subset: &[PathBuf]) -> Vec<Option<CallGraphTypes>> {
         let mut subset_loaded_data = Vec::new();
         for ele in fp_subset.iter() {
             let data = read_to_string(ele).expect(&format!("Unable to read file - {:?}", ele));
@@ -553,10 +553,10 @@ impl CGCorpus {
         }
     }
 
-    fn generate_dedup_filepath(output_path: &PathBuf, filepath: &PathBuf) -> PathBuf {
+    fn generate_dedup_filepath(output_path: &Path, filepath: &Path) -> PathBuf {
         let first_two = filepath.components().rev().take(2).collect::<Vec<_>>();
         let first_two: PathBuf = first_two.iter().rev().collect();
-        let output = output_path.clone();
+        let output = output_path.to_path_buf();
         let mut final_path = PathBuf::new();
         final_path.push(output);
         final_path.push(first_two);
@@ -566,7 +566,7 @@ impl CGCorpus {
     pub fn save_corpus(
         &self,
         subset_loaded_data: Vec<CallGraphTypes>,
-        fp_subset: &mut Vec<PathBuf>,
+        fp_subset: &mut [PathBuf],
     ) {
         subset_loaded_data
             .iter()
@@ -585,6 +585,7 @@ impl CGCorpus {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use crate::dedup::CGCorpus;
     use crate::networkx::{

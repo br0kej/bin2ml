@@ -24,18 +24,18 @@ pub fn get_save_file_path(
         "Building Filepath - Binary Path: {:?} Output Path: {:?}",
         binary_path, output_path
     );
-    let mut file_name = binary_path
+    let file_name = binary_path
         .file_stem()
         .unwrap()
         .to_string_lossy()
         .to_string();
 
-    let file_name = if remove_suffix.is_some() {
-        let file_name = file_name.replace(&remove_suffix.unwrap(), "");
-        file_name
+    let file_name = if let Some(suffix) = remove_suffix {
+        file_name.replace(&suffix, "")
     } else {
         file_name
     };
+
 
     if optional_suffix.is_none() {
         let full_output_path = format!(

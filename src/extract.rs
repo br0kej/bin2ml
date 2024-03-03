@@ -487,13 +487,9 @@ impl FileToBeProcessed {
         info!("Getting function information from binary");
         let json = r2p.cmd("aflj");
 
-        if json.is_ok() {
-            let json_obj: Vec<AFIJFunctionInfo> = serde_json::from_str(json.as_ref().unwrap())
-                .expect(&format!(
-                    "Unable to convert to JSON object! - {}",
-                    json.unwrap()
-                ));
-
+        if let Ok(json_str) = json {
+            let json_obj: Vec<AFIJFunctionInfo> = serde_json::from_str(json_str.as_ref())
+                .expect("Unable to convert to JSON object!");
             Ok(json_obj)
         } else {
             Err(json.unwrap_err())

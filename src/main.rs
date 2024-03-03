@@ -42,7 +42,7 @@ use crate::files::{AFIJFile, AGCJFile, FunctionMetadataTypes, TikNibFuncMetaFile
 use crate::tokeniser::{train_byte_bpe_tokeniser, TokeniserType};
 use crate::utils::get_save_file_path;
 
-use crate::networkx::{CallGraphFuncNameNode, CallGraphNodeFeatureType, NetworkxDiGraph};
+use crate::networkx::{CallGraphNodeFeatureType};
 use bb::{FeatureType, InstructionMode};
 #[cfg(feature = "goblin")]
 use binnfo::goblin_info;
