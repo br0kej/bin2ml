@@ -666,7 +666,7 @@ fn main() {
                                         };
                                         debug!("Attempting to load {:?}", file.filename);
                                         file.load_and_deserialize()
-                                            .expect("Unable to load and desearilize JSON");
+                                            .expect("Unable to load and deserialize JSON");
 
                                         file.process_based_on_graph_data_type(
                                             graph_data_type,
@@ -872,7 +872,7 @@ fn main() {
             if job.input_path_type == PathType::Dir {
                 info!("Directory found - will parallel process");
 
-                info!("Creating threadpool with {} threads ", num_threads);
+                info!("Creating thread pool with {} threads ", num_threads);
                 rayon::ThreadPoolBuilder::new()
                     .num_threads(*num_threads)
                     .build_global()
