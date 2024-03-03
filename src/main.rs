@@ -484,7 +484,7 @@ fn main() {
                             #[cfg(feature = "inference")]
                             if feature_vec_type == FeatureType::ModelEmbedded {
                                 if tokeniser_fp.is_none() || model_fp.is_none() {
-                                    println!("Both Tokeniser and Model filespaths are needed");
+                                    println!("Both Tokenizer and Model file paths are needed");
                                     exit(100)
                                 } else {
                                     agfj_graph_embedded_feats(
@@ -503,28 +503,6 @@ fn main() {
                     } else {
                         error!("--feature-type/-f is required for creating CFG's")
                     }
-                } else if graph_data_type == DataType::GlobalCg {
-                    warn!("This functionality currently only supports Function name node types.");
-                    // Need to add the functionality for adding metadata
-                    // to the calls graphs as well as saving them
-                    if Path::new(path).is_file() {
-                        let mut file = AGCJFile {
-                            filename: (*path).clone(),
-                            function_call_graphs: None,
-                            output_path: (*output_path).clone(),
-                            function_metadata: None,
-                            include_unk: *include_unk,
-                        };
-                        file.load_and_deserialize()
-                            .expect("Unable to load and desearilize JSON");
-                        info!(
-                            "Generating and saving global call graph for: {}",
-                            path.display()
-                        );
-                        file.generate_global_call_graphs();
-                    } else {
-                        todo!("Parallel generation of Global Call Graphs is currently not implemented");
-                    }
                 } else {
                     if Path::new(path).is_file() {
                         let mut file = match with_features {
@@ -534,6 +512,7 @@ fn main() {
                                     function_info: None,
                                     output_path: PathBuf::new(),
                                 };
+                                debug!("AFIJ Object: {:?}", metadata);
                                 metadata
                                     .load_and_deserialize()
                                     .expect("Unable to load file");
@@ -557,12 +536,11 @@ fn main() {
 
                         file.load_and_deserialize()
                             .expect("Unable to load and desearilize JSON");
-
                         file.process_based_on_graph_data_type(
                             graph_data_type,
                             with_features,
                             metadata_type.clone(),
-                        )
+                        );
                     } else {
                         debug!("Multiple files found");
 
@@ -596,9 +574,9 @@ fn main() {
                                         function_metadata: None,
                                         include_unk: *include_unk,
                                     };
-                                    debug!("Proceissing {:?}", file.filename);
+                                    debug!("Processing {:?}", file.filename);
                                     file.load_and_deserialize()
-                                        .expect("Unable to load and desearilize JSON");
+                                        .expect("Unable to load and deserialize JSON");
                                     file.process_based_on_graph_data_type(
                                         graph_data_type,
                                         with_features,

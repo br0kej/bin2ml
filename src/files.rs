@@ -491,7 +491,6 @@ impl AGCJFile {
             Some("gcg".to_string()),
             Some("_cg".to_string()),
         );
-        check_or_create_dir(&full_output_path);
 
         full_output_path.set_extension("json");
 
@@ -508,7 +507,7 @@ impl AGCJFile {
     }
 
     // Local Call Graph Helper Functions
-    pub fn process_based_on_graph_data_type(
+    fn process_function_level_cg(
         &self,
         graph_data_type: DataType,
         with_features: &bool,
@@ -558,6 +557,26 @@ impl AGCJFile {
                 }
                 _ => unreachable!("Not possible hopefully! :O"),
             }
+        }
+    }
+
+    pub fn process_based_on_graph_data_type(
+        &mut self,
+        graph_data_type: DataType,
+        with_features: &bool,
+        metadata_type: Option<String>,
+    ) {
+        match graph_data_type {
+            DataType::GlobalCg => self.generate_global_call_graphs(),
+            DataType::Cg
+            | DataType::OneHopCg
+            | DataType::OneHopCgWithcallers
+            | DataType::CgWithCallers => self.process_function_level_cg(
+                graph_data_type,
+                with_features,
+                metadata_type.clone(),
+            ),
+            _ => unreachable!("Unreachable!"),
         }
     }
 }
