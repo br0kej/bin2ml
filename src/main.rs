@@ -535,7 +535,7 @@ fn main() {
                         };
 
                         file.load_and_deserialize()
-                            .expect("Unable to load and desearilize JSON");
+                            .expect("Unable to load and deserialize JSON");
                         file.process_based_on_graph_data_type(
                             graph_data_type,
                             with_features,
