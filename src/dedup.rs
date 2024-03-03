@@ -586,12 +586,14 @@ impl CGCorpus {
 }
 
 mod tests {
+    use crate::dedup::CGCorpus;
+    use crate::networkx::{
+        CallGraphFuncWithMetadata, CallGraphNodeFeatureType, CallGraphTypes, NetworkxDiGraph,
+    };
     use std::fs;
     use std::fs::read_to_string;
     use std::path::{Path, PathBuf};
     use walkdir::WalkDir;
-    use crate::dedup::CGCorpus;
-    use crate::networkx::{CallGraphFuncWithMetadata, CallGraphNodeFeatureType, CallGraphTypes, NetworkxDiGraph};
 
     // Test Dedup on typed CG's
     #[test]

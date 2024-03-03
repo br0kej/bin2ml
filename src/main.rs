@@ -42,7 +42,7 @@ use crate::files::{AFIJFile, AGCJFile, FunctionMetadataTypes, TikNibFuncMetaFile
 use crate::tokeniser::{train_byte_bpe_tokeniser, TokeniserType};
 use crate::utils::get_save_file_path;
 
-use crate::networkx::CallGraphNodeFeatureType;
+use crate::networkx::{CallGraphFuncNameNode, CallGraphNodeFeatureType, NetworkxDiGraph};
 use bb::{FeatureType, InstructionMode};
 #[cfg(feature = "goblin")]
 use binnfo::goblin_info;
@@ -281,7 +281,7 @@ enum Commands {
         #[arg(long, default_value = "false")]
         extended_analysis: bool,
 
-        #[arg(long, default_value ="true")]
+        #[arg(long, default_value = "true")]
         use_curl_pdb: bool,
     },
     /// Generate single embeddings on the fly
@@ -504,6 +504,9 @@ fn main() {
                         error!("--feature-type/-f is required for creating CFG's")
                     }
                 } else if graph_data_type == DataType::GlobalCg {
+                    warn!("This functionality currently only supports Function name node types.");
+                    // Need to add the functionality for adding metadata
+                    // to the calls graphs as well as saving them
                     if Path::new(path).is_file() {
                         let mut file = AGCJFile {
                             filename: (*path).clone(),
@@ -514,12 +517,13 @@ fn main() {
                         };
                         file.load_and_deserialize()
                             .expect("Unable to load and desearilize JSON");
-                        let global_cg = file.build_global_call_graphs();
-                        println!("{:?}", global_cg);
+                        info!(
+                            "Generating and saving global call graph for: {}",
+                            path.display()
+                        );
+                        file.generate_global_call_graphs();
                     } else {
-                        todo!("Need to do this!");
-                        //let mut file_paths_vec =
-                        //    get_json_paths_from_dir(path, Some("_cg".to_string()));
+                        todo!("Parallel generation of Global Call Graphs is currently not implemented");
                     }
                 } else {
                     // If its only one file
@@ -624,6 +628,7 @@ fn main() {
                                     &PathBuf::from(path),
                                     output_path,
                                     Some(suffix),
+                                    None,
                                 );
                                 if !full_output_path.is_dir() {
                                     let mut file = AGCJFile {
@@ -717,7 +722,7 @@ fn main() {
 
                             combined_cgs_metadata.par_iter().progress().for_each(|(filepath, metapath)| {
                                 let suffix = format!("{}-meta", graph_type.to_owned());
-                                let full_output_path = get_save_file_path(&PathBuf::from(filepath), output_path, Some(suffix));
+                                let full_output_path = get_save_file_path(&PathBuf::from(filepath), output_path, Some(suffix), None);
                                 if !full_output_path.is_dir() {
                                     let mut file = {
                                         let metadata: Option<FunctionMetadataTypes>;
@@ -976,7 +981,15 @@ fn main() {
             use_curl_pdb,
         } => {
             info!("Creating extraction job");
-            let job = ExtractionJob::new(fpath, output_dir, mode, debug, extended_analysis, use_curl_pdb).unwrap();
+            let job = ExtractionJob::new(
+                fpath,
+                output_dir,
+                mode,
+                debug,
+                extended_analysis,
+                use_curl_pdb,
+            )
+            .unwrap();
 
             if job.input_path_type == PathType::Dir {
                 info!("Directory found - will parallel process");

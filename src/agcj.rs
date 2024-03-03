@@ -33,8 +33,12 @@ impl AGCJFunctionCallGraph {
         networkx_graph: NetworkxDiGraph<CallGraphFuncNameNode>,
         type_suffix: &str,
     ) {
-        let mut full_output_path =
-            get_save_file_path(binary_name, output_path, Some(type_suffix.to_string()));
+        let mut full_output_path = get_save_file_path(
+            binary_name,
+            output_path,
+            Some(type_suffix.to_string()),
+            None,
+        );
         check_or_create_dir(&full_output_path);
 
         let mut function_name = self.name.clone();
@@ -43,12 +47,9 @@ impl AGCJFunctionCallGraph {
         if function_name.chars().count() > 100 {
             function_name = self.name[..75].to_string();
         }
-        
-        let filename = format!(
-            "{}-{}.json",
-            function_name, type_suffix
-        );
-        
+
+        let filename = format!("{}-{}.json", function_name, type_suffix);
+
         // Normalise string for windows
         let filename = filename.replace(&['(', ')', ',', '\"', ';', ':', '\''][..], "");
         full_output_path.push(filename);
@@ -69,8 +70,12 @@ impl AGCJFunctionCallGraph {
         networkx_graph: NetworkxDiGraph<CallGraphTikNibFeatures>,
         type_suffix: &str,
     ) {
-        let full_output_path =
-            get_save_file_path(binary_name, output_path, Some(type_suffix.to_string()));
+        let full_output_path = get_save_file_path(
+            binary_name,
+            output_path,
+            Some(type_suffix.to_string()),
+            None,
+        );
         check_or_create_dir(&full_output_path);
 
         let mut function_name = self.name.clone();
@@ -99,8 +104,12 @@ impl AGCJFunctionCallGraph {
         networkx_graph: NetworkxDiGraph<CallGraphFuncWithMetadata>,
         type_suffix: &str,
     ) {
-        let mut full_output_path =
-            get_save_file_path(binary_name, output_path, Some(type_suffix.to_string()));
+        let mut full_output_path = get_save_file_path(
+            binary_name,
+            output_path,
+            Some(type_suffix.to_string()),
+            None,
+        );
         check_or_create_dir(&full_output_path);
         debug!("Built Path: {:?}", full_output_path);
         let mut function_name = self.name.clone();

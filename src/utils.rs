@@ -18,16 +18,24 @@ pub fn get_save_file_path(
     binary_path: &PathBuf,
     output_path: &PathBuf,
     optional_suffix: Option<String>,
+    remove_suffix: Option<String>,
 ) -> PathBuf {
     debug!(
         "Building Filepath - Binary Path: {:?} Output Path: {:?}",
         binary_path, output_path
     );
-    let file_name = binary_path
+    let mut file_name = binary_path
         .file_stem()
         .unwrap()
         .to_string_lossy()
         .to_string();
+
+    let file_name = if remove_suffix.is_some() {
+        let file_name = file_name.replace(&remove_suffix.unwrap(), "");
+        file_name
+    } else {
+        file_name
+    };
 
     if optional_suffix.is_none() {
         let full_output_path = format!(
@@ -97,21 +105,34 @@ mod tests {
     fn test_get_save_file_path_1() {
         let path: &PathBuf = &PathBuf::from("test_bin/hello.json");
         let output_path: &PathBuf = &PathBuf::from("processed_data/");
-        let output_path = get_save_file_path(path, &output_path, Some("cg".to_string()));
+        let output_path = get_save_file_path(path, &output_path, Some("cg".to_string()), None);
         assert_eq!(output_path, PathBuf::from("processed_data/hello-cg"))
     }
     #[test]
     fn test_get_save_file_path_2() {
         let path: &PathBuf = &PathBuf::from("test_bin/extra_dir/hello.json");
         let output_path: &PathBuf = &PathBuf::from("with_more/processed_data/");
-        let output = get_save_file_path(path, output_path, None);
+        let output = get_save_file_path(path, output_path, None, None);
         assert_eq!(output, PathBuf::from("with_more/processed_data/hello"))
     }
     #[test]
     fn test_get_save_file_path_3() {
         let path: &PathBuf = &PathBuf::from("hello.json");
         let output_path: &PathBuf = &PathBuf::from("processed_data");
-        let output = get_save_file_path(path, &output_path, None);
+        let output = get_save_file_path(path, &output_path, None, None);
         assert_eq!(output, PathBuf::from("processed_data/hello"))
+    }
+
+    #[test]
+    fn test_get_save_file_path_with_suffix_removal() {
+        let path: &PathBuf = &PathBuf::from("hello_cg.json");
+        let output_path: &PathBuf = &PathBuf::from("processed_data");
+        let output = get_save_file_path(
+            path,
+            &output_path,
+            Some("gcg".to_string()),
+            Some("_cg".to_string()),
+        );
+        assert_eq!(output, PathBuf::from("processed_data/hello-gcg"))
     }
 }

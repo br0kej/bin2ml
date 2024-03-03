@@ -6,9 +6,12 @@ use crate::consts::*;
 use crate::errors::FileLoadError;
 #[cfg(feature = "inference")]
 use crate::inference::InferenceJob;
-use crate::utils::get_save_file_path;
+use crate::networkx::{CallGraphFuncNameNode, NetworkxDiGraph};
+use crate::utils::{check_or_create_dir, get_save_file_path};
 use enum_as_inner::EnumAsInner;
 use indicatif::ParallelProgressIterator;
+use itertools::Itertools;
+use petgraph::visit::IntoEdgesDirected;
 use petgraph::{Graph, Incoming, Outgoing};
 use rayon::iter::ParallelIterator;
 use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator};
@@ -22,8 +25,6 @@ use std::string::String;
 use std::sync::mpsc::channel;
 #[cfg(feature = "inference")]
 use std::sync::Arc;
-use itertools::Itertools;
-use petgraph::visit::IntoEdgesDirected;
 #[cfg(feature = "inference")]
 use tch::nn::func;
 
@@ -144,7 +145,8 @@ impl AGFJFile {
     /// It is *not* suitable for doing any other sort of tasks such as Next Sentence
     /// Prediction (NSP) as there is not indication of where a basic block starts or ends.
     pub fn generate_random_bb_walk(mut self, esil: bool, pairs: bool) {
-        let fname_string: PathBuf = get_save_file_path(&self.filename, &self.output_path, None);
+        let fname_string: PathBuf =
+            get_save_file_path(&self.filename, &self.output_path, None, None);
         let fname_string = if esil {
             format!("{:?}-esil-singles-rwdfs.txt", fname_string)
         } else {
@@ -194,7 +196,8 @@ impl AGFJFile {
     /// Generates a single string which contains the ESIL representation of every
     /// instruction within a function
     pub fn generate_esil_func_strings(mut self) {
-        let fname_string: PathBuf = get_save_file_path(&self.filename, &self.output_path, None);
+        let fname_string: PathBuf =
+            get_save_file_path(&self.filename, &self.output_path, None, None);
         let fname_string = format!("{:?}-efs.json", fname_string);
 
         if !Path::new(&fname_string).exists() {
@@ -234,7 +237,8 @@ impl AGFJFile {
     pub fn generate_disasm_func_strings(mut self) {
         // This needs to be amended so that there is a AGFJFunc function
         // that returns a function as a func string.
-        let fname_string: PathBuf = get_save_file_path(&self.filename, &self.output_path, None);
+        let fname_string: PathBuf =
+            get_save_file_path(&self.filename, &self.output_path, None, None);
         let fname_string = format!("{:?}-dfs.json", fname_string);
 
         if !Path::new(&fname_string).exists() {
@@ -260,7 +264,7 @@ impl AGFJFile {
 
                 let json = json!(map);
                 let fname_string: PathBuf =
-                    get_save_file_path(&self.filename, &self.output_path, None);
+                    get_save_file_path(&self.filename, &self.output_path, None, None);
                 let fname_string = format!("{:?}-dfs.json", fname_string);
 
                 serde_json::to_writer(
@@ -278,7 +282,8 @@ impl AGFJFile {
     /// This ignores control flow and simple iterates the JSON objects from the top to
     /// the bottom.
     pub fn generate_linear_bb_walk(mut self, esil: bool) {
-        let fname_string: PathBuf = get_save_file_path(&self.filename, &self.output_path, None);
+        let fname_string: PathBuf =
+            get_save_file_path(&self.filename, &self.output_path, None, None);
         let fname_string = if esil {
             format!("{:?}-esil-singles.txt", fname_string)
         } else {
@@ -340,7 +345,8 @@ impl AGFJFile {
         }
 
         let json = json!(&func_feature_vectors);
-        let fname_string: PathBuf = get_save_file_path(&self.filename, &self.output_path, None);
+        let fname_string: PathBuf =
+            get_save_file_path(&self.filename, &self.output_path, None, None);
         let fname_string = format!("{}-tiknib.json", fname_string.to_string_lossy());
         serde_json::to_writer(
             &File::create(fname_string).expect("Failed to create writer"),
@@ -401,7 +407,15 @@ impl AGCJFile {
         Ok(())
     }
 
-    pub fn build_global_call_graphs(&mut self) -> Graph<String, u32> {
+    pub fn generate_global_call_graphs(&mut self) {
+        let call_graph = self.build_global_call_graph();
+        println!("Num Nodes (Default): {}", call_graph.node_count());
+        let cleaned_graph = self.post_process_graph(call_graph);
+        println!("Num Nodes (Post-Clean): {}", cleaned_graph.node_count());
+        self.save_global_call_graph_to_json(cleaned_graph)
+    }
+
+    fn build_global_call_graph(&mut self) -> Graph<String, u32> {
         if self.function_call_graphs.is_none() {
             let ret = self.load_and_deserialize();
             if ret.is_err() {
@@ -419,13 +433,16 @@ impl AGCJFile {
                 function_index_find.unwrap()
             };
 
-            debug!("Function Index Find: {:?} Function Index Used: {:?}", function_index_find, function_index);
+            debug!(
+                "Function Index Find: {:?} Function Index Used: {:?}",
+                function_index_find, function_index
+            );
 
             if function.imports.is_some() {
                 for import in function.imports.as_ref().unwrap().iter() {
                     if !self.include_unk && import.starts_with("unk.") {
                         debug!("Skipping {}", import);
-                        continue
+                        continue;
                     } else {
                         let import_index_find = graph.node_indices().find(|i| &graph[*i] == import);
                         if import_index_find.is_none() {
@@ -438,18 +455,52 @@ impl AGCJFile {
                 }
             }
         }
+        graph
+    }
 
+    fn post_process_graph(&self, mut graph: Graph<String, u32>) -> Graph<String, u32> {
         // Tidy up the generated call graph to account for when
-        // calling relationships may have not be recovered and
+        // calling relationships may have not been recovered and
         // we have orphan nodes
         for node_idx in graph.node_indices() {
-            if graph.neighbors_directed(node_idx, Outgoing).collect_vec().len() +
-                graph.neighbors_directed(node_idx, Incoming).collect_vec().len() == 0 {
+            if graph
+                .neighbors_directed(node_idx, Outgoing)
+                .collect_vec()
+                .len()
+                + graph
+                    .neighbors_directed(node_idx, Incoming)
+                    .collect_vec()
+                    .len()
+                == 0
+            {
                 graph.remove_node(node_idx);
             }
         }
-
         graph
+    }
+    fn save_global_call_graph_to_json(&self, graph: Graph<String, u32>) {
+        let networkx_graph = NetworkxDiGraph::from(graph);
+
+        let mut full_output_path = get_save_file_path(
+            &self.filename,
+            &self.output_path,
+            Some("gcg".to_string()),
+            Some("_cg".to_string()),
+        );
+        check_or_create_dir(&full_output_path);
+
+        full_output_path.set_extension("json".to_string());
+
+        debug!(
+            "Attempting to save global call graph to: {:?}",
+            full_output_path
+        );
+
+        serde_json::to_writer(
+            &File::create(full_output_path).expect("Failed to create writer"),
+            &networkx_graph,
+        )
+        .expect("Unable to write JSON");
     }
 }
 
@@ -493,7 +544,8 @@ impl AFIJFile {
     }
     pub fn subset_and_save(&mut self, extended: bool) {
         let func_info_subsets = self.subset(extended);
-        let fname_string: PathBuf = get_save_file_path(&self.filename, &self.output_path, None);
+        let fname_string: PathBuf =
+            get_save_file_path(&self.filename, &self.output_path, None, None);
         let filename = format!("{}-finfo-subset.json", fname_string.to_string_lossy());
         serde_json::to_writer(
             &File::create(filename).expect("Failed to create writer"),
@@ -527,16 +579,15 @@ impl TikNibFuncMetaFile {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
+    use crate::files::AGCJFile;
     use std::collections::HashSet;
     use std::path::PathBuf;
-    use crate::files::AGCJFile;
 
-    fn return_test_file_oject() -> AGCJFile {
+    fn return_test_file_oject(file_path: &str) -> AGCJFile {
         let mut call_graph_file = AGCJFile {
-            filename: PathBuf::from("test-files/ls_cg.json"),
+            filename: PathBuf::from(file_path),
             function_call_graphs: None,
             output_path: PathBuf::new(),
             function_metadata: None,
@@ -551,9 +602,9 @@ mod tests {
 
     #[test]
     fn test_global_call_graph_generation() {
-        let mut call_graph_file = return_test_file_oject();
+        let mut call_graph_file = return_test_file_oject("test-files/ls_cg.json");
 
-        let global_call_graph = call_graph_file.build_global_call_graphs();
+        let global_call_graph = call_graph_file.build_global_call_graph();
 
         assert_eq!(global_call_graph.node_count(), 111);
 
@@ -563,8 +614,40 @@ mod tests {
             node_names.push(node.weight.clone())
         }
 
-        let unique_node_names = node_names.iter()
-            .collect::<HashSet<_>>();
+        let unique_node_names = node_names.iter().collect::<HashSet<_>>();
+
+        assert_eq!(node_names.len(), unique_node_names.len());
+    }
+
+    #[test]
+    fn test_global_graph_with_redudent_nodes() {
+        let mut call_graph_file = return_test_file_oject("data-examples/raw/test_bin_cg.json");
+
+        let global_call_graph = call_graph_file.build_global_call_graph();
+
+        assert_eq!(global_call_graph.node_count(), 9);
+
+        let mut node_names = Vec::new();
+
+        for node in global_call_graph.raw_nodes().iter() {
+            node_names.push(node.weight.clone())
+        }
+
+        let unique_node_names = node_names.iter().collect::<HashSet<_>>();
+
+        assert_eq!(node_names.len(), unique_node_names.len());
+
+        let post_processed_call_graph = call_graph_file.post_process_graph(global_call_graph);
+
+        assert_eq!(post_processed_call_graph.node_count(), 8);
+
+        let mut node_names = Vec::new();
+
+        for node in post_processed_call_graph.raw_nodes().iter() {
+            node_names.push(node.weight.clone())
+        }
+
+        let unique_node_names = node_names.iter().collect::<HashSet<_>>();
 
         assert_eq!(node_names.len(), unique_node_names.len());
     }
