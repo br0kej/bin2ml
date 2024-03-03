@@ -7,10 +7,9 @@ use crate::errors::FileLoadError;
 #[cfg(feature = "inference")]
 use crate::inference::InferenceJob;
 use crate::networkx::{
-    CallGraphFuncWithMetadata, CallGraphNodeFeatureType, CallGraphTikNibFeatures, CallGraphTypes,
-    NetworkxDiGraph,
+    CallGraphFuncWithMetadata, CallGraphTikNibFeatures, CallGraphTypes, NetworkxDiGraph,
 };
-use crate::utils::{check_or_create_dir, get_save_file_path};
+use crate::utils::get_save_file_path;
 use enum_as_inner::EnumAsInner;
 use indicatif::ParallelProgressIterator;
 use itertools::Itertools;
@@ -552,7 +551,7 @@ impl AGCJFile {
             match graph_data_type {
                 DataType::Cg => {
                     fcg.to_petgraph(
-                        &self,
+                        self,
                         &self.output_path,
                         &self.filename,
                         with_features,
@@ -562,7 +561,7 @@ impl AGCJFile {
                 }
                 DataType::OneHopCg => {
                     fcg.one_hop_to_petgraph(
-                        &self,
+                        self,
                         &self.output_path,
                         &self.filename,
                         with_features,
@@ -572,7 +571,7 @@ impl AGCJFile {
                 }
                 DataType::CgWithCallers => {
                     fcg.to_petgraph_with_callers(
-                        &self,
+                        self,
                         &self.output_path,
                         &self.filename,
                         with_features,
@@ -582,7 +581,7 @@ impl AGCJFile {
                 }
                 DataType::OneHopCgWithcallers => {
                     fcg.one_hop_to_petgraph_with_callers(
-                        &self,
+                        self,
                         &self.output_path,
                         &self.filename,
                         with_features,

@@ -503,84 +503,177 @@ fn main() {
                     } else {
                         error!("--feature-type/-f is required for creating CFG's")
                     }
-                } else {
-                    if Path::new(path).is_file() {
-                        let mut file = match with_features {
-                            true => {
-                                let mut metadata = AFIJFile {
-                                    filename: metadata_path.as_ref().unwrap().to_path_buf(),
-                                    function_info: None,
-                                    output_path: PathBuf::new(),
-                                };
-                                debug!("AFIJ Object: {:?}", metadata);
-                                metadata
-                                    .load_and_deserialize()
-                                    .expect("Unable to load file");
-                                let metadata_subset = metadata.subset(false);
-                                AGCJFile {
-                                    filename: path.clone(),
-                                    function_call_graphs: None,
-                                    output_path: output_path.clone(),
-                                    function_metadata: Some(metadata_subset),
-                                    include_unk: *include_unk,
-                                }
-                            }
-                            false => AGCJFile {
+                } else if Path::new(path).is_file() {
+                    let mut file = match with_features {
+                        true => {
+                            let mut metadata = AFIJFile {
+                                filename: metadata_path.as_ref().unwrap().to_path_buf(),
+                                function_info: None,
+                                output_path: PathBuf::new(),
+                            };
+                            debug!("AFIJ Object: {:?}", metadata);
+                            metadata
+                                .load_and_deserialize()
+                                .expect("Unable to load file");
+                            let metadata_subset = metadata.subset(false);
+                            AGCJFile {
                                 filename: path.clone(),
                                 function_call_graphs: None,
                                 output_path: output_path.clone(),
-                                function_metadata: None,
+                                function_metadata: Some(metadata_subset),
                                 include_unk: *include_unk,
-                            },
-                        };
+                            }
+                        }
+                        false => AGCJFile {
+                            filename: path.clone(),
+                            function_call_graphs: None,
+                            output_path: output_path.clone(),
+                            function_metadata: None,
+                            include_unk: *include_unk,
+                        },
+                    };
 
-                        file.load_and_deserialize()
-                            .expect("Unable to load and deserialize JSON");
-                        file.process_based_on_graph_data_type(
-                            graph_data_type,
-                            with_features,
-                            metadata_type.clone(),
-                        );
+                    file.load_and_deserialize()
+                        .expect("Unable to load and deserialize JSON");
+                    file.process_based_on_graph_data_type(
+                        graph_data_type,
+                        with_features,
+                        metadata_type.clone(),
+                    );
+                } else {
+                    debug!("Multiple files found");
+
+                    if metadata_path.is_none() & with_features {
+                        error!("with features active - require --metadata-path argument");
+                        exit(1)
+                    };
+
+                    let mut file_paths_vec = get_json_paths_from_dir(path, Some("_cg".to_string()));
+                    info!(
+                        "{} files found. Beginning Processing.",
+                        file_paths_vec.len()
+                    );
+                    // if without metadata
+                    if !with_features & metadata_type.is_none() {
+                        debug!("Creating call graphs without any node features");
+                        file_paths_vec.par_iter().progress().for_each(|path| {
+                            let suffix = graph_type.to_owned().to_string();
+                            let full_output_path = get_save_file_path(
+                                &PathBuf::from(path),
+                                output_path,
+                                Some(suffix),
+                                None,
+                            );
+                            if !full_output_path.is_dir() {
+                                let mut file = AGCJFile {
+                                    filename: path.to_owned().parse().unwrap(),
+                                    function_call_graphs: None,
+                                    output_path: output_path.to_owned(),
+                                    function_metadata: None,
+                                    include_unk: *include_unk,
+                                };
+                                debug!("Processing {:?}", file.filename);
+                                file.load_and_deserialize()
+                                    .expect("Unable to load and deserialize JSON");
+                                file.process_based_on_graph_data_type(
+                                    graph_data_type,
+                                    with_features,
+                                    metadata_type.clone(),
+                                );
+                            } else {
+                                info!(
+                                    "Skipping {} as already exists",
+                                    full_output_path.to_string_lossy()
+                                )
+                            }
+                        })
                     } else {
-                        debug!("Multiple files found");
-
-                        if metadata_path.is_none() & with_features {
+                        debug!("Creating call graphs with node features");
+                        debug!("Getting metadata file paths");
+                        // its more than one file
+                        if metadata_path.is_none() {
                             error!("with features active - require --metadata-path argument");
                             exit(1)
                         };
 
-                        let mut file_paths_vec =
-                            get_json_paths_from_dir(path, Some("_cg".to_string()));
-                        info!(
-                            "{} files found. Beginning Processing.",
-                            file_paths_vec.len()
+                        if with_features & metadata_type.is_none() {
+                            error!("with features requires metadata_type to be set")
+                        }
+                        let mut metadata_paths_vec = get_json_paths_from_dir(
+                            metadata_path.as_ref().unwrap(),
+                            Some(metadata_type.as_ref().unwrap().to_string()),
                         );
-                        // if without metadata
-                        if !with_features & metadata_type.is_none() {
-                            debug!("Creating call graphs without any node features");
-                            file_paths_vec.par_iter().progress().for_each(|path| {
-                                let suffix = graph_type.to_owned().to_string();
+
+                        file_paths_vec.sort();
+                        metadata_paths_vec.sort();
+
+                        assert_eq!(file_paths_vec.len(), metadata_paths_vec.len());
+                        let combined_cgs_metadata = file_paths_vec
+                            .into_iter()
+                            .zip(metadata_paths_vec)
+                            .collect::<Vec<_>>();
+
+                        combined_cgs_metadata.par_iter().progress().for_each(
+                            |(filepath, metapath)| {
+                                let suffix = format!("{}-meta", graph_type.to_owned());
                                 let full_output_path = get_save_file_path(
-                                    &PathBuf::from(path),
+                                    &PathBuf::from(filepath),
                                     output_path,
                                     Some(suffix),
                                     None,
                                 );
                                 if !full_output_path.is_dir() {
-                                    let mut file = AGCJFile {
-                                        filename: path.to_owned().parse().unwrap(),
-                                        function_call_graphs: None,
-                                        output_path: output_path.to_owned(),
-                                        function_metadata: None,
-                                        include_unk: *include_unk,
+                                    let mut file = {
+                                        let metadata: Option<FunctionMetadataTypes>;
+                                        if metadata_type.clone().unwrap() == *"finfo" {
+                                            let mut metadata_file = AFIJFile {
+                                                filename: PathBuf::from(metapath),
+                                                function_info: None,
+                                                output_path: PathBuf::new(),
+                                            };
+                                            debug!(
+                                                "Attempting to load metadata file: {}",
+                                                metapath
+                                            );
+                                            metadata_file
+                                                .load_and_deserialize()
+                                                .expect("Unable to load associated metadata file");
+                                            metadata = Some(metadata_file.subset(false));
+                                        } else if metadata_type.clone().unwrap() == *"tiknib" {
+                                            let mut metadata_file = TikNibFuncMetaFile {
+                                                filename: PathBuf::from(metapath),
+                                                function_info: None,
+                                                output_path: PathBuf::new(),
+                                            };
+
+                                            metadata_file
+                                                .load_and_deserialize()
+                                                .expect("Unable to load associated metadata file");
+                                            metadata = Some(metadata_file.subset());
+                                        } else {
+                                            metadata = None
+                                        }
+
+                                        AGCJFile {
+                                            filename: PathBuf::from(filepath),
+                                            function_call_graphs: None,
+                                            output_path: output_path.to_owned(),
+                                            function_metadata: metadata,
+                                            include_unk: *include_unk,
+                                        }
                                     };
-                                    debug!("Processing {:?}", file.filename);
+                                    debug!("Attempting to load {:?}", file.filename);
                                     file.load_and_deserialize()
                                         .expect("Unable to load and deserialize JSON");
+
                                     file.process_based_on_graph_data_type(
                                         graph_data_type,
                                         with_features,
                                         metadata_type.clone(),
+                                    );
+                                    debug!(
+                                        "Finished generating cgs + metadata for {:?}",
+                                        file.filename
                                     );
                                 } else {
                                     info!(
@@ -588,104 +681,8 @@ fn main() {
                                         full_output_path.to_string_lossy()
                                     )
                                 }
-                            })
-                        } else {
-                            debug!("Creating call graphs with node features");
-                            debug!("Getting metadata file paths");
-                            // its more than one file
-                            if metadata_path.is_none() {
-                                error!("with features active - require --metadata-path argument");
-                                exit(1)
-                            };
-
-                            if with_features & metadata_type.is_none() {
-                                error!("with features requires metadata_type to be set")
-                            }
-                            let mut metadata_paths_vec = get_json_paths_from_dir(
-                                metadata_path.as_ref().unwrap(),
-                                Some(metadata_type.as_ref().unwrap().to_string()),
-                            );
-
-                            file_paths_vec.sort();
-                            metadata_paths_vec.sort();
-
-                            assert_eq!(file_paths_vec.len(), metadata_paths_vec.len());
-                            let combined_cgs_metadata = file_paths_vec
-                                .into_iter()
-                                .zip(metadata_paths_vec)
-                                .collect::<Vec<_>>();
-
-                            combined_cgs_metadata.par_iter().progress().for_each(
-                                |(filepath, metapath)| {
-                                    let suffix = format!("{}-meta", graph_type.to_owned());
-                                    let full_output_path = get_save_file_path(
-                                        &PathBuf::from(filepath),
-                                        output_path,
-                                        Some(suffix),
-                                        None,
-                                    );
-                                    if !full_output_path.is_dir() {
-                                        let mut file = {
-                                            let metadata: Option<FunctionMetadataTypes>;
-                                            if metadata_type.clone().unwrap() == *"finfo" {
-                                                let mut metadata_file = AFIJFile {
-                                                    filename: PathBuf::from(metapath),
-                                                    function_info: None,
-                                                    output_path: PathBuf::new(),
-                                                };
-                                                debug!(
-                                                    "Attempting to load metadata file: {}",
-                                                    metapath
-                                                );
-                                                metadata_file.load_and_deserialize().expect(
-                                                    "Unable to load associated metadata file",
-                                                );
-                                                metadata = Some(metadata_file.subset(false));
-                                            } else if metadata_type.clone().unwrap() == *"tiknib" {
-                                                let mut metadata_file = TikNibFuncMetaFile {
-                                                    filename: PathBuf::from(metapath),
-                                                    function_info: None,
-                                                    output_path: PathBuf::new(),
-                                                };
-
-                                                metadata_file.load_and_deserialize().expect(
-                                                    "Unable to load associated metadata file",
-                                                );
-                                                metadata = Some(metadata_file.subset());
-                                            } else {
-                                                metadata = None
-                                            }
-
-                                            AGCJFile {
-                                                filename: PathBuf::from(filepath),
-                                                function_call_graphs: None,
-                                                output_path: output_path.to_owned(),
-                                                function_metadata: metadata,
-                                                include_unk: *include_unk,
-                                            }
-                                        };
-                                        debug!("Attempting to load {:?}", file.filename);
-                                        file.load_and_deserialize()
-                                            .expect("Unable to load and deserialize JSON");
-
-                                        file.process_based_on_graph_data_type(
-                                            graph_data_type,
-                                            with_features,
-                                            metadata_type.clone(),
-                                        );
-                                        debug!(
-                                            "Finished generating cgs + metadata for {:?}",
-                                            file.filename
-                                        );
-                                    } else {
-                                        info!(
-                                            "Skipping {} as already exists",
-                                            full_output_path.to_string_lossy()
-                                        )
-                                    }
-                                },
-                            );
-                        }
+                            },
+                        );
                     }
                 }
             }
