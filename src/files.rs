@@ -6,7 +6,10 @@ use crate::consts::*;
 use crate::errors::FileLoadError;
 #[cfg(feature = "inference")]
 use crate::inference::InferenceJob;
-use crate::networkx::NetworkxDiGraph;
+use crate::networkx::{
+    CallGraphFuncWithMetadata, CallGraphNodeFeatureType, CallGraphTikNibFeatures, CallGraphTypes,
+    NetworkxDiGraph,
+};
 use crate::utils::{check_or_create_dir, get_save_file_path};
 use enum_as_inner::EnumAsInner;
 use indicatif::ParallelProgressIterator;
@@ -409,12 +412,12 @@ impl AGCJFile {
     }
 
     // Global Call Graph Related Functions
-    pub fn generate_global_call_graphs(&mut self) {
+    pub fn generate_global_call_graphs(&mut self, metadata_type: Option<String>) {
         let call_graph = self.build_global_call_graph();
         debug!("Num Nodes (Default): {}", call_graph.node_count());
         let cleaned_graph = self.post_process_graph(call_graph);
         debug!("Num Nodes (Post-Clean): {}", cleaned_graph.node_count());
-        self.save_global_call_graph_to_json(cleaned_graph)
+        self.save_global_call_graph_to_json(cleaned_graph, metadata_type)
     }
 
     fn build_global_call_graph(&mut self) -> Graph<String, u32> {
@@ -482,8 +485,40 @@ impl AGCJFile {
         }
         graph
     }
-    fn save_global_call_graph_to_json(&self, graph: Graph<String, u32>) {
-        let networkx_graph = NetworkxDiGraph::from(graph);
+
+    fn add_node_features_to_global_call_graph(
+        &self,
+        graph: Graph<String, u32>,
+        metadata_type: Option<String>,
+    ) -> CallGraphTypes {
+        match metadata_type.unwrap().as_str() {
+            "finfo" => {
+                let networkx_graph = NetworkxDiGraph::<CallGraphFuncWithMetadata>::from((
+                    graph,
+                    self.function_metadata.as_ref().unwrap().as_afij().unwrap(),
+                ));
+                CallGraphTypes::CGMeta(networkx_graph)
+            }
+            "tiknib" => {
+                let networkx_graph = NetworkxDiGraph::<CallGraphTikNibFeatures>::from((
+                    graph,
+                    self.function_metadata.as_ref().unwrap().as_agfj().unwrap(),
+                ));
+                CallGraphTypes::TikNib(networkx_graph)
+            }
+            _ => unreachable!("Impossible :D"),
+        }
+    }
+    fn save_global_call_graph_to_json(
+        &self,
+        graph: Graph<String, u32>,
+        metadata_type: Option<String>,
+    ) {
+        let networkx_graph = if metadata_type.is_some() {
+            self.add_node_features_to_global_call_graph(graph, metadata_type)
+        } else {
+            CallGraphTypes::CGName(NetworkxDiGraph::from(graph))
+        };
 
         let mut full_output_path = get_save_file_path(
             &self.filename,
@@ -567,7 +602,7 @@ impl AGCJFile {
         metadata_type: Option<String>,
     ) {
         match graph_data_type {
-            DataType::GlobalCg => self.generate_global_call_graphs(),
+            DataType::GlobalCg => self.generate_global_call_graphs(metadata_type.clone()),
             DataType::Cg
             | DataType::OneHopCg
             | DataType::OneHopCgWithcallers
