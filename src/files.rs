@@ -411,9 +411,9 @@ impl AGCJFile {
     // Global Call Graph Related Functions
     pub fn generate_global_call_graphs(&mut self) {
         let call_graph = self.build_global_call_graph();
-        println!("Num Nodes (Default): {}", call_graph.node_count());
+        debug!("Num Nodes (Default): {}", call_graph.node_count());
         let cleaned_graph = self.post_process_graph(call_graph);
-        println!("Num Nodes (Post-Clean): {}", cleaned_graph.node_count());
+        debug!("Num Nodes (Post-Clean): {}", cleaned_graph.node_count());
         self.save_global_call_graph_to_json(cleaned_graph)
     }
 
