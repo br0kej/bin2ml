@@ -1,18 +1,25 @@
 use crate::afij::AFIJFunctionInfo;
-use crate::agcj::AGCJFunctionCallGraphs;
+use crate::agcj::AGCJFunctionCallGraph;
+
+use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Error;
 use anyhow::Result;
 use r2pipe::R2Pipe;
 use r2pipe::R2PipeSpawnOptions;
+
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 use serde_json;
+
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::env;
+
 use std::fs;
 use std::fs::File;
-use std::path::Path;
+
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 #[derive(PartialEq, Debug)]
@@ -35,25 +42,33 @@ pub enum ExtractionJobType {
 
 #[derive(Debug)]
 pub struct FileToBeProcessed {
-    pub file_path: String,
-    pub output_path: String,
+    pub file_path: PathBuf,
+    pub output_path: PathBuf,
     pub job_type_suffix: String,
+    pub r2p_config: R2PipeConfig,
 }
 
 #[derive(Debug)]
 pub struct ExtractionJob {
-    pub input_path: String,
+    pub input_path: PathBuf,
     pub input_path_type: PathType,
     pub job_type: ExtractionJobType,
     pub files_to_be_processed: Vec<FileToBeProcessed>,
-    pub output_path: String, // Remove - Kept for backwards compat
+    pub output_path: PathBuf, // Remove - Kept for backwards compat
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct R2PipeConfig {
+    pub debug: bool,
+    pub extended_analysis: bool,
+    pub use_curl_pdb: bool,
 }
 
 impl std::fmt::Display for ExtractionJob {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
-            "bin_path: {} p_type: {:?} what_do: {:?}",
+            "bin_path: {:?} p_type: {:?} what_do: {:?}",
             self.input_path, self.input_path_type, self.job_type
         )
     }
@@ -159,7 +174,6 @@ pub struct Codexref {
 
 // Structs related to AEAFJ
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct AEAFJRegisterBehaviour {
     #[serde(rename = "A")]
     pub a: Vec<String>,
@@ -200,29 +214,35 @@ impl std::fmt::Display for AFLJFuncDetails {
     }
 }
 
-impl From<(String, String, String)> for FileToBeProcessed {
-    fn from(orig: (String, String, String)) -> FileToBeProcessed {
+impl From<(String, String, String, R2PipeConfig)> for FileToBeProcessed {
+    fn from(orig: (String, String, String, R2PipeConfig)) -> FileToBeProcessed {
         FileToBeProcessed {
-            file_path: orig.0,
-            output_path: orig.1,
+            file_path: PathBuf::from(orig.0),
+            output_path: PathBuf::from(orig.1),
             job_type_suffix: orig.2,
+            r2p_config: orig.3,
         }
     }
 }
 
 impl ExtractionJob {
-    pub fn new(input_path: &str, output_path: &str, mode: &str) -> Result<ExtractionJob, Error> {
-        fn get_path_type(bin_path: &str) -> PathType {
+    pub fn new(
+        input_path: &PathBuf,
+        output_path: &PathBuf,
+        mode: &str,
+        debug: &bool,
+        extended_analysis: &bool,
+        use_curl_pdb: &bool,
+    ) -> Result<ExtractionJob, Error> {
+        fn get_path_type(bin_path: &PathBuf) -> PathType {
             let fpath_md = fs::metadata(bin_path).unwrap();
-            let p_type: PathType;
             if fpath_md.is_file() {
-                p_type = PathType::File;
+                PathType::File
             } else if fpath_md.is_dir() {
-                p_type = PathType::Dir;
+                PathType::Dir
             } else {
-                p_type = PathType::Unk;
+                PathType::Unk
             }
-            p_type
         }
 
         // This functionality is currently not being used!
@@ -239,45 +259,60 @@ impl ExtractionJob {
             }
         }
 
+        let r2_handle_config = R2PipeConfig {
+            debug: *debug,
+            extended_analysis: *extended_analysis,
+            use_curl_pdb: *use_curl_pdb,
+        };
+
         let p_type = get_path_type(input_path);
         let job_type = extraction_job_matcher(mode).unwrap();
 
         if p_type == PathType::File {
             let file = FileToBeProcessed {
-                file_path: input_path.to_string(),
-                output_path: output_path.to_string(),
+                file_path: input_path.to_owned(),
+                output_path: output_path.to_owned(),
                 job_type_suffix: (*mode).to_string(),
+                r2p_config: r2_handle_config,
             };
             Ok(ExtractionJob {
-                input_path: input_path.to_string(),
+                input_path: input_path.to_owned(),
                 input_path_type: p_type,
                 job_type,
                 files_to_be_processed: vec![file],
-                output_path: (*output_path).to_string(),
+                output_path: output_path.to_owned(),
             })
         } else if p_type == PathType::Dir {
-            let files = ExtractionJob::get_file_paths_dir(input_path.to_string());
-            let files_with_output_path: Vec<(String, String, String)> = files
+            let files = ExtractionJob::get_file_paths_dir(input_path);
+
+            let files_with_output_path: Vec<(String, String, String, R2PipeConfig)> = files
                 .into_iter()
-                .map(|f| (f, output_path.to_string(), mode.to_string()))
+                .map(|f| {
+                    (
+                        f,
+                        output_path.to_string_lossy().to_string(),
+                        mode.to_string(),
+                        r2_handle_config,
+                    )
+                })
                 .collect();
             let files_to_be_processed: Vec<FileToBeProcessed> = files_with_output_path
                 .into_iter()
                 .map(FileToBeProcessed::from)
                 .collect();
             Ok(ExtractionJob {
-                input_path: input_path.to_string(),
+                input_path: input_path.to_owned(),
                 input_path_type: p_type,
                 job_type,
                 files_to_be_processed,
-                output_path: output_path.to_string(),
+                output_path: output_path.to_owned(),
             })
         } else {
             bail!("Failed to create extraction job.")
         }
     }
 
-    fn get_file_paths_dir(input_path: String) -> Vec<String> {
+    fn get_file_paths_dir(input_path: &PathBuf) -> Vec<String> {
         let mut str_vec: Vec<String> = Vec::new();
         for file in WalkDir::new(input_path)
             .into_iter()
@@ -296,49 +331,54 @@ impl ExtractionJob {
 }
 
 impl FileToBeProcessed {
-    pub fn extract_register_behaviour(&self, debug: &bool) {
+    pub fn extract_register_behaviour(&self) {
         info!("Starting register behaviour extraction");
-        let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
+        let mut r2p = self.setup_r2_pipe();
         let function_details = self.get_function_name_list(&mut r2p);
-        let mut register_behaviour_vec: HashMap<String, AEAFJRegisterBehaviour> = HashMap::new();
-        info!("Executing aeafj for each function");
-        for function in function_details.iter() {
-            r2p.cmd(format!("s @ {}", &function.name).as_str())
-                .expect("Command failed..");
-            let json = r2p.cmd("aeafj").expect("Command failed..");
-            let json_obj: AEAFJRegisterBehaviour =
-                serde_json::from_str(&json).expect("Unable to convert to JSON object!");
-            register_behaviour_vec.insert(function.name.clone(), json_obj);
-        }
-        info!("All functions processed");
-        r2p.close();
-        info!("r2p closed");
+        if function_details.is_ok() {
+            let mut register_behaviour_vec: HashMap<String, AEAFJRegisterBehaviour> =
+                HashMap::new();
+            info!("Executing aeafj for each function");
+            for function in function_details.unwrap().iter() {
+                r2p.cmd(format!("s @ {}", &function.name).as_str())
+                    .expect("Command failed..");
+                let json = r2p.cmd("aeafj").expect("Command failed..");
+                let json_obj: AEAFJRegisterBehaviour =
+                    serde_json::from_str(&json).expect("Unable to convert to JSON object!");
+                register_behaviour_vec.insert(function.name.clone(), json_obj);
+            }
+            info!("All functions processed");
+            r2p.close();
+            info!("r2p closed");
 
-        info!("Writing extracted data to file");
-        self.write_to_json(&json!(register_behaviour_vec))
+            info!("Writing extracted data to file");
+            self.write_to_json(&json!(register_behaviour_vec))
+        } else {
+            error!(
+                "Failed to extract function details to generate register behaviour - Error in r2 extraction for {:?}",
+                self.file_path
+            )
+        }
     }
 
-    // TODO: Refactor this so it uses the AGFJ struct
-    pub fn extract_func_cfgs(&self, debug: &bool) {
+    pub fn extract_func_cfgs(&self) {
         let mut fp_filename = Path::new(&self.file_path)
             .file_name()
             .expect("Unable to get filename")
             .to_string_lossy()
             .to_string();
         fp_filename = fp_filename + "_" + &self.job_type_suffix.clone();
-        let f_name = format!("{}/{}.json", &self.output_path, fp_filename);
+        let f_name = format!("{:?}/{}.json", &self.output_path, fp_filename);
         if !Path::new(&f_name).exists() {
             info!("{} not found. Continuing processing.", f_name);
-            // This creates HUGE JSON files for each files
-            // Approximately 40x file size to JSON
-            let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
-            info!("Executing agfj @@f on {}", self.file_path);
-            let mut json = r2p.cmd("agfj @@f").expect("Command failed..");
-
-            info!("Closing r2p process for {}", self.file_path);
+            let mut r2p = self.setup_r2_pipe();
+            info!("Executing agfj @@f on {:?}", self.file_path);
+            let mut json = r2p
+                .cmd("agfj @@f")
+                .expect("Failed to extract control flow graph information.");
+            info!("Closing r2p process for {:?}", self.file_path);
             r2p.close();
-
-            info!("Starting JSON fixup for {}", self.file_path);
+            info!("Starting JSON fixup for {:?}", self.file_path);
             // Fix JSON object
             json = json.replace("[]\n", ",");
             json = json.replace("}]\n[{", "}],\n[{");
@@ -347,7 +387,7 @@ impl FileToBeProcessed {
             json = json.replace("}]\n,]", "}]\n]");
             json = json.replace("\n,,[{", "\n,[{");
             json = json.replace("\n,,[{", "\n,[{");
-            info!("JSON fixup finished for {}", self.file_path);
+            info!("JSON fixup finished for {:?}", self.file_path);
 
             if json != "[,]" {
                 #[allow(clippy::expect_fun_call)]
@@ -369,11 +409,11 @@ impl FileToBeProcessed {
         }
     }
 
-    pub fn extract_function_call_graphs(&self, debug: &bool) {
+    pub fn extract_function_call_graphs(&self) {
         info!("Starting function call graph extraction");
-        let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
+        let mut r2p = self.setup_r2_pipe();
         let json = r2p.cmd("agCj").expect("agCj command failed to execute");
-        let function_call_graphs: Vec<AGCJFunctionCallGraphs> =
+        let function_call_graphs: Vec<AGCJFunctionCallGraph> =
             serde_json::from_str(&json).expect("Unable to convert to JSON object!");
         info!("Function call graph extracted.");
         r2p.close();
@@ -383,67 +423,77 @@ impl FileToBeProcessed {
         self.write_to_json(&json!(function_call_graphs))
     }
 
-    pub fn extract_function_xrefs(&self, debug: &bool) {
-        let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
+    pub fn extract_function_xrefs(&self) {
+        let mut r2p = self.setup_r2_pipe();
         let function_details = self.get_function_name_list(&mut r2p);
         let mut function_xrefs: HashMap<String, Vec<FunctionXrefDetails>> = HashMap::new();
         info!("Extracting xrefs for each function");
-        for function in function_details.iter() {
-            let ret = self.get_function_xref_details(function.offset, &mut r2p);
-            function_xrefs.insert(function.name.clone(), ret);
-        }
-        info!("All functions processed");
-        r2p.close();
-        info!("r2p closed");
-
-        info!("Writing extracted data to file");
-        self.write_to_json(&json!(function_xrefs))
-    }
-
-    pub fn extract_function_info(&self, debug: &bool) {
-        info!("Starting function metdata extraction");
-        let mut fp_filename = Path::new(self.file_path.as_str())
-            .file_name()
-            .expect("Unable to get filename")
-            .to_string_lossy()
-            .to_string();
-
-        fp_filename = fp_filename + "_" + &self.job_type_suffix.clone();
-        let f_name = format!("{}/{}.json", self.output_path, fp_filename);
-        if !Path::new(&f_name).exists() {
-            let mut r2p = self.setup_r2_pipe(&self.file_path, debug);
-            let function_details = self.get_function_name_list(&mut r2p);
-            let mut function_info: Vec<Vec<AFIJFunctionInfo>> = Vec::new();
-            info!("Extracting function metadata");
-            for function in function_details.iter() {
-                debug!("Processing {}", function.name);
-                let ret = self.get_function_info(function.offset, &mut r2p);
-                debug!("Metadata Collected: {:?}", ret);
-                function_info.push(ret);
+        if function_details.is_ok() {
+            for function in function_details.unwrap().iter() {
+                let ret = self.get_function_xref_details(function.offset, &mut r2p);
+                function_xrefs.insert(function.name.clone(), ret);
             }
             info!("All functions processed");
             r2p.close();
             info!("r2p closed");
 
             info!("Writing extracted data to file");
-            self.write_to_json(&json!(function_info
-                .into_iter()
-                .flatten()
-                .collect::<Vec<AFIJFunctionInfo>>()))
+            self.write_to_json(&json!(function_xrefs))
+        } else {
+            error!(
+                "Failed to extract function xrefs - Error in r2 extraction for {:?}",
+                self.file_path
+            )
+        }
+    }
+
+    pub fn extract_function_info(&self) {
+        info!("Starting function metdata extraction");
+        let mut fp_filename = self
+            .file_path
+            .file_name()
+            .expect("Unable to get filename")
+            .to_string_lossy()
+            .to_string();
+
+        fp_filename = fp_filename + "_" + &self.job_type_suffix.clone();
+        let f_name = format!("{:?}/{}.json", self.output_path, fp_filename);
+        if !Path::new(&f_name).exists() {
+            let mut r2p = self.setup_r2_pipe();
+
+            let function_details: Result<Vec<AFIJFunctionInfo>, r2pipe::Error> =
+                self.get_function_name_list(&mut r2p);
+
+            if function_details.is_err() {
+                error!("Unable to extract function info for {:?}", self.file_path);
+                r2p.close();
+                info!("r2p closed");
+            } else {
+                r2p.close();
+                info!("r2p closed");
+
+                info!("Writing extracted data to file");
+                self.write_to_json(&json!(function_details.unwrap()))
+            }
         }
     }
 
     // r2 commands to structs
 
-    fn get_function_name_list(&self, r2p: &mut R2Pipe) -> Vec<AFLJFuncDetails> {
+    fn get_function_name_list(
+        &self,
+        r2p: &mut R2Pipe,
+    ) -> Result<Vec<AFIJFunctionInfo>, r2pipe::Error> {
         info!("Getting function information from binary");
-        let json = r2p
-            .cmd("aflj")
-            .expect(&format!("aflj command failed for {}", self.file_path));
-        let json_obj: Vec<AFLJFuncDetails> = serde_json::from_str(&json)
-            .expect(&format!("Unable to convert to JSON object! - {}", json));
+        let json = r2p.cmd("aflj");
 
-        json_obj
+        if let Ok(json_str) = json {
+            let json_obj: Vec<AFIJFunctionInfo> = serde_json::from_str(json_str.as_ref())
+                .expect("Unable to convert to JSON object!");
+            Ok(json_obj)
+        } else {
+            Err(json.unwrap_err())
+        }
     }
 
     fn get_function_xref_details(
@@ -473,30 +523,27 @@ impl FileToBeProcessed {
         json_obj
     }
 
-    fn get_function_info(&self, function_addr: u64, r2p: &mut R2Pipe) -> Vec<AFIJFunctionInfo> {
-        Self::go_to_address(r2p, function_addr);
-        let json = r2p.cmd("afij").expect("afij command failed");
-        let json_obj: Vec<AFIJFunctionInfo> = serde_json::from_str(&json)
-            .expect(&format!("Unable to convert to JSON object! - {}", json));
-        json_obj
-    }
-
     // Helper Functions
-
     fn write_to_json(&self, json_obj: &Value) {
-        let mut fp_filename = Path::new(self.file_path.as_str())
+        let mut fp_filename = self
+            .file_path
             .file_name()
             .expect("Unable to get filename")
             .to_string_lossy()
             .to_string();
 
-        fp_filename = fp_filename + "_" + &self.job_type_suffix.clone();
-        let f_name = format!("{}/{}.json", self.output_path, fp_filename);
+        fp_filename = fp_filename + "_" + &self.job_type_suffix.clone() + ".json";
+
+        let mut output_filepath = PathBuf::new();
+        output_filepath.push(self.output_path.clone());
+        output_filepath.push(fp_filename);
+        debug!("Save filename: {:?}", output_filepath);
+
         serde_json::to_writer(
-            &File::create(&f_name).expect("Unable to create file!"),
+            &File::create(&output_filepath).expect("Unable to create file!"),
             &json_obj,
         )
-        .unwrap_or_else(|_| panic!("the world is ending: {}", f_name));
+        .unwrap_or_else(|_| panic!("the world is ending: {:?}", output_filepath));
     }
 
     fn go_to_address(r2p: &mut R2Pipe, function_addr: u64) {
@@ -504,33 +551,80 @@ impl FileToBeProcessed {
             .expect("failed to seek addr");
     }
 
-    fn setup_r2_pipe(&self, s: &String, debug: &bool) -> R2Pipe {
-        // Setup R2 pipe with options and return it
-        // Could be extended to include toggling of options
-        // + more args?
-        let opts = if !(*debug) {
-            debug!("Creating r2 handle without debugging");
-            R2PipeSpawnOptions {
-                exepath: "r2".to_owned(),
-                args: vec!["-e bin.cache=true", "-e log.level=1", "-2"],
-            }
+    fn handle_symbols_pdb(&self, r2p: &mut R2Pipe) -> Result<(), Error> {
+        // Download symbols if available
+        debug!("Downloading pdb file for {:?}", self.file_path);
+        let download_pdb = r2p.cmd("idpd");
+
+        debug!("Download PDB Ret: {:?}", download_pdb);
+
+        if download_pdb.unwrap().contains("success") {
+            let ret = r2p.cmd("idp");
+            debug!("Return value: {:?}", ret);
+
+            Ok(())
         } else {
+            Err(anyhow!("Unable to download pdb"))
+        }
+    }
+
+    fn setup_r2_pipe(&self) -> R2Pipe {
+        if self.r2p_config.use_curl_pdb {
+            // Docs suggest this is unsafe
+            env::set_var("R2_CURL", "1");
+        }
+
+        let opts = if self.r2p_config.debug {
             debug!("Creating r2 handle with debugging");
             R2PipeSpawnOptions {
-                exepath: "r2".to_owned(),
+                exepath: "radare2".to_owned(),
                 args: vec!["-e bin.cache=true", "-e log.level=0"],
             }
-        };
-        debug!("Attempting to create r2pipe using {}", s);
-        let mut r2p = match R2Pipe::in_session() {
-            Some(_) => R2Pipe::open().expect("Unable to open R2Pipe"),
-            None => R2Pipe::spawn(s, Some(opts)).expect("Failed to spawn new R2Pipe"),
+        } else {
+            debug!("Creating r2 handle without debugging");
+            R2PipeSpawnOptions {
+                exepath: "radare2".to_owned(),
+                args: vec!["-e bin.cache=true", "-e log.level=1", "-2"],
+            }
         };
 
-        debug!("Executing 'aa' r2 command for {}", s);
-        r2p.cmd("aa")
-            .expect("Unable to complete standard analysis!");
-        debug!("'aa' r2 command complete for {}", s);
+        debug!("Attempting to create r2pipe using {:?}", self.file_path);
+        let mut r2p = match R2Pipe::in_session() {
+            Some(_) => R2Pipe::open().expect("Unable to open R2Pipe"),
+            None => R2Pipe::spawn(self.file_path.to_str().unwrap(), Some(opts))
+                .expect("Failed to spawn new R2Pipe"),
+        };
+
+        let info = r2p.cmdj("ij");
+        if info.is_ok() {
+            let info = info.unwrap();
+            if info["bin"]["bintype"].as_str().unwrap() == "pe" {
+                debug!("PE file found. Handling symbol download!");
+                let ret = self.handle_symbols_pdb(&mut r2p);
+
+                if ret.is_err() {
+                    error!("Unable to get PDB info")
+                }
+            }
+        }
+
+        if self.r2p_config.extended_analysis {
+            debug!(
+                "Executing 'aaa' r2 command for {}",
+                self.file_path.display()
+            );
+            r2p.cmd("aaa")
+                .expect("Unable to complete standard analysis!");
+            debug!("'aaa' r2 command complete for {}", self.file_path.display());
+        } else {
+            debug!("Executing 'aa' r2 command for {}", self.file_path.display());
+            r2p.cmd("aa")
+                .expect("Unable to complete standard analysis!");
+            debug!(
+                "'aa' r2 command complete for {:?}",
+                self.file_path.display()
+            );
+        };
         r2p
     }
 }

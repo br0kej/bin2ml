@@ -1,5 +1,5 @@
 use std::fs::create_dir_all;
-use std::path::Path;
+use std::path::PathBuf;
 use walkdir::WalkDir;
 
 /// Formats a save file path
@@ -15,35 +15,49 @@ use walkdir::WalkDir;
 ///
 /// See agcj.rs for an example of this optional suffix being used
 pub fn get_save_file_path(
-    binary_path: &str,
-    output_path: &String,
+    binary_path: &PathBuf,
+    output_path: &PathBuf,
     optional_suffix: Option<String>,
-) -> String {
+    remove_suffix: Option<String>,
+) -> PathBuf {
     debug!(
         "Building Filepath - Binary Path: {:?} Output Path: {:?}",
         binary_path, output_path
     );
-    let file_name = Path::new(binary_path)
+    let file_name = binary_path
         .file_stem()
         .unwrap()
         .to_string_lossy()
         .to_string();
 
+    let file_name = if let Some(suffix) = remove_suffix {
+        file_name.replace(&suffix, "")
+    } else {
+        file_name
+    };
+
+
     if optional_suffix.is_none() {
         let full_output_path = format!(
             "{}/{}",
-            output_path.strip_suffix('/').unwrap_or(output_path),
+            output_path
+                .to_string_lossy()
+                .strip_suffix('/')
+                .unwrap_or(output_path.as_os_str().to_str().unwrap()),
             file_name
         );
-        full_output_path
+        PathBuf::from(full_output_path)
     } else {
         let full_output_path = format!(
             "{}/{}-{}",
-            output_path.strip_suffix('/').unwrap_or(output_path),
+            output_path
+                .to_string_lossy()
+                .strip_suffix('/')
+                .unwrap_or(output_path.as_os_str().to_str().unwrap()),
             file_name,
             optional_suffix.unwrap()
         );
-        full_output_path
+        PathBuf::from(full_output_path)
     }
 }
 
@@ -53,7 +67,7 @@ pub fn get_save_file_path(
 /// files present within identifying files ending in .json before
 /// returning a Vec<String> where each string is an absolute path
 /// to a given JSON file
-pub fn get_json_paths_from_dir(path: &String, identifier: Option<String>) -> Vec<String> {
+pub fn get_json_paths_from_dir(path: &PathBuf, identifier: Option<String>) -> Vec<String> {
     let mut str_vec: Vec<String> = Vec::new();
     let pattern = if identifier.is_none() {
         ".json".to_string()
@@ -72,8 +86,8 @@ pub fn get_json_paths_from_dir(path: &String, identifier: Option<String>) -> Vec
 }
 
 /// Checks to see if a directory is prsent, if not creates
-pub fn check_or_create_dir(full_output_path: &String) {
-    if !Path::new(full_output_path).is_dir() {
+pub fn check_or_create_dir(full_output_path: &PathBuf) {
+    if !full_output_path.is_dir() {
         create_dir_all(full_output_path).expect("Unable to create directory!");
     }
 }
@@ -89,23 +103,36 @@ mod tests {
     // TESTS FOR SAVE PATH BUILDING
     #[test]
     fn test_get_save_file_path_1() {
-        let path: &str = "test_bin/hello.json";
-        let output_path: String = String::from("processed_data/");
-        let output_path = get_save_file_path(path, &output_path, Some("cg".to_string()));
-        assert_eq!(output_path, String::from("processed_data/hello-cg"))
+        let path: &PathBuf = &PathBuf::from("test_bin/hello.json");
+        let output_path: &PathBuf = &PathBuf::from("processed_data/");
+        let output_path = get_save_file_path(path, &output_path, Some("cg".to_string()), None);
+        assert_eq!(output_path, PathBuf::from("processed_data/hello-cg"))
     }
     #[test]
     fn test_get_save_file_path_2() {
-        let path: &str = "test_bin/extra_dir/hello.json";
-        let output_path: String = String::from("with_more/processed_data/");
-        let output = get_save_file_path(path, &output_path, None);
-        assert_eq!(output, String::from("with_more/processed_data/hello"))
+        let path: &PathBuf = &PathBuf::from("test_bin/extra_dir/hello.json");
+        let output_path: &PathBuf = &PathBuf::from("with_more/processed_data/");
+        let output = get_save_file_path(path, output_path, None, None);
+        assert_eq!(output, PathBuf::from("with_more/processed_data/hello"))
     }
     #[test]
     fn test_get_save_file_path_3() {
-        let path: &str = "hello.json";
-        let output_path: String = String::from("processed_data");
-        let output = get_save_file_path(path, &output_path, None);
-        assert_eq!(output, String::from("processed_data/hello"))
+        let path: &PathBuf = &PathBuf::from("hello.json");
+        let output_path: &PathBuf = &PathBuf::from("processed_data");
+        let output = get_save_file_path(path, &output_path, None, None);
+        assert_eq!(output, PathBuf::from("processed_data/hello"))
+    }
+
+    #[test]
+    fn test_get_save_file_path_with_suffix_removal() {
+        let path: &PathBuf = &PathBuf::from("hello_cg.json");
+        let output_path: &PathBuf = &PathBuf::from("processed_data");
+        let output = get_save_file_path(
+            path,
+            &output_path,
+            Some("gcg".to_string()),
+            Some("_cg".to_string()),
+        );
+        assert_eq!(output, PathBuf::from("processed_data/hello-gcg"))
     }
 }

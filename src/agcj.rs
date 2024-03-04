@@ -7,10 +7,11 @@ use itertools::Itertools;
 use petgraph::prelude::Graph;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
+use std::path::PathBuf;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AGCJFunctionCallGraphs {
+pub struct AGCJFunctionCallGraph {
     pub name: String,
     pub size: i64,
     pub imports: Option<Vec<String>>,
@@ -24,16 +25,20 @@ pub struct AGCJParsedObjects {
     pub nodes: Vec<String>,
 }
 
-impl AGCJFunctionCallGraphs {
+impl AGCJFunctionCallGraph {
     fn graph_to_json_func_node(
         &self,
-        binary_name: &str,
-        output_path: &String,
+        binary_name: &PathBuf,
+        output_path: &PathBuf,
         networkx_graph: NetworkxDiGraph<CallGraphFuncNameNode>,
         type_suffix: &str,
     ) {
-        let full_output_path =
-            get_save_file_path(binary_name, output_path, Some(type_suffix.to_string()));
+        let mut full_output_path = get_save_file_path(
+            binary_name,
+            output_path,
+            Some(type_suffix.to_string()),
+            None,
+        );
         check_or_create_dir(&full_output_path);
 
         let mut function_name = self.name.clone();
@@ -43,13 +48,16 @@ impl AGCJFunctionCallGraphs {
             function_name = self.name[..75].to_string();
         }
 
-        let filename = format!(
-            "{}/{}-{}.json",
-            full_output_path, function_name, type_suffix
-        );
+        let filename = format!("{}-{}.json", function_name, type_suffix);
+
+        // Normalise string for windows
+        let filename = filename.replace(&['(', ')', ',', '\"', ';', ':', '\''][..], "");
+        full_output_path.push(filename);
+
+        debug!("Filename to save graphs to: {:?}", full_output_path);
 
         serde_json::to_writer(
-            &File::create(filename).expect("Failed to create writer"),
+            &File::create(full_output_path).expect("Failed to create writer"),
             &networkx_graph,
         )
         .expect("Unable to write JSON");
@@ -57,13 +65,17 @@ impl AGCJFunctionCallGraphs {
 
     fn graph_to_json_func_metadata_tiknib(
         &self,
-        binary_name: &str,
-        output_path: &String,
+        binary_name: &PathBuf,
+        output_path: &PathBuf,
         networkx_graph: NetworkxDiGraph<CallGraphTikNibFeatures>,
         type_suffix: &str,
     ) {
-        let full_output_path =
-            get_save_file_path(binary_name, output_path, Some(type_suffix.to_string()));
+        let full_output_path = get_save_file_path(
+            binary_name,
+            output_path,
+            Some(type_suffix.to_string()),
+            None,
+        );
         check_or_create_dir(&full_output_path);
 
         let mut function_name = self.name.clone();
@@ -74,7 +86,7 @@ impl AGCJFunctionCallGraphs {
         }
 
         let filename = format!(
-            "{}/{}-{}.json",
+            "{:?}/{}-{}.json",
             full_output_path, function_name, type_suffix
         );
 
@@ -87,15 +99,19 @@ impl AGCJFunctionCallGraphs {
 
     fn graph_to_json_func_metadata_finfo(
         &self,
-        binary_name: &str,
-        output_path: &String,
+        binary_name: &PathBuf,
+        output_path: &PathBuf,
         networkx_graph: NetworkxDiGraph<CallGraphFuncWithMetadata>,
         type_suffix: &str,
     ) {
-        let full_output_path =
-            get_save_file_path(binary_name, output_path, Some(type_suffix.to_string()));
+        let mut full_output_path = get_save_file_path(
+            binary_name,
+            output_path,
+            Some(type_suffix.to_string()),
+            None,
+        );
         check_or_create_dir(&full_output_path);
-
+        debug!("Built Path: {:?}", full_output_path);
         let mut function_name = self.name.clone();
 
         // This is a pretty dirty fix and may break things
@@ -103,13 +119,14 @@ impl AGCJFunctionCallGraphs {
             function_name = self.name[..75].to_string();
         }
 
-        let filename = format!(
-            "{}/{}-{}.json",
-            full_output_path, function_name, type_suffix
-        );
+        let filename = format!("{}-{}.json", function_name, type_suffix);
+        // Normalise string for windows
+        let filename = filename.replace(&['(', ')', ',', '\"', ';', ':', '\''][..], "");
+        full_output_path.push(filename);
 
+        debug!("Attempting to save to {:?}", full_output_path);
         serde_json::to_writer(
-            &File::create(filename).expect("Failed to create writer"),
+            &File::create(full_output_path).expect("Failed to create writer"),
             &networkx_graph,
         )
         .expect("Unable to write JSON");
@@ -148,7 +165,7 @@ impl AGCJFunctionCallGraphs {
             trace!("Imports: {:?}", self.imports);
             for import in self.imports.as_ref().unwrap().iter() {
                 trace! {"Starting to Process {:?}", import};
-                let import_object: &Vec<&AGCJFunctionCallGraphs> = &global_cg
+                let import_object: &Vec<&AGCJFunctionCallGraph> = &global_cg
                     .function_call_graphs
                     .as_ref()
                     .unwrap()
@@ -226,8 +243,8 @@ impl AGCJFunctionCallGraphs {
     pub fn to_petgraph(
         &self,
         global_cg: &AGCJFile,
-        output_path: &String,
-        binary_name: &str,
+        output_path: &PathBuf,
+        binary_name: &PathBuf,
         with_metadata: &bool,
         include_unk: &bool,
         node_feature_type: Option<String>,
@@ -250,8 +267,8 @@ impl AGCJFunctionCallGraphs {
     pub fn one_hop_to_petgraph(
         &self,
         global_cg: &AGCJFile,
-        output_path: &String,
-        binary_name: &str,
+        output_path: &PathBuf,
+        binary_name: &PathBuf,
         with_metadata: &bool,
         include_unk: &bool,
         node_feature_type: Option<String>,
@@ -273,8 +290,8 @@ impl AGCJFunctionCallGraphs {
     pub fn to_petgraph_with_callers(
         &self,
         global_cg: &AGCJFile,
-        output_path: &String,
-        binary_name: &str,
+        output_path: &PathBuf,
+        binary_name: &PathBuf,
         with_metadata: &bool,
         include_unk: &bool,
         node_feature_type: Option<String>,
@@ -296,8 +313,8 @@ impl AGCJFunctionCallGraphs {
     pub fn one_hop_to_petgraph_with_callers(
         &self,
         global_cg: &AGCJFile,
-        output_path: &String,
-        binary_name: &str,
+        output_path: &PathBuf,
+        binary_name: &PathBuf,
         with_metadata: &bool,
         include_unk: &bool,
         node_feature_type: Option<String>,
@@ -327,8 +344,8 @@ impl AGCJFunctionCallGraphs {
         &self,
         graph: Graph<String, u32>,
         global_cg: &AGCJFile,
-        binary_name: &str,
-        output_path: &String,
+        binary_name: &PathBuf,
+        output_path: &PathBuf,
         with_metadata: &bool,
         node_feature_type: Option<String>,
         type_suffix: &str,
@@ -384,13 +401,13 @@ impl AGCJFunctionCallGraphs {
 #[cfg(test)]
 mod tests {
     use crate::files::AGCJFile;
-    use env_logger;
+    use std::path::PathBuf;
 
     fn return_test_file_oject() -> AGCJFile {
         let mut call_graph_file = AGCJFile {
-            filename: "test-files/ls_cg.json".to_string(),
+            filename: PathBuf::from("test-files/ls_cg.json"),
             function_call_graphs: None,
-            output_path: "".to_string(),
+            output_path: PathBuf::new(),
             function_metadata: None,
             include_unk: false,
         };
@@ -402,7 +419,7 @@ mod tests {
     }
     #[test]
     fn test_function_call_graph_without_unks() {
-        let mut call_graph_file = return_test_file_oject();
+        let call_graph_file = return_test_file_oject();
 
         // Get main function - No Unks
         let raw_call_graph_data = &call_graph_file.function_call_graphs.clone().unwrap()[0];
@@ -417,7 +434,7 @@ mod tests {
 
     #[test]
     fn test_function_call_graph_with_callees_without_unks() {
-        let mut call_graph_file = return_test_file_oject();
+        let call_graph_file = return_test_file_oject();
 
         // Unk False
         let raw_call_graph_data = &call_graph_file.function_call_graphs.clone().unwrap()[0];
@@ -452,7 +469,7 @@ mod tests {
 
     #[test]
     fn test_function_call_graph_with_callees_with_unks() {
-        let mut call_graph_file = return_test_file_oject();
+        let call_graph_file = return_test_file_oject();
 
         // sym.func.100004d11 - One unknown
         let raw_call_graph_data = &call_graph_file.function_call_graphs.clone().unwrap()[2];
@@ -471,7 +488,7 @@ mod tests {
 
     #[test]
     fn test_function_call_graph_callees_and_callers_with_unks() {
-        let mut call_graph_file = return_test_file_oject();
+        let call_graph_file = return_test_file_oject();
 
         // sym.func.100004d11 - One unknown
         let raw_call_graph_data = &call_graph_file.function_call_graphs.clone().unwrap()[2];
