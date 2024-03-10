@@ -9,6 +9,7 @@ extern crate log;
 use clap::builder::TypedValueParser;
 use env_logger::Env;
 use indicatif::{ParallelProgressIterator, ProgressIterator};
+use itertools::Itertools;
 use mimalloc::MiMalloc;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::IntoParallelRefIterator;
@@ -42,6 +43,7 @@ use crate::files::{AFIJFile, AGCJFile, FunctionMetadataTypes, TikNibFuncMetaFile
 use crate::tokeniser::{train_byte_bpe_tokeniser, TokeniserType};
 use crate::utils::get_save_file_path;
 
+use crate::combos::{ComboJob, FinfoTiknib};
 use crate::networkx::CallGraphNodeFeatureType;
 use bb::{FeatureType, InstructionMode};
 #[cfg(feature = "goblin")]
@@ -202,7 +204,7 @@ enum GenerateSubCommands {
         #[arg(short, long, value_name = "OUTPUT_PATH")]
         output_path: PathBuf,
         /// Data Source Type
-        #[arg(short, long, value_parser = clap::builder::PossibleValuesParser::new(["finfo", "agfj"])
+        #[arg(short, long, value_parser = clap::builder::PossibleValuesParser::new(["finfo", "tiknib"])
             .map(|s| s.parse::<String>().unwrap()))]
         data_source_type: String,
         /// Toggle for extended version of finfo
@@ -330,7 +332,7 @@ enum DedupSubCommands {
         num_threads: usize,
 
         /// The filepath_format of the dataset
-        #[arg(long,value_parser = clap::builder::PossibleValuesParser::new(["cisco", "binkit", "trex"])
+        #[arg(long,value_parser = clap::builder::PossibleValuesParser::new(["cisco", "binkit", "trex", "binarycorp"])
         .map(|s| s.parse::<String>().unwrap()), required = true)]
         filepath_format: String,
 
@@ -704,7 +706,7 @@ fn main() {
                     info!("Successfully loaded JSON");
                     file.subset_and_save(*extended);
                     info!("Generation complete");
-                } else if data_source_type == "agfj" {
+                } else if data_source_type == "tiknib" {
                     warn!("This currently only supports making TikNib features for single files");
 
                     if input_path.is_file() {
@@ -743,15 +745,50 @@ fn main() {
             }
             GenerateSubCommands::Combos {
                 input_path,
-                output_path: _,
+                output_path,
                 combo_type,
             } => {
                 warn!("This feature is experimental and should be used with caution!");
+                let combo_job = ComboJob::new(combo_type, input_path, output_path);
+                println!("Combo Job: {:?}", combo_job);
                 if combo_type == "finfo+tiknib" {
-                    let _finfo_paths =
+                    let mut finfo_paths =
                         get_json_paths_from_dir(input_path, Some("_finfo".to_string()));
-                    let _tiknib_paths =
+                    let mut tiknib_paths =
                         get_json_paths_from_dir(input_path, Some("cfg-tiknib".to_string()));
+
+                    finfo_paths.sort();
+                    tiknib_paths.sort();
+
+                    for (finfo, tiknib) in finfo_paths.iter().zip(tiknib_paths.iter()) {
+                        println!("{} -> {}", finfo, tiknib);
+
+                        let mut finfo_obj: AFIJFile = AFIJFile {
+                            filename: finfo.parse().unwrap(),
+                            function_info: None,
+                            output_path: output_path.clone(),
+                        };
+                        let finfo_load_ret = finfo_obj.load_and_deserialize();
+
+                        let mut tiknib_obj: TikNibFuncMetaFile = TikNibFuncMetaFile {
+                            filename: tiknib.parse().unwrap(),
+                            function_info: None,
+                            output_path: output_path.clone(),
+                        };
+                        let tiknib_load_ret = tiknib_obj.load_and_deserialize();
+
+                        if finfo_load_ret.is_ok() & tiknib_load_ret.is_ok() {
+                            let finfo_obj_functions = finfo_obj.function_info.unwrap();
+                            let tiknib_obj_functions = tiknib_obj.function_info.unwrap();
+
+                            for (finfo, tiknib) in finfo_obj_functions
+                                .into_iter()
+                                .zip(tiknib_obj_functions.into_iter())
+                            {
+                                let combined = FinfoTiknib::from((finfo, tiknib.features));
+                            }
+                        }
+                    }
                 }
             }
             GenerateSubCommands::Nlp {
