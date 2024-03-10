@@ -412,10 +412,8 @@ impl CGCorpus {
         PathBuf::from(
             binary_intermediate
                 .to_string_lossy()
-                .split('-')
-                .rev()
-                .nth(2)
-                .unwrap(),
+                .split("-O")
+                .collect_vec()[0],
         )
     }
 
@@ -491,7 +489,10 @@ impl CGCorpus {
             .for_each(|(idx, fp_subset)| {
                 let mut subset_loaded_data: Vec<Option<CallGraphTypes>> =
                     self.load_subset(fp_subset);
-                debug!("Starting to deduplicate the corpus - {}", idx);
+                debug!(
+                    "Starting to deduplicate the corpus - {} (Example: {:?})",
+                    idx, fp_subset[0]
+                );
                 Self::dedup_corpus(&mut subset_loaded_data, fp_subset);
                 let subset_loaded_data: Vec<CallGraphTypes> =
                     subset_loaded_data.into_iter().flatten().collect();
@@ -921,11 +922,22 @@ mod tests {
 
     #[test]
     fn test_binarycorp_binary_extraction() {
+        // qt6-base-git-libqsqlodbc.so-O0-7ec313ab3fa55a4fd226b04c64a1c9ef_cg-onehopcgcallers-meta/dummy_onehopcgcallers-meta.json
         assert_eq!(
             CGCorpus::get_binary_name_binarycorp(&PathBuf::from(
-                "afifechan-git-libfifechan_sdl.so.0.1.5-O0-39f42250f8e0d261c64854ccacf5a415/sym.dummy-func-onehopcgcallers-meta.json"
+                "afifechan-git-libfifechan_sdl.so.0.1.5-O0-39f42250f8e0d261c64854ccacf5a415_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json"
             )),
-            PathBuf::from("libfifechan_sdl.so.0.1.5")
+            PathBuf::from("afifechan-git-libfifechan_sdl.so.0.1.5")
+        );
+        assert_eq!(CGCorpus::get_binary_name_binarycorp(&PathBuf::from(
+            "fdupes-fdupes-Os-478aae4c6befe33db84f17296c1cd5b2_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json"
+        )),
+                   PathBuf::from("fdupes-fdupes")
+        );
+        assert_eq!(CGCorpus::get_binary_name_binarycorp(&PathBuf::from(
+            "gammaray-libgammaray_widget_export_actions-qt5_15-x86_64.so-O1-ba7a0e23ab8cd2ee36c088e3bce111b1_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json"
+        )),
+                   PathBuf::from("gammaray-libgammaray_widget_export_actions-qt5_15-x86_64.so")
         )
     }
 }
