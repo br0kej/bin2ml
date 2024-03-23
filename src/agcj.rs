@@ -36,6 +36,7 @@ impl AGCJFunctionCallGraph {
         let mut full_output_path = get_save_file_path(
             binary_name,
             output_path,
+            ".json",
             Some(type_suffix.to_string()),
             None,
         );
@@ -73,6 +74,7 @@ impl AGCJFunctionCallGraph {
         let full_output_path = get_save_file_path(
             binary_name,
             output_path,
+            ".json",
             Some(type_suffix.to_string()),
             None,
         );
@@ -107,6 +109,7 @@ impl AGCJFunctionCallGraph {
         let mut full_output_path = get_save_file_path(
             binary_name,
             output_path,
+            ".json",
             Some(type_suffix.to_string()),
             None,
         );

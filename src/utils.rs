@@ -17,46 +17,59 @@ use walkdir::WalkDir;
 pub fn get_save_file_path(
     binary_path: &PathBuf,
     output_path: &PathBuf,
+    extension: &str,
     optional_suffix: Option<String>,
     remove_suffix: Option<String>,
 ) -> PathBuf {
     debug!(
-        "Building Filepath - Binary Path: {:?} Output Path: {:?}",
-        binary_path, output_path
+        "Building Filepath - Binary Path: {:?} Output Path: {:?} with Extension: {}",
+        binary_path, output_path, extension
     );
+
+    let extension = if extension.starts_with(".") {
+        extension.to_string()
+    } else {
+        format!(".{}", extension.to_string())
+    };
+
     let file_name = binary_path
         .file_stem()
         .unwrap()
         .to_string_lossy()
         .to_string();
-
+    debug!("File Name: {}", file_name);
     let file_name = if let Some(suffix) = remove_suffix {
         file_name.replace(&suffix, "")
     } else {
         file_name
     };
 
-
     if optional_suffix.is_none() {
+        debug!("No Optional Suffix found");
         let full_output_path = format!(
-            "{}/{}",
-            output_path
-                .to_string_lossy()
-                .strip_suffix('/')
-                .unwrap_or(output_path.as_os_str().to_str().unwrap()),
-            file_name
-        );
-        PathBuf::from(full_output_path)
-    } else {
-        let full_output_path = format!(
-            "{}/{}-{}",
+            "{}/{}{}",
             output_path
                 .to_string_lossy()
                 .strip_suffix('/')
                 .unwrap_or(output_path.as_os_str().to_str().unwrap()),
             file_name,
-            optional_suffix.unwrap()
+            extension
         );
+        debug!("Full Output Path: {}", full_output_path);
+        PathBuf::from(full_output_path)
+    } else {
+        debug!("Optional Suffix found");
+        let full_output_path = format!(
+            "{}/{}-{}{}",
+            output_path
+                .to_string_lossy()
+                .strip_suffix('/')
+                .unwrap_or(output_path.as_os_str().to_str().unwrap()),
+            file_name,
+            optional_suffix.unwrap(),
+            extension
+        );
+        debug!("Full Output Path: {}", full_output_path);
         PathBuf::from(full_output_path)
     }
 }

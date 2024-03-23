@@ -2,6 +2,7 @@ use crate::afij::AFIJFunctionInfo;
 use crate::agfj::TikNibFuncFeatures;
 use anyhow::{anyhow, Error};
 use ordered_float::OrderedFloat;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Debug)]
@@ -68,7 +69,7 @@ impl ComboJob {
     fn combine_finfo_tiknib(&self) {}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct FinfoTiknib {
     pub name: String,
     pub edges: i64,
@@ -93,6 +94,13 @@ pub struct FinfoTiknib {
     pub sum_total: OrderedFloat<f32>,
 }
 
+impl FinfoTiknib {
+    pub fn save_to_json(&self, path: &PathBuf) -> Result<(), Error> {
+        let json = serde_json::to_string(&self)?;
+        std::fs::write(path, json)?;
+        Ok(())
+    }
+}
 impl From<(AFIJFunctionInfo, TikNibFuncFeatures)> for FinfoTiknib {
     fn from(value: (AFIJFunctionInfo, TikNibFuncFeatures)) -> Self {
         FinfoTiknib {

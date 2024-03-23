@@ -11,6 +11,7 @@ use env_logger::Env;
 use indicatif::{ParallelProgressIterator, ProgressIterator};
 use itertools::Itertools;
 use mimalloc::MiMalloc;
+use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::IntoParallelRefIterator;
 use std::path::{Path, PathBuf};
@@ -241,6 +242,9 @@ enum GenerateSubCommands {
         #[arg(short, long, value_parser = clap::builder::PossibleValuesParser::new(["finfo+tiknib", "finfoe+tiknib"])
         .map(|s| s.parse::<String>().unwrap()))]
         combo_type: String,
+        /// Number of threads
+        #[arg(short, long, default_value = "2")]
+        num_threads: usize,
     },
 }
 
@@ -563,6 +567,7 @@ fn main() {
                             let full_output_path = get_save_file_path(
                                 &PathBuf::from(path),
                                 output_path,
+                                ".json",
                                 Some(suffix),
                                 None,
                             );
@@ -621,6 +626,7 @@ fn main() {
                                 let full_output_path = get_save_file_path(
                                     &PathBuf::from(filepath),
                                     output_path,
+                                    ".json",
                                     Some(suffix),
                                     None,
                                 );
@@ -747,10 +753,11 @@ fn main() {
                 input_path,
                 output_path,
                 combo_type,
+                num_threads,
             } => {
                 warn!("This feature is experimental and should be used with caution!");
                 let combo_job = ComboJob::new(combo_type, input_path, output_path);
-                println!("Combo Job: {:?}", combo_job);
+                info!("Combo Job: {:?}", combo_job);
                 if combo_type == "finfo+tiknib" {
                     let mut finfo_paths =
                         get_json_paths_from_dir(input_path, Some("_finfo".to_string()));
@@ -760,8 +767,19 @@ fn main() {
                     finfo_paths.sort();
                     tiknib_paths.sort();
 
-                    for (finfo, tiknib) in finfo_paths.iter().zip(tiknib_paths.iter()) {
-                        println!("{} -> {}", finfo, tiknib);
+                    if finfo_paths.len() != tiknib_paths.len() {
+                        error!("Mismatch in number of files found. Exiting.");
+                        exit(1)
+                    }
+
+                    rayon::ThreadPoolBuilder::new()
+                        .num_threads(*num_threads)
+                        .build_global()
+                        .unwrap();
+
+                    let joint_par_iter = finfo_paths.par_iter().zip(tiknib_paths.par_iter());
+                    joint_par_iter.for_each(|(finfo, tiknib)| {
+                        info!("{} -> {}", finfo, tiknib);
 
                         let mut finfo_obj: AFIJFile = AFIJFile {
                             filename: finfo.parse().unwrap(),
@@ -777,6 +795,8 @@ fn main() {
                         };
                         let tiknib_load_ret = tiknib_obj.load_and_deserialize();
 
+                        let mut generated_combos = Vec::new();
+
                         if finfo_load_ret.is_ok() & tiknib_load_ret.is_ok() {
                             let finfo_obj_functions = finfo_obj.function_info.unwrap();
                             let tiknib_obj_functions = tiknib_obj.function_info.unwrap();
@@ -786,9 +806,29 @@ fn main() {
                                 .zip(tiknib_obj_functions.into_iter())
                             {
                                 let combined = FinfoTiknib::from((finfo, tiknib.features));
+                                generated_combos.push(combined);
                             }
+                        } else {
+                            error!("Failed to load and deserialize files");
                         }
-                    }
+                        // Save combined object to JSON file
+                        let mut save_path = get_save_file_path(
+                            &PathBuf::from(finfo_obj.filename.to_owned()),
+                            output_path,
+                            ".json",
+                            Some("finfo-tiknib".to_string()),
+                            None,
+                        );
+                        debug!("Save Path: {:?}", save_path);
+
+                        let save_file =
+                            std::fs::File::create(save_path).expect("Unable to create file");
+                        serde_json::to_writer(&save_file, &generated_combos)
+                            .expect("Unable to write to file");
+                    });
+                } else {
+                    error!("Invalid combo type: {}", combo_type);
+                    exit(1)
                 }
             }
             GenerateSubCommands::Nlp {
