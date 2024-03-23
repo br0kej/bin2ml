@@ -44,7 +44,7 @@ use crate::files::{AFIJFile, AGCJFile, FunctionMetadataTypes, TikNibFuncMetaFile
 use crate::tokeniser::{train_byte_bpe_tokeniser, TokeniserType};
 use crate::utils::get_save_file_path;
 
-use crate::combos::{ComboJob, FinfoTiknib};
+use crate::combos::{ComboJob, FinfoTiknib, FinfoTiknibFile};
 use crate::networkx::CallGraphNodeFeatureType;
 use bb::{FeatureType, InstructionMode};
 #[cfg(feature = "goblin")]
@@ -156,7 +156,7 @@ enum GenerateSubCommands {
         include_unk: bool,
 
         /// Metadata Type (For call graphs)
-        #[arg(short, long, value_name = "METADATA_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "tiknib"])
+        #[arg(short, long, value_name = "METADATA_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "tiknib", "finfo-tiknib"])
         .map(|s| s.parse::<String>().unwrap()),)]
         metadata_type: Option<String>,
     },
@@ -567,7 +567,7 @@ fn main() {
                             let full_output_path = get_save_file_path(
                                 &PathBuf::from(path),
                                 output_path,
-                                ".json",
+                                Some(".json".to_string()),
                                 Some(suffix),
                                 None,
                             );
@@ -595,7 +595,7 @@ fn main() {
                             }
                         })
                     } else {
-                        debug!("Creating call graphs with node features");
+                        info!("Creating call graphs with node features");
                         debug!("Getting metadata file paths");
                         // its more than one file
                         if metadata_path.is_none() {
@@ -604,8 +604,10 @@ fn main() {
                         };
 
                         if with_features & metadata_type.is_none() {
-                            error!("with features requires metadata_type to be set")
-                        }
+                            error!("with features requires metadata_type to be set");
+                            exit(1)
+                        };
+
                         let mut metadata_paths_vec = get_json_paths_from_dir(
                             metadata_path.as_ref().unwrap(),
                             Some(metadata_type.as_ref().unwrap().to_string()),
@@ -626,7 +628,7 @@ fn main() {
                                 let full_output_path = get_save_file_path(
                                     &PathBuf::from(filepath),
                                     output_path,
-                                    ".json",
+                                    Some(".json".to_string()),
                                     Some(suffix),
                                     None,
                                 );
@@ -658,6 +660,20 @@ fn main() {
                                                 .load_and_deserialize()
                                                 .expect("Unable to load associated metadata file");
                                             metadata = Some(metadata_file.subset());
+                                        } else if metadata_type.clone().unwrap() == *"finfo-tiknib" {
+                                            let mut metadata_file = FinfoTiknibFile {
+                                                filename: PathBuf::from(metapath),
+                                                function_info: None,
+                                                output_path: PathBuf::new(),
+                                            };
+                                            debug!(
+                                                "Attempting to load metadata file: {}",
+                                                metapath
+                                            );
+                                            metadata_file
+                                                .load_and_deserialize()
+                                                .expect("Unable to load associated metadata file");
+                                            metadata = Some(FunctionMetadataTypes::FinfoTiknibCombo(metadata_file.function_info.unwrap()));
                                         } else {
                                             metadata = None
                                         }
@@ -679,7 +695,7 @@ fn main() {
                                         with_features,
                                         metadata_type.clone(),
                                     );
-                                    debug!(
+                                    info!(
                                         "Finished generating cgs + metadata for {:?}",
                                         file.filename
                                     );
@@ -815,9 +831,9 @@ fn main() {
                         let mut save_path = get_save_file_path(
                             &PathBuf::from(finfo_obj.filename.to_owned()),
                             output_path,
-                            ".json",
-                            Some("finfo-tiknib".to_string()),
-                            None,
+                            Some(".json".to_string()),
+                            Some("tiknib".to_string()),
+                            None
                         );
                         debug!("Save Path: {:?}", save_path);
 

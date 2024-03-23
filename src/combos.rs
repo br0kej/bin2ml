@@ -1,9 +1,11 @@
+use std::fs::read_to_string;
 use crate::afij::AFIJFunctionInfo;
-use crate::agfj::TikNibFuncFeatures;
+use crate::agfj::{TikNibFunc, TikNibFuncFeatures};
 use anyhow::{anyhow, Error};
 use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use crate::errors::FileLoadError;
 
 #[derive(Debug)]
 enum ComboTypes {
@@ -69,7 +71,7 @@ impl ComboJob {
     fn combine_finfo_tiknib(&self) {}
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Default, Hash, PartialEq, Clone, Debug, Deserialize, Serialize)]
 pub struct FinfoTiknib {
     pub name: String,
     pub edges: i64,
@@ -101,6 +103,28 @@ impl FinfoTiknib {
         Ok(())
     }
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct FinfoTiknibFile {
+    pub filename: PathBuf,
+    pub function_info: Option<Vec<FinfoTiknib>>,
+    pub output_path: PathBuf,
+}
+
+impl FinfoTiknibFile {
+    pub fn load_and_deserialize(&mut self) -> Result<(), FileLoadError> {
+        let data = read_to_string(&self.filename)?;
+
+        #[allow(clippy::expect_fun_call)]
+            // Kept in to ensure that the JSON decode error message is printed alongside the filename
+            let json: Vec<FinfoTiknib> = serde_json::from_str(&data)?;
+
+        self.function_info = Some(json);
+        Ok(())
+    }
+
+    }
+
 impl From<(AFIJFunctionInfo, TikNibFuncFeatures)> for FinfoTiknib {
     fn from(value: (AFIJFunctionInfo, TikNibFuncFeatures)) -> Self {
         FinfoTiknib {

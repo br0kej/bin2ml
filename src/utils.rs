@@ -17,20 +17,21 @@ use walkdir::WalkDir;
 pub fn get_save_file_path(
     binary_path: &PathBuf,
     output_path: &PathBuf,
-    extension: &str,
+    extension: Option<String>,
     optional_suffix: Option<String>,
     remove_suffix: Option<String>,
 ) -> PathBuf {
-    debug!(
-        "Building Filepath - Binary Path: {:?} Output Path: {:?} with Extension: {}",
-        binary_path, output_path, extension
-    );
 
-    let extension = if extension.starts_with(".") {
-        extension.to_string()
+    let extension = if extension.is_some() {
+        let extension = extension.unwrap();
+        if extension.starts_with(".") {
+            extension
+        } else {
+            format!(".{}", extension)
+        }
     } else {
-        format!(".{}", extension.to_string())
-    };
+            "".to_string()
+        };
 
     let file_name = binary_path
         .file_stem()
