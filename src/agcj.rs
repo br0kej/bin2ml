@@ -5,7 +5,7 @@ use itertools::Itertools;
 use petgraph::prelude::Graph;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -26,8 +26,8 @@ pub struct AGCJParsedObjects {
 impl AGCJFunctionCallGraph {
     fn graph_to_json_func_node(
         &self,
-        binary_name: &PathBuf,
-        output_path: &PathBuf,
+        binary_name: &Path,
+        output_path: &Path,
         networkx_graph: NetworkxDiGraph<CallGraphFuncNameNode>,
         type_suffix: &str,
     ) {
@@ -64,8 +64,8 @@ impl AGCJFunctionCallGraph {
 
     fn graph_to_json_func_metadata_tiknib(
         &self,
-        binary_name: &PathBuf,
-        output_path: &PathBuf,
+        binary_name: &Path,
+        output_path: &Path,
         networkx_graph: NetworkxDiGraph<CallGraphTikNibFeatures>,
         type_suffix: &str,
     ) {
@@ -101,8 +101,8 @@ impl AGCJFunctionCallGraph {
 
     fn graph_to_json_func_tiknib_finfo(
         &self,
-        binary_name: &PathBuf,
-        output_path: &PathBuf,
+        binary_name: &Path,
+        output_path: &Path,
         networkx_graph: NetworkxDiGraph<CallGraphTikNibFinfoFeatures>,
         type_suffix: &str,
     ) {
@@ -137,8 +137,8 @@ impl AGCJFunctionCallGraph {
 
     fn graph_to_json_func_metadata_finfo(
         &self,
-        binary_name: &PathBuf,
-        output_path: &PathBuf,
+        binary_name: &Path,
+        output_path: &Path,
         networkx_graph: NetworkxDiGraph<CallGraphFuncWithMetadata>,
         type_suffix: &str,
     ) {
@@ -282,8 +282,8 @@ impl AGCJFunctionCallGraph {
     pub fn to_petgraph(
         &self,
         global_cg: &AGCJFile,
-        output_path: &PathBuf,
-        binary_name: &PathBuf,
+        output_path: &Path,
+        binary_name: &Path,
         with_metadata: &bool,
         include_unk: &bool,
         node_feature_type: Option<String>,
@@ -306,8 +306,8 @@ impl AGCJFunctionCallGraph {
     pub fn one_hop_to_petgraph(
         &self,
         global_cg: &AGCJFile,
-        output_path: &PathBuf,
-        binary_name: &PathBuf,
+        output_path: &Path,
+        binary_name: &Path,
         with_metadata: &bool,
         include_unk: &bool,
         node_feature_type: Option<String>,
@@ -329,8 +329,8 @@ impl AGCJFunctionCallGraph {
     pub fn to_petgraph_with_callers(
         &self,
         global_cg: &AGCJFile,
-        output_path: &PathBuf,
-        binary_name: &PathBuf,
+        output_path: &Path,
+        binary_name: &Path,
         with_metadata: &bool,
         include_unk: &bool,
         node_feature_type: Option<String>,
@@ -352,8 +352,8 @@ impl AGCJFunctionCallGraph {
     pub fn one_hop_to_petgraph_with_callers(
         &self,
         global_cg: &AGCJFile,
-        output_path: &PathBuf,
-        binary_name: &PathBuf,
+        output_path: &Path,
+        binary_name: &Path,
         with_metadata: &bool,
         include_unk: &bool,
         node_feature_type: Option<String>,
@@ -382,8 +382,8 @@ impl AGCJFunctionCallGraph {
         &self,
         graph: Graph<String, u32>,
         global_cg: &AGCJFile,
-        binary_name: &PathBuf,
-        output_path: &PathBuf,
+        binary_name: &Path,
+        output_path: &Path,
         with_metadata: &bool,
         node_feature_type: Option<String>,
         type_suffix: &str,

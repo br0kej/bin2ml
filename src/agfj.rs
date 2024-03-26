@@ -12,7 +12,7 @@ use serde_json;
 #[cfg(feature = "inference")]
 use serde_json::{Map, Value};
 use std::fs::File;
-use std::path::{Path, PathBuf};
+use std::path::{Path};
 #[cfg(feature = "inference")]
 use std::process::exit;
 #[cfg(feature = "inference")]
@@ -325,9 +325,9 @@ impl AGFJFunc {
 
     pub fn generate_attributed_cfg(
         &self,
-        path: &PathBuf,
+        path: &Path,
         min_blocks: &u16,
-        output_path: &PathBuf,
+        output_path: &Path,
         feature_type: FeatureType,
         architecture: &String,
     ) {

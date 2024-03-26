@@ -9,7 +9,7 @@ extern crate log;
 use clap::builder::TypedValueParser;
 use env_logger::Env;
 use indicatif::{ParallelProgressIterator, ProgressIterator};
-use itertools::Itertools;
+
 use mimalloc::MiMalloc;
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
@@ -828,8 +828,8 @@ fn main() {
                             error!("Failed to load and deserialize files");
                         }
                         // Save combined object to JSON file
-                        let mut save_path = get_save_file_path(
-                            &PathBuf::from(finfo_obj.filename.to_owned()),
+                        let save_path = get_save_file_path(
+                            &finfo_obj.filename.to_owned(),
                             output_path,
                             Some(".json".to_string()),
                             Some("tiknib".to_string()),

@@ -1,10 +1,10 @@
 use std::fs::read_to_string;
 use crate::afij::AFIJFunctionInfo;
-use crate::agfj::{TikNibFunc, TikNibFuncFeatures};
+use crate::agfj::{TikNibFuncFeatures};
 use anyhow::{anyhow, Error};
 use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use crate::errors::FileLoadError;
 
 #[derive(Debug)]
@@ -13,8 +13,8 @@ enum ComboTypes {
 }
 
 impl ComboTypes {
-    pub fn new(combo_type: &String) -> ComboTypes {
-        match combo_type.as_str() {
+    pub fn new(combo_type: &str) -> ComboTypes {
+        match combo_type {
             "finfo+tiknib" => ComboTypes::FinfoTikib,
             _ => unreachable!("Unable to determine combo type"),
         }
@@ -30,24 +30,24 @@ impl ComboTypes {
 }
 
 #[derive(Debug)]
-enum ComboFileTypes {
+pub enum ComboFileTypes {
     AFIJFunctionInfo,
     TikNibFuncFeatures,
 }
 #[derive(Debug)]
 pub struct ComboJob {
     pub combo_type: ComboTypes,
-    file_type_one: ComboFileTypes,
-    file_type_two: ComboFileTypes,
+    pub file_type_one: ComboFileTypes,
+    pub file_type_two: ComboFileTypes,
     pub input_path: PathBuf,
     pub output_path: PathBuf,
 }
 
 impl ComboJob {
     pub fn new(
-        combo_type: &String,
-        input_path: &PathBuf,
-        output_path: &PathBuf,
+        combo_type: &str,
+        input_path: &Path,
+        output_path: &Path,
     ) -> Result<ComboJob, Error> {
         let combo_type = ComboTypes::new(combo_type);
         let combo_file_types = combo_type.to_combo_file_types();
@@ -58,17 +58,19 @@ impl ComboJob {
                 combo_type,
                 file_type_one: combo_file_types.0,
                 file_type_two: combo_file_types.1,
-                input_path: input_path.clone(),
-                output_path: output_path.clone(),
+                input_path: input_path.to_path_buf(),
+                output_path: output_path.to_path_buf(),
             })
         } else {
             Err(anyhow!("Unable to create ComboJob"))
         }
     }
-
+    /*
+    To be implemented
     pub fn process(&self) {}
 
     fn combine_finfo_tiknib(&self) {}
+     */
 }
 
 #[derive(Default, Hash, PartialEq, Clone, Debug, Deserialize, Serialize)]

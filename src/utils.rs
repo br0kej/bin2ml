@@ -1,5 +1,5 @@
 use std::fs::create_dir_all;
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use walkdir::WalkDir;
 
 /// Formats a save file path
@@ -15,8 +15,8 @@ use walkdir::WalkDir;
 ///
 /// See agcj.rs for an example of this optional suffix being used
 pub fn get_save_file_path(
-    binary_path: &PathBuf,
-    output_path: &PathBuf,
+    binary_path: &Path,
+    output_path: &Path,
     extension: Option<String>,
     optional_suffix: Option<String>,
     remove_suffix: Option<String>,
@@ -24,7 +24,7 @@ pub fn get_save_file_path(
 
     let extension = if extension.is_some() {
         let extension = extension.unwrap();
-        if extension.starts_with(".") {
+        if extension.starts_with('.') {
             extension
         } else {
             format!(".{}", extension)
