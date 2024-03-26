@@ -1,5 +1,5 @@
 use std::fs::create_dir_all;
-use std::path::{PathBuf, Path};
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 /// Formats a save file path
@@ -21,7 +21,6 @@ pub fn get_save_file_path(
     optional_suffix: Option<String>,
     remove_suffix: Option<String>,
 ) -> PathBuf {
-
     let extension = if extension.is_some() {
         let extension = extension.unwrap();
         if extension.starts_with('.') {
@@ -30,8 +29,8 @@ pub fn get_save_file_path(
             format!(".{}", extension)
         }
     } else {
-            "".to_string()
-        };
+        "".to_string()
+    };
 
     let file_name = binary_path
         .file_stem()
@@ -119,7 +118,13 @@ mod tests {
     fn test_get_save_file_path_1() {
         let path: &PathBuf = &PathBuf::from("test_bin/hello.json");
         let output_path: &PathBuf = &PathBuf::from("processed_data/");
-        let output_path = get_save_file_path(path, &output_path, Some(".json".to_string()), Some("cg".to_string()), None);
+        let output_path = get_save_file_path(
+            path,
+            &output_path,
+            Some(".json".to_string()),
+            Some("cg".to_string()),
+            None,
+        );
         assert_eq!(output_path, PathBuf::from("processed_data/hello-cg.json"))
     }
     #[test]
@@ -146,7 +151,7 @@ mod tests {
             &output_path,
             Some(".json".to_string()),
             Some("gcg".to_string()),
-            Some("_cg".to_string())
+            Some("_cg".to_string()),
         );
         assert_eq!(output, PathBuf::from("processed_data/hello-gcg.json"))
     }

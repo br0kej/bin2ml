@@ -1,11 +1,11 @@
 use crate::afij::AFIJFeatureSubset;
 use crate::agfj::TikNibFunc;
 use crate::bb::FeatureType;
+use crate::combos::FinfoTiknib;
 use enum_as_inner::EnumAsInner;
 use petgraph::prelude::Graph;
 use petgraph::visit::EdgeRef;
 use serde::{Deserialize, Serialize};
-use crate::combos::FinfoTiknib;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -306,7 +306,9 @@ pub struct CallGraphTikNibFinfoFeatures {
     pub features: FinfoTiknib,
 }
 
-impl From<(Graph<String, u32>, &Vec<FinfoTiknib>)> for NetworkxDiGraph<CallGraphTikNibFinfoFeatures> {
+impl From<(Graph<String, u32>, &Vec<FinfoTiknib>)>
+    for NetworkxDiGraph<CallGraphTikNibFinfoFeatures>
+{
     fn from(
         src_graph: (Graph<String, u32>, &Vec<FinfoTiknib>),
     ) -> NetworkxDiGraph<crate::networkx::CallGraphTikNibFinfoFeatures> {

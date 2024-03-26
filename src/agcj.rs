@@ -1,5 +1,8 @@
 use crate::files::AGCJFile;
-use crate::networkx::{CallGraphFuncNameNode, CallGraphFuncWithMetadata, CallGraphTikNibFeatures, CallGraphTikNibFinfoFeatures, NetworkxDiGraph};
+use crate::networkx::{
+    CallGraphFuncNameNode, CallGraphFuncWithMetadata, CallGraphTikNibFeatures,
+    CallGraphTikNibFinfoFeatures, NetworkxDiGraph,
+};
 use crate::utils::{check_or_create_dir, get_save_file_path};
 use itertools::Itertools;
 use petgraph::prelude::Graph;
@@ -87,7 +90,9 @@ impl AGCJFunctionCallGraph {
 
         let filename = format!(
             "{}/{}-{}.json",
-            full_output_path.to_string_lossy(), function_name, type_suffix
+            full_output_path.to_string_lossy(),
+            function_name,
+            type_suffix
         );
 
         let filename = PathBuf::from(filename);
@@ -124,7 +129,9 @@ impl AGCJFunctionCallGraph {
 
         let filename = format!(
             "{}/{}-{}.json",
-            full_output_path.to_string_lossy(), function_name, type_suffix
+            full_output_path.to_string_lossy(),
+            function_name,
+            type_suffix
         );
         let filename = PathBuf::from(filename);
 
@@ -132,7 +139,7 @@ impl AGCJFunctionCallGraph {
             &File::create(filename).expect("Failed to create writer"),
             &networkx_graph,
         )
-            .expect("Unable to write JSON");
+        .expect("Unable to write JSON");
     }
 
     fn graph_to_json_func_metadata_finfo(

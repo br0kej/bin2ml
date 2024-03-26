@@ -44,7 +44,7 @@ use crate::files::{AFIJFile, AGCJFile, FunctionMetadataTypes, TikNibFuncMetaFile
 use crate::tokeniser::{train_byte_bpe_tokeniser, TokeniserType};
 use crate::utils::get_save_file_path;
 
-use crate::combos::{ComboJob, FinfoTiknib, FinfoTiknibFile};
+use crate::combos::{ComboJob, FinfoTiknibFile};
 use crate::networkx::CallGraphNodeFeatureType;
 use bb::{FeatureType, InstructionMode};
 #[cfg(feature = "goblin")]
@@ -660,7 +660,8 @@ fn main() {
                                                 .load_and_deserialize()
                                                 .expect("Unable to load associated metadata file");
                                             metadata = Some(metadata_file.subset());
-                                        } else if metadata_type.clone().unwrap() == *"finfo-tiknib" {
+                                        } else if metadata_type.clone().unwrap() == *"finfo-tiknib"
+                                        {
                                             let mut metadata_file = FinfoTiknibFile {
                                                 filename: PathBuf::from(metapath),
                                                 function_info: None,
@@ -673,7 +674,10 @@ fn main() {
                                             metadata_file
                                                 .load_and_deserialize()
                                                 .expect("Unable to load associated metadata file");
-                                            metadata = Some(FunctionMetadataTypes::FinfoTiknibCombo(metadata_file.function_info.unwrap()));
+                                            metadata =
+                                                Some(FunctionMetadataTypes::FinfoTiknibCombo(
+                                                    metadata_file.function_info.unwrap(),
+                                                ));
                                         } else {
                                             metadata = None
                                         }
@@ -773,75 +777,17 @@ fn main() {
             } => {
                 warn!("This feature is experimental and should be used with caution!");
                 let combo_job = ComboJob::new(combo_type, input_path, output_path);
-                info!("Combo Job: {:?}", combo_job);
-                if combo_type == "finfo+tiknib" {
-                    let mut finfo_paths =
-                        get_json_paths_from_dir(input_path, Some("_finfo".to_string()));
-                    let mut tiknib_paths =
-                        get_json_paths_from_dir(input_path, Some("cfg-tiknib".to_string()));
 
-                    finfo_paths.sort();
-                    tiknib_paths.sort();
-
-                    if finfo_paths.len() != tiknib_paths.len() {
-                        error!("Mismatch in number of files found. Exiting.");
-                        exit(1)
-                    }
-
+                if combo_job.is_ok() {
+                    let combo_job = combo_job.unwrap();
                     rayon::ThreadPoolBuilder::new()
                         .num_threads(*num_threads)
                         .build_global()
                         .unwrap();
 
-                    let joint_par_iter = finfo_paths.par_iter().zip(tiknib_paths.par_iter());
-                    joint_par_iter.for_each(|(finfo, tiknib)| {
-                        info!("{} -> {}", finfo, tiknib);
-
-                        let mut finfo_obj: AFIJFile = AFIJFile {
-                            filename: finfo.parse().unwrap(),
-                            function_info: None,
-                            output_path: output_path.clone(),
-                        };
-                        let finfo_load_ret = finfo_obj.load_and_deserialize();
-
-                        let mut tiknib_obj: TikNibFuncMetaFile = TikNibFuncMetaFile {
-                            filename: tiknib.parse().unwrap(),
-                            function_info: None,
-                            output_path: output_path.clone(),
-                        };
-                        let tiknib_load_ret = tiknib_obj.load_and_deserialize();
-
-                        let mut generated_combos = Vec::new();
-
-                        if finfo_load_ret.is_ok() & tiknib_load_ret.is_ok() {
-                            let finfo_obj_functions = finfo_obj.function_info.unwrap();
-                            let tiknib_obj_functions = tiknib_obj.function_info.unwrap();
-
-                            for (finfo, tiknib) in finfo_obj_functions
-                                .into_iter()
-                                .zip(tiknib_obj_functions.into_iter())
-                            {
-                                let combined = FinfoTiknib::from((finfo, tiknib.features));
-                                generated_combos.push(combined);
-                            }
-                        } else {
-                            error!("Failed to load and deserialize files");
-                        }
-                        // Save combined object to JSON file
-                        let save_path = get_save_file_path(
-                            &finfo_obj.filename.to_owned(),
-                            output_path,
-                            Some(".json".to_string()),
-                            Some("tiknib".to_string()),
-                            None
-                        );
-                        debug!("Save Path: {:?}", save_path);
-
-                        let save_file =
-                            std::fs::File::create(save_path).expect("Unable to create file");
-                        serde_json::to_writer(&save_file, &generated_combos)
-                            .expect("Unable to write to file");
-                    });
+                    match combo_job.combo_type {
+                        combos::ComboTypes::FinfoTikib => combo_job.process_finfo_tiknib(),
+                    }
                 } else {
                     error!("Invalid combo type: {}", combo_type);
                     exit(1)

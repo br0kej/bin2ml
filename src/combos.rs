@@ -1,14 +1,18 @@
-use std::fs::read_to_string;
 use crate::afij::AFIJFunctionInfo;
-use crate::agfj::{TikNibFuncFeatures};
+use crate::agfj::TikNibFuncFeatures;
+use crate::errors::FileLoadError;
+use crate::files::{AFIJFile, TikNibFuncMetaFile};
+use crate::utils::{get_json_paths_from_dir, get_save_file_path};
 use anyhow::{anyhow, Error};
 use ordered_float::OrderedFloat;
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
+use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
-use crate::errors::FileLoadError;
+use std::process::exit;
 
 #[derive(Debug)]
-enum ComboTypes {
+pub enum ComboTypes {
     FinfoTikib,
 }
 
@@ -44,11 +48,7 @@ pub struct ComboJob {
 }
 
 impl ComboJob {
-    pub fn new(
-        combo_type: &str,
-        input_path: &Path,
-        output_path: &Path,
-    ) -> Result<ComboJob, Error> {
+    pub fn new(combo_type: &str, input_path: &Path, output_path: &Path) -> Result<ComboJob, Error> {
         let combo_type = ComboTypes::new(combo_type);
         let combo_file_types = combo_type.to_combo_file_types();
 
@@ -64,6 +64,68 @@ impl ComboJob {
         } else {
             Err(anyhow!("Unable to create ComboJob"))
         }
+    }
+
+    pub fn process_finfo_tiknib(self) {
+        let mut finfo_paths = get_json_paths_from_dir(&self.input_path, Some("_finfo".to_string()));
+        let mut tiknib_paths =
+            get_json_paths_from_dir(&self.input_path, Some("cfg-tiknib".to_string()));
+
+        finfo_paths.sort();
+        tiknib_paths.sort();
+
+        if finfo_paths.len() != tiknib_paths.len() {
+            error!("Mismatch in number of files found. Exiting.");
+            exit(1)
+        }
+
+        let joint_par_iter = finfo_paths.par_iter().zip(tiknib_paths.par_iter());
+        joint_par_iter.for_each(|(finfo, tiknib)| {
+            info!("{} -> {}", finfo, tiknib);
+
+            let mut finfo_obj: AFIJFile = AFIJFile {
+                filename: finfo.parse().unwrap(),
+                function_info: None,
+                output_path: self.output_path.clone(),
+            };
+            let finfo_load_ret = finfo_obj.load_and_deserialize();
+
+            let mut tiknib_obj: TikNibFuncMetaFile = TikNibFuncMetaFile {
+                filename: tiknib.parse().unwrap(),
+                function_info: None,
+                output_path: self.output_path.clone(),
+            };
+            let tiknib_load_ret = tiknib_obj.load_and_deserialize();
+
+            let mut generated_combos = Vec::new();
+
+            if finfo_load_ret.is_ok() & tiknib_load_ret.is_ok() {
+                let finfo_obj_functions = finfo_obj.function_info.unwrap();
+                let tiknib_obj_functions = tiknib_obj.function_info.unwrap();
+
+                for (finfo, tiknib) in finfo_obj_functions
+                    .into_iter()
+                    .zip(tiknib_obj_functions.into_iter())
+                {
+                    let combined = FinfoTiknib::from((finfo, tiknib.features));
+                    generated_combos.push(combined);
+                }
+            } else {
+                error!("Failed to load and deserialize files");
+            }
+            // Save combined object to JSON file
+            let save_path = get_save_file_path(
+                &finfo_obj.filename.to_owned(),
+                &self.output_path,
+                Some(".json".to_string()),
+                Some("tiknib".to_string()),
+                None,
+            );
+            debug!("Save Path: {:?}", save_path);
+
+            let save_file = std::fs::File::create(save_path).expect("Unable to create file");
+            serde_json::to_writer(&save_file, &generated_combos).expect("Unable to write to file");
+        });
     }
     /*
     To be implemented
@@ -118,14 +180,13 @@ impl FinfoTiknibFile {
         let data = read_to_string(&self.filename)?;
 
         #[allow(clippy::expect_fun_call)]
-            // Kept in to ensure that the JSON decode error message is printed alongside the filename
-            let json: Vec<FinfoTiknib> = serde_json::from_str(&data)?;
+        // Kept in to ensure that the JSON decode error message is printed alongside the filename
+        let json: Vec<FinfoTiknib> = serde_json::from_str(&data)?;
 
         self.function_info = Some(json);
         Ok(())
     }
-
-    }
+}
 
 impl From<(AFIJFunctionInfo, TikNibFuncFeatures)> for FinfoTiknib {
     fn from(value: (AFIJFunctionInfo, TikNibFuncFeatures)) -> Self {

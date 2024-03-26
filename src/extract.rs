@@ -488,8 +488,8 @@ impl FileToBeProcessed {
         let json = r2p.cmd("aflj");
 
         if let Ok(json_str) = json {
-            let json_obj: Vec<AFIJFunctionInfo> = serde_json::from_str(json_str.as_ref())
-                .expect("Unable to convert to JSON object!");
+            let json_obj: Vec<AFIJFunctionInfo> =
+                serde_json::from_str(json_str.as_ref()).expect("Unable to convert to JSON object!");
             Ok(json_obj)
         } else {
             Err(json.unwrap_err())

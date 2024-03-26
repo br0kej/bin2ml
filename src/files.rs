@@ -14,6 +14,7 @@ use enum_as_inner::EnumAsInner;
 use indicatif::ParallelProgressIterator;
 use itertools::Itertools;
 
+use crate::combos::FinfoTiknib;
 use crate::DataType;
 use petgraph::{Graph, Incoming, Outgoing};
 use rayon::iter::ParallelIterator;
@@ -30,7 +31,6 @@ use std::sync::mpsc::channel;
 use std::sync::Arc;
 #[cfg(feature = "inference")]
 use tch::nn::func;
-use crate::combos::FinfoTiknib;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AGFJFile {
@@ -385,7 +385,7 @@ pub enum FunctionMetadataTypes {
     AFIJ(Vec<AFIJFeatureSubset>),
     AFIJExtended(Vec<AFIJFeatureSubsetExtended>),
     AGFJ(Vec<TikNibFunc>),
-    FinfoTiknibCombo(Vec<FinfoTiknib>)
+    FinfoTiknibCombo(Vec<FinfoTiknib>),
 }
 
 #[derive(Serialize, Deserialize, Debug)]

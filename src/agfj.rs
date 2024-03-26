@@ -12,7 +12,7 @@ use serde_json;
 #[cfg(feature = "inference")]
 use serde_json::{Map, Value};
 use std::fs::File;
-use std::path::{Path};
+use std::path::Path;
 #[cfg(feature = "inference")]
 use std::process::exit;
 #[cfg(feature = "inference")]
@@ -248,7 +248,8 @@ impl AGFJFunc {
         inference_job: &Option<Arc<InferenceJob>>,
     ) {
         info!("Processing {:?}", self.name);
-        let full_output_path = get_save_file_path(path, output_path, Some(".json".to_string()), None, None);
+        let full_output_path =
+            get_save_file_path(path, output_path, Some(".json".to_string()), None, None);
         check_or_create_dir(&full_output_path);
 
         // offset != 1 has been added to skip functions with invalid instructions
@@ -331,7 +332,8 @@ impl AGFJFunc {
         feature_type: FeatureType,
         architecture: &String,
     ) {
-        let full_output_path = get_save_file_path(path, output_path, Some(".json".to_string()), None, None);
+        let full_output_path =
+            get_save_file_path(path, output_path, Some(".json".to_string()), None, None);
         check_or_create_dir(&full_output_path);
         let file_name = path.file_name().unwrap();
         let binding = file_name.to_string_lossy().to_string();
@@ -346,7 +348,9 @@ impl AGFJFunc {
 
         let fname_string = format!(
             "{}/{:?}-{}.json",
-            &full_output_path.to_string_lossy(), binary_name[0], function_name
+            &full_output_path.to_string_lossy(),
+            binary_name[0],
+            function_name
         );
 
         if !Path::new(&fname_string).is_file() {
