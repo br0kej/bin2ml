@@ -119,21 +119,21 @@ mod tests {
     fn test_get_save_file_path_1() {
         let path: &PathBuf = &PathBuf::from("test_bin/hello.json");
         let output_path: &PathBuf = &PathBuf::from("processed_data/");
-        let output_path = get_save_file_path(path, &output_path, Some("cg".to_string()), None);
-        assert_eq!(output_path, PathBuf::from("processed_data/hello-cg"))
+        let output_path = get_save_file_path(path, &output_path, Some(".json".to_string()), Some("cg".to_string()), None);
+        assert_eq!(output_path, PathBuf::from("processed_data/hello-cg.json"))
     }
     #[test]
     fn test_get_save_file_path_2() {
         let path: &PathBuf = &PathBuf::from("test_bin/extra_dir/hello.json");
         let output_path: &PathBuf = &PathBuf::from("with_more/processed_data/");
-        let output = get_save_file_path(path, output_path, None, None);
+        let output = get_save_file_path(path, output_path, None, None, None);
         assert_eq!(output, PathBuf::from("with_more/processed_data/hello"))
     }
     #[test]
     fn test_get_save_file_path_3() {
         let path: &PathBuf = &PathBuf::from("hello.json");
         let output_path: &PathBuf = &PathBuf::from("processed_data");
-        let output = get_save_file_path(path, &output_path, None, None);
+        let output = get_save_file_path(path, &output_path, None, None, None);
         assert_eq!(output, PathBuf::from("processed_data/hello"))
     }
 
@@ -144,9 +144,10 @@ mod tests {
         let output = get_save_file_path(
             path,
             &output_path,
+            Some(".json".to_string()),
             Some("gcg".to_string()),
-            Some("_cg".to_string()),
+            Some("_cg".to_string())
         );
-        assert_eq!(output, PathBuf::from("processed_data/hello-gcg"))
+        assert_eq!(output, PathBuf::from("processed_data/hello-gcg.json"))
     }
 }

@@ -202,7 +202,7 @@ impl AGFJFile {
     pub fn generate_esil_func_strings(mut self) {
         let fname_string: PathBuf =
             get_save_file_path(&self.filename, &self.output_path, None, None, None);
-        let fname_string = format!("{:?}-efs.json", fname_string);
+        let fname_string = format!("{}-efs.json", fname_string.to_string_lossy());
 
         if !Path::new(&fname_string).exists() {
             self.load_and_deserialize()
@@ -243,7 +243,7 @@ impl AGFJFile {
         // that returns a function as a func string.
         let fname_string: PathBuf =
             get_save_file_path(&self.filename, &self.output_path, None, None, None);
-        let fname_string = format!("{:?}-dfs.json", fname_string);
+        let fname_string = format!("{}-dfs.json", fname_string.to_string_lossy());
 
         if !Path::new(&fname_string).exists() {
             self.load_and_deserialize()
@@ -267,9 +267,6 @@ impl AGFJFile {
                 let map: HashMap<_, _> = fixed.into_iter().collect();
 
                 let json = json!(map);
-                let fname_string: PathBuf =
-                    get_save_file_path(&self.filename, &self.output_path, None, None, None);
-                let fname_string = format!("{:?}-dfs.json", fname_string);
 
                 serde_json::to_writer(
                     &File::create(fname_string).expect("Failed to create writer"),
@@ -289,9 +286,9 @@ impl AGFJFile {
         let fname_string: PathBuf =
             get_save_file_path(&self.filename, &self.output_path, None, None, None);
         let fname_string = if esil {
-            format!("{:?}-esil-singles.txt", fname_string)
+            format!("{}-esil-singles.txt", fname_string.to_string_lossy())
         } else {
-            format!("{:?}-dis-singles.txt", fname_string)
+            format!("{}-dis-singles.txt", fname_string.to_string_lossy())
         };
 
         if !Path::new(&fname_string).exists() {
