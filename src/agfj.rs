@@ -345,7 +345,7 @@ impl AGFJFunc {
         };
 
         let fname_string = format!(
-            "{}/{:?}-{}.json",
+            "{}/{}-{}.json",
             &full_output_path.to_string_lossy(), binary_name[0], function_name
         );
 
