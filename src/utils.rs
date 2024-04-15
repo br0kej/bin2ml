@@ -98,7 +98,7 @@ pub fn get_json_paths_from_dir(path: &PathBuf, identifier: Option<String>) -> Ve
     str_vec
 }
 
-/// Checks to see if a directory is prsent, if not creates
+/// Checks to see if a directory is present, if not creates
 pub fn check_or_create_dir(full_output_path: &PathBuf) {
     if !full_output_path.is_dir() {
         create_dir_all(full_output_path).expect("Unable to create directory!");
