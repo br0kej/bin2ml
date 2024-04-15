@@ -14,6 +14,7 @@ use enum_as_inner::EnumAsInner;
 use indicatif::ParallelProgressIterator;
 use itertools::Itertools;
 
+use crate::combos::FinfoTiknib;
 use crate::DataType;
 use petgraph::{Graph, Incoming, Outgoing};
 use rayon::iter::ParallelIterator;
@@ -149,7 +150,7 @@ impl AGFJFile {
     /// Prediction (NSP) as there is not indication of where a basic block starts or ends.
     pub fn generate_random_bb_walk(mut self, esil: bool, pairs: bool) {
         let fname_string: PathBuf =
-            get_save_file_path(&self.filename, &self.output_path, None, None);
+            get_save_file_path(&self.filename, &self.output_path, None, None, None);
         let fname_string = if esil {
             format!("{:?}-esil-singles-rwdfs.txt", fname_string)
         } else {
@@ -200,7 +201,7 @@ impl AGFJFile {
     /// instruction within a function
     pub fn generate_esil_func_strings(mut self) {
         let fname_string: PathBuf =
-            get_save_file_path(&self.filename, &self.output_path, None, None);
+            get_save_file_path(&self.filename, &self.output_path, None, None, None);
         let fname_string = format!("{}-efs.json", fname_string.to_string_lossy());
 
         if !Path::new(&fname_string).exists() {
@@ -241,7 +242,7 @@ impl AGFJFile {
         // This needs to be amended so that there is a AGFJFunc function
         // that returns a function as a func string.
         let fname_string: PathBuf =
-            get_save_file_path(&self.filename, &self.output_path, None, None);
+            get_save_file_path(&self.filename, &self.output_path, None, None, None);
         let fname_string = format!("{}-dfs.json", fname_string.to_string_lossy());
 
         if !Path::new(&fname_string).exists() {
@@ -283,7 +284,7 @@ impl AGFJFile {
     /// the bottom.
     pub fn generate_linear_bb_walk(mut self, esil: bool) {
         let fname_string: PathBuf =
-            get_save_file_path(&self.filename, &self.output_path, None, None);
+            get_save_file_path(&self.filename, &self.output_path, None, None, None);
         let fname_string = if esil {
             format!("{}-esil-singles.txt", fname_string.to_string_lossy())
         } else {
@@ -346,7 +347,7 @@ impl AGFJFile {
 
         let json = json!(&func_feature_vectors);
         let fname_string: PathBuf =
-            get_save_file_path(&self.filename, &self.output_path, None, None);
+            get_save_file_path(&self.filename, &self.output_path, None, None, None);
         let fname_string = format!("{}-tiknib.json", fname_string.to_string_lossy());
         serde_json::to_writer(
             &File::create(fname_string).expect("Failed to create writer"),
@@ -384,6 +385,7 @@ pub enum FunctionMetadataTypes {
     AFIJ(Vec<AFIJFeatureSubset>),
     AFIJExtended(Vec<AFIJFeatureSubsetExtended>),
     AGFJ(Vec<TikNibFunc>),
+    FinfoTiknibCombo(Vec<FinfoTiknib>),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -516,14 +518,13 @@ impl AGCJFile {
             CallGraphTypes::CGName(NetworkxDiGraph::from(graph))
         };
 
-        let mut full_output_path = get_save_file_path(
+        let full_output_path = get_save_file_path(
             &self.filename,
             &self.output_path,
+            Some(".json".to_string()),
             Some("gcg".to_string()),
             Some("_cg".to_string()),
         );
-
-        full_output_path.set_extension("json");
 
         debug!(
             "Attempting to save global call graph to: {:?}",
@@ -653,7 +654,7 @@ impl AFIJFile {
     pub fn subset_and_save(&mut self, extended: bool) {
         let func_info_subsets = self.subset(extended);
         let fname_string: PathBuf =
-            get_save_file_path(&self.filename, &self.output_path, None, None);
+            get_save_file_path(&self.filename, &self.output_path, None, None, None);
         let filename = format!("{}-finfo-subset.json", fname_string.to_string_lossy());
         serde_json::to_writer(
             &File::create(filename).expect("Failed to create writer"),

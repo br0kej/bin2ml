@@ -405,6 +405,18 @@ impl CGCorpus {
         )
     }
 
+    fn get_binary_name_binarycorp(filepath: &PathBuf) -> PathBuf {
+        //abseil-cpp-libabsl_flags_internal.so.2103.0.1-O0-0c4d4b7fa8d2e49da0f70b07c726ceaa
+        //fifechan-git-libfifechan_sdl.so.0.1.5-O0-39f42250f8e0d261c64854ccacf5a415
+        let binary_intermediate = Path::new(filepath).parent().unwrap().file_name().unwrap();
+        PathBuf::from(
+            binary_intermediate
+                .to_string_lossy()
+                .split("-O")
+                .collect_vec()[0],
+        )
+    }
+
     fn extract_binary_from_fps(&self) -> Vec<PathBuf> {
         let mut fp_binaries = Vec::new();
         // Process the file paths to get the associated binary of each path
@@ -414,6 +426,7 @@ impl CGCorpus {
                 "cisco" => Self::get_binary_name_cisco(file),
                 "binkit" => Self::get_binary_name_binkit(file),
                 "trex" => Self::get_binary_name_binkit(file),
+                "binarycorp" => Self::get_binary_name_binarycorp(file),
                 _ => unreachable!(),
             };
             trace!("Extracted Binary Name: {:?} from {:?}", binary, file);
@@ -476,7 +489,10 @@ impl CGCorpus {
             .for_each(|(idx, fp_subset)| {
                 let mut subset_loaded_data: Vec<Option<CallGraphTypes>> =
                     self.load_subset(fp_subset);
-                debug!("Starting to deduplicate the corpus - {}", idx);
+                debug!(
+                    "Starting to deduplicate the corpus - {} (Example: {:?})",
+                    idx, fp_subset[0]
+                );
                 Self::dedup_corpus(&mut subset_loaded_data, fp_subset);
                 let subset_loaded_data: Vec<CallGraphTypes> =
                     subset_loaded_data.into_iter().flatten().collect();
@@ -902,5 +918,26 @@ mod tests {
 
         assert_eq!(crate::dedup::CGCorpus::get_binary_name_binkit(&PathBuf::from("/fast-disk/processed_datasets/Dataset-2/arm-32_binutils-2.34-O0_addr2line_cg-onehopcgcallers-meta/sym.adjust_relative_path-onehopcgcallers-meta.json")),
                    PathBuf::from("addr2line"))
+    }
+
+    #[test]
+    fn test_binarycorp_binary_extraction() {
+        // qt6-base-git-libqsqlodbc.so-O0-7ec313ab3fa55a4fd226b04c64a1c9ef_cg-onehopcgcallers-meta/dummy_onehopcgcallers-meta.json
+        assert_eq!(
+            CGCorpus::get_binary_name_binarycorp(&PathBuf::from(
+                "afifechan-git-libfifechan_sdl.so.0.1.5-O0-39f42250f8e0d261c64854ccacf5a415_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json"
+            )),
+            PathBuf::from("afifechan-git-libfifechan_sdl.so.0.1.5")
+        );
+        assert_eq!(CGCorpus::get_binary_name_binarycorp(&PathBuf::from(
+            "fdupes-fdupes-Os-478aae4c6befe33db84f17296c1cd5b2_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json"
+        )),
+                   PathBuf::from("fdupes-fdupes")
+        );
+        assert_eq!(CGCorpus::get_binary_name_binarycorp(&PathBuf::from(
+            "gammaray-libgammaray_widget_export_actions-qt5_15-x86_64.so-O1-ba7a0e23ab8cd2ee36c088e3bce111b1_cg-onehopcgcallers-meta/sym.dummy-func-onehopcgcallers-meta.json"
+        )),
+                   PathBuf::from("gammaray-libgammaray_widget_export_actions-qt5_15-x86_64.so")
+        )
     }
 }

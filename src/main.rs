@@ -9,6 +9,7 @@ extern crate log;
 use clap::builder::TypedValueParser;
 use env_logger::Env;
 use indicatif::{ParallelProgressIterator, ProgressIterator};
+
 use mimalloc::MiMalloc;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::IntoParallelRefIterator;
@@ -42,6 +43,7 @@ use crate::files::{AFIJFile, AGCJFile, FunctionMetadataTypes, TikNibFuncMetaFile
 use crate::tokeniser::{train_byte_bpe_tokeniser, TokeniserType};
 use crate::utils::get_save_file_path;
 
+use crate::combos::{ComboJob, FinfoTiknibFile};
 use crate::networkx::CallGraphNodeFeatureType;
 use bb::{FeatureType, InstructionMode};
 #[cfg(feature = "goblin")]
@@ -153,7 +155,7 @@ enum GenerateSubCommands {
         include_unk: bool,
 
         /// Metadata Type (For call graphs)
-        #[arg(short, long, value_name = "METADATA_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "tiknib"])
+        #[arg(short, long, value_name = "METADATA_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "tiknib", "finfo-tiknib"])
         .map(|s| s.parse::<String>().unwrap()),)]
         metadata_type: Option<String>,
     },
@@ -202,7 +204,7 @@ enum GenerateSubCommands {
         #[arg(short, long, value_name = "OUTPUT_PATH")]
         output_path: PathBuf,
         /// Data Source Type
-        #[arg(short, long, value_parser = clap::builder::PossibleValuesParser::new(["finfo", "agfj"])
+        #[arg(short, long, value_parser = clap::builder::PossibleValuesParser::new(["finfo", "tiknib"])
             .map(|s| s.parse::<String>().unwrap()))]
         data_source_type: String,
         /// Toggle for extended version of finfo
@@ -239,6 +241,9 @@ enum GenerateSubCommands {
         #[arg(short, long, value_parser = clap::builder::PossibleValuesParser::new(["finfo+tiknib", "finfoe+tiknib"])
         .map(|s| s.parse::<String>().unwrap()))]
         combo_type: String,
+        /// Number of threads
+        #[arg(short, long, default_value = "2")]
+        num_threads: usize,
     },
 }
 
@@ -330,7 +335,7 @@ enum DedupSubCommands {
         num_threads: usize,
 
         /// The filepath_format of the dataset
-        #[arg(long,value_parser = clap::builder::PossibleValuesParser::new(["cisco", "binkit", "trex"])
+        #[arg(long,value_parser = clap::builder::PossibleValuesParser::new(["cisco", "binkit", "trex", "binarycorp"])
         .map(|s| s.parse::<String>().unwrap()), required = true)]
         filepath_format: String,
 
@@ -563,6 +568,7 @@ fn main() {
                             let full_output_path = get_save_file_path(
                                 &PathBuf::from(path),
                                 output_path,
+                                Some(".json".to_string()),
                                 Some(suffix),
                                 None,
                             );
@@ -590,7 +596,7 @@ fn main() {
                             }
                         })
                     } else {
-                        debug!("Creating call graphs with node features");
+                        info!("Creating call graphs with node features");
                         debug!("Getting metadata file paths");
                         // its more than one file
                         if metadata_path.is_none() {
@@ -599,8 +605,10 @@ fn main() {
                         };
 
                         if with_features & metadata_type.is_none() {
-                            error!("with features requires metadata_type to be set")
-                        }
+                            error!("with features requires metadata_type to be set");
+                            exit(1)
+                        };
+
                         let mut metadata_paths_vec = get_json_paths_from_dir(
                             metadata_path.as_ref().unwrap(),
                             Some(metadata_type.as_ref().unwrap().to_string()),
@@ -621,6 +629,7 @@ fn main() {
                                 let full_output_path = get_save_file_path(
                                     &PathBuf::from(filepath),
                                     output_path,
+                                    Some(".json".to_string()),
                                     Some(suffix),
                                     None,
                                 );
@@ -652,6 +661,24 @@ fn main() {
                                                 .load_and_deserialize()
                                                 .expect("Unable to load associated metadata file");
                                             metadata = Some(metadata_file.subset());
+                                        } else if metadata_type.clone().unwrap() == *"finfo-tiknib"
+                                        {
+                                            let mut metadata_file = FinfoTiknibFile {
+                                                filename: PathBuf::from(metapath),
+                                                function_info: None,
+                                                output_path: PathBuf::new(),
+                                            };
+                                            debug!(
+                                                "Attempting to load metadata file: {}",
+                                                metapath
+                                            );
+                                            metadata_file
+                                                .load_and_deserialize()
+                                                .expect("Unable to load associated metadata file");
+                                            metadata =
+                                                Some(FunctionMetadataTypes::FinfoTiknibCombo(
+                                                    metadata_file.function_info.unwrap(),
+                                                ));
                                         } else {
                                             metadata = None
                                         }
@@ -673,7 +700,7 @@ fn main() {
                                         with_features,
                                         metadata_type.clone(),
                                     );
-                                    debug!(
+                                    info!(
                                         "Finished generating cgs + metadata for {:?}",
                                         file.filename
                                     );
@@ -706,7 +733,7 @@ fn main() {
                     info!("Successfully loaded JSON");
                     file.subset_and_save(*extended);
                     info!("Generation complete");
-                } else if data_source_type == "agfj" {
+                } else if data_source_type == "tiknib" {
                     warn!("This currently only supports making TikNib features for single files");
 
                     if input_path.is_file() {
@@ -745,15 +772,26 @@ fn main() {
             }
             GenerateSubCommands::Combos {
                 input_path,
-                output_path: _,
+                output_path,
                 combo_type,
+                num_threads,
             } => {
                 warn!("This feature is experimental and should be used with caution!");
-                if combo_type == "finfo+tiknib" {
-                    let _finfo_paths =
-                        get_json_paths_from_dir(input_path, Some("_finfo".to_string()));
-                    let _tiknib_paths =
-                        get_json_paths_from_dir(input_path, Some("cfg-tiknib".to_string()));
+                let combo_job = ComboJob::new(combo_type, input_path, output_path);
+
+                if combo_job.is_ok() {
+                    let combo_job = combo_job.unwrap();
+                    rayon::ThreadPoolBuilder::new()
+                        .num_threads(*num_threads)
+                        .build_global()
+                        .unwrap();
+
+                    match combo_job.combo_type {
+                        combos::ComboTypes::FinfoTikib => combo_job.process_finfo_tiknib(),
+                    }
+                } else {
+                    error!("Invalid combo type: {}", combo_type);
+                    exit(1)
                 }
             }
             GenerateSubCommands::Nlp {

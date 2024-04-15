@@ -1,5 +1,5 @@
 use std::fs::create_dir_all;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 /// Formats a save file path
@@ -15,21 +15,29 @@ use walkdir::WalkDir;
 ///
 /// See agcj.rs for an example of this optional suffix being used
 pub fn get_save_file_path(
-    binary_path: &PathBuf,
-    output_path: &PathBuf,
+    binary_path: &Path,
+    output_path: &Path,
+    extension: Option<String>,
     optional_suffix: Option<String>,
     remove_suffix: Option<String>,
 ) -> PathBuf {
-    debug!(
-        "Building Filepath - Binary Path: {:?} Output Path: {:?}",
-        binary_path, output_path
-    );
+    let extension = if extension.is_some() {
+        let extension = extension.unwrap();
+        if extension.starts_with('.') {
+            extension
+        } else {
+            format!(".{}", extension)
+        }
+    } else {
+        "".to_string()
+    };
+
     let file_name = binary_path
         .file_stem()
         .unwrap()
         .to_string_lossy()
         .to_string();
-
+    debug!("File Name: {}", file_name);
     let file_name = if let Some(suffix) = remove_suffix {
         file_name.replace(&suffix, "")
     } else {
@@ -37,25 +45,31 @@ pub fn get_save_file_path(
     };
 
     if optional_suffix.is_none() {
+        debug!("No Optional Suffix found");
         let full_output_path = format!(
-            "{}/{}",
-            output_path
-                .to_string_lossy()
-                .strip_suffix('/')
-                .unwrap_or(output_path.as_os_str().to_str().unwrap()),
-            file_name
-        );
-        PathBuf::from(full_output_path)
-    } else {
-        let full_output_path = format!(
-            "{}/{}-{}",
+            "{}/{}{}",
             output_path
                 .to_string_lossy()
                 .strip_suffix('/')
                 .unwrap_or(output_path.as_os_str().to_str().unwrap()),
             file_name,
-            optional_suffix.unwrap()
+            extension
         );
+        debug!("Full Output Path: {}", full_output_path);
+        PathBuf::from(full_output_path)
+    } else {
+        debug!("Optional Suffix found");
+        let full_output_path = format!(
+            "{}/{}-{}{}",
+            output_path
+                .to_string_lossy()
+                .strip_suffix('/')
+                .unwrap_or(output_path.as_os_str().to_str().unwrap()),
+            file_name,
+            optional_suffix.unwrap(),
+            extension
+        );
+        debug!("Full Output Path: {}", full_output_path);
         PathBuf::from(full_output_path)
     }
 }
@@ -104,21 +118,27 @@ mod tests {
     fn test_get_save_file_path_1() {
         let path: &PathBuf = &PathBuf::from("test_bin/hello.json");
         let output_path: &PathBuf = &PathBuf::from("processed_data/");
-        let output_path = get_save_file_path(path, &output_path, Some("cg".to_string()), None);
-        assert_eq!(output_path, PathBuf::from("processed_data/hello-cg"))
+        let output_path = get_save_file_path(
+            path,
+            &output_path,
+            Some(".json".to_string()),
+            Some("cg".to_string()),
+            None,
+        );
+        assert_eq!(output_path, PathBuf::from("processed_data/hello-cg.json"))
     }
     #[test]
     fn test_get_save_file_path_2() {
         let path: &PathBuf = &PathBuf::from("test_bin/extra_dir/hello.json");
         let output_path: &PathBuf = &PathBuf::from("with_more/processed_data/");
-        let output = get_save_file_path(path, output_path, None, None);
+        let output = get_save_file_path(path, output_path, None, None, None);
         assert_eq!(output, PathBuf::from("with_more/processed_data/hello"))
     }
     #[test]
     fn test_get_save_file_path_3() {
         let path: &PathBuf = &PathBuf::from("hello.json");
         let output_path: &PathBuf = &PathBuf::from("processed_data");
-        let output = get_save_file_path(path, &output_path, None, None);
+        let output = get_save_file_path(path, &output_path, None, None, None);
         assert_eq!(output, PathBuf::from("processed_data/hello"))
     }
 
@@ -129,9 +149,10 @@ mod tests {
         let output = get_save_file_path(
             path,
             &output_path,
+            Some(".json".to_string()),
             Some("gcg".to_string()),
             Some("_cg".to_string()),
         );
-        assert_eq!(output, PathBuf::from("processed_data/hello-gcg"))
+        assert_eq!(output, PathBuf::from("processed_data/hello-gcg.json"))
     }
 }
