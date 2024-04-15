@@ -36,6 +36,7 @@ pub mod normalisation;
 pub mod processors;
 pub mod tokeniser;
 pub mod utils;
+mod validate;
 
 use crate::dedup::{CGCorpus, EsilFuncStringCorpus};
 use crate::extract::ExtractionJobType;
@@ -45,6 +46,7 @@ use crate::utils::get_save_file_path;
 
 use crate::combos::{ComboJob, FinfoTiknibFile};
 use crate::networkx::CallGraphNodeFeatureType;
+use crate::validate::validate_input;
 use bb::{FeatureType, InstructionMode};
 #[cfg(feature = "goblin")]
 use binnfo::goblin_info;
@@ -463,6 +465,7 @@ fn main() {
                             );
 
                             if Path::new(path).is_file() {
+                                validate_input(path, "cfg");
                                 info!("Single file found");
                                 agfj_graph_statistical_features(
                                     path,
@@ -476,6 +479,7 @@ fn main() {
                                     WalkDir::new(path).into_iter().filter_map(|file| file.ok())
                                 {
                                     if file.path().to_string_lossy().ends_with(".json") {
+                                        validate_input(path, "cfg");
                                         agfj_graph_statistical_features(
                                             file.path(),
                                             &min_blocks.unwrap(),
@@ -511,6 +515,7 @@ fn main() {
                         error!("--feature-type/-f is required for creating CFG's")
                     }
                 } else if Path::new(path).is_file() {
+                    validate_input(path, "cg");
                     let mut file = match with_features {
                         true => {
                             let mut metadata = AFIJFile {
@@ -722,6 +727,7 @@ fn main() {
                 extended,
             } => {
                 if data_source_type == "finfo" {
+                    validate_input(input_path, "metadata_finfo");
                     let mut file = AFIJFile {
                         filename: input_path.to_owned(),
                         function_info: None,
@@ -737,6 +743,7 @@ fn main() {
                     warn!("This currently only supports making TikNib features for single files");
 
                     if input_path.is_file() {
+                        validate_input(input_path, "metadata_tiknib");
                         let mut file = AGFJFile {
                             functions: None,
                             filename: input_path.to_owned(),
@@ -828,6 +835,7 @@ fn main() {
 
                 if Path::new(path).is_file() {
                     info!("Single file found");
+                    validate_input(path, "nlp");
                     let file = AGFJFile {
                         functions: None,
                         filename: path.to_owned(),
@@ -841,7 +849,7 @@ fn main() {
                     file.execute_data_generation(format_type, instruction_type, random_walk, *pairs)
                 } else {
                     info!("Multiple files found. Will parallel process.");
-                    let file_paths_vec = get_json_paths_from_dir(path, None);
+                    let file_paths_vec = get_json_paths_from_dir(path, Some("_cfg".to_string()));
                     info!(
                         "{} files found. Beginning Processing.",
                         file_paths_vec.len()

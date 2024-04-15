@@ -332,8 +332,7 @@ impl AGFJFunc {
         feature_type: FeatureType,
         architecture: &String,
     ) {
-        let full_output_path =
-            get_save_file_path(path, output_path, Some(".json".to_string()), None, None);
+        let full_output_path = get_save_file_path(path, output_path, None, None, None);
         check_or_create_dir(&full_output_path);
         let file_name = path.file_name().unwrap();
         let binding = file_name.to_string_lossy().to_string();
