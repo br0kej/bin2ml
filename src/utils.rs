@@ -36,7 +36,6 @@ pub fn get_save_file_path(
         file_name
     };
 
-
     if optional_suffix.is_none() {
         let full_output_path = format!(
             "{}/{}",

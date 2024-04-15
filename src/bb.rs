@@ -100,6 +100,7 @@ pub struct ACFJBlock {
 
 // Data Transfer + Misc have been removed.
 // Paper shows its a weak feature
+#[derive(Serialize, Deserialize, Copy, Clone, PartialEq, Debug, Default)]
 pub struct TikNibFeaturesBB {
     pub arithshift: f32,
     pub compare: f32,
@@ -110,6 +111,33 @@ pub struct TikNibFeaturesBB {
     pub total: f32,
 }
 
+impl TikNibFeaturesBB {
+    pub fn to_vec(self) -> Vec<f64> {
+        let mut feature_vec = vec![0.0; 7];
+        feature_vec[0] = self.arithshift as f64;
+        feature_vec[1] = self.compare as f64;
+        feature_vec[2] = self.ctransfer as f64;
+        feature_vec[3] = self.ctransfercond as f64;
+        feature_vec[4] = self.dtransfer as f64;
+        feature_vec[5] = self.float as f64;
+        feature_vec[6] = self.total as f64;
+
+        feature_vec
+    }
+}
+impl From<&Vec<f64>> for TikNibFeaturesBB {
+    fn from(src: &Vec<f64>) -> TikNibFeaturesBB {
+        TikNibFeaturesBB {
+            arithshift: src[0] as f32,
+            compare: src[1] as f32,
+            ctransfer: src[2] as f32,
+            ctransfercond: src[3] as f32,
+            dtransfer: src[4] as f32,
+            float: src[5] as f32,
+            total: src[6] as f32,
+        }
+    }
+}
 impl FeatureType {
     // Returns the corresponding feature map given a provided FeatureType
     // These feature maps are used to provide the functionality that handles
@@ -180,10 +208,11 @@ impl ACFJBlock {
         feature_type: FeatureType,
         architecture: &String,
     ) {
-        let feature_vector = match feature_type {
+        let feature_vector: Vec<f64> = match feature_type {
             FeatureType::DiscovRE => self.gemini_features(architecture, true),
             FeatureType::Gemini => self.gemini_features(architecture, false),
             FeatureType::DGIS => self.dgis_features(architecture),
+            FeatureType::Tiknib => self.get_tiknib_features_vec(architecture),
             _ => unreachable!(),
         };
 
@@ -201,6 +230,7 @@ impl ACFJBlock {
     //
     // Note: The Betweenness feature used in Gemini is calculated down stream using
     // Networkx
+    //pub fn gemini_features(&self, architecture: &String, reduced: bool) -> Vec<f64> {
     pub fn gemini_features(&self, architecture: &String, reduced: bool) -> Vec<f64> {
         let n_features = if reduced { 6 } else { 7 };
 
@@ -491,7 +521,7 @@ impl ACFJBlock {
         n_ins
     }
 
-    pub fn get_tiknib_features(&self, architecture: &String) -> TikNibFeaturesBB {
+    pub fn get_tiknib_features_bb(&self, architecture: &String) -> TikNibFeaturesBB {
         let mut features = TikNibFeaturesBB {
             arithshift: 0.0,
             compare: 0.0,
@@ -622,6 +652,9 @@ impl ACFJBlock {
             }
         }
         features
+    }
+    pub fn get_tiknib_features_vec(&self, architecture: &String) -> Vec<f64> {
+        Self::get_tiknib_features_bb(self, architecture).to_vec()
     }
 }
 

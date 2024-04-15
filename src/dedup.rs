@@ -563,11 +563,7 @@ impl CGCorpus {
 
         final_path
     }
-    pub fn save_corpus(
-        &self,
-        subset_loaded_data: Vec<CallGraphTypes>,
-        fp_subset: &mut [PathBuf],
-    ) {
+    pub fn save_corpus(&self, subset_loaded_data: Vec<CallGraphTypes>, fp_subset: &mut [PathBuf]) {
         subset_loaded_data
             .iter()
             .zip(fp_subset.iter())

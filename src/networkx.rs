@@ -1,6 +1,6 @@
 use crate::afij::AFIJFeatureSubset;
 use crate::agfj::TikNibFunc;
-use crate::bb::FeatureType;
+use crate::bb::{FeatureType, TikNibFeaturesBB};
 use enum_as_inner::EnumAsInner;
 use petgraph::prelude::Graph;
 use petgraph::visit::EdgeRef;
@@ -28,6 +28,7 @@ pub enum NodeType {
     Gemini(GeminiNode),
     Dgis(DGISNode),
     Discovere(DiscovreNode),
+    Tiknib(TiknibNode),
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize, EnumAsInner)]
@@ -56,6 +57,21 @@ impl CallGraphNodeFeatureType {
         }
     }
 }
+
+#[derive(Copy, Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TiknibNode {
+    pub id: i64,
+    pub features: TikNibFeaturesBB,
+}
+impl From<(i64, &Vec<f64>)> for TiknibNode {
+    fn from(src: (i64, &Vec<f64>)) -> TiknibNode {
+        TiknibNode {
+            id: src.0,
+            features: TikNibFeaturesBB::from(src.1),
+        }
+    }
+}
+
 #[derive(Default, Copy, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GeminiNode {
@@ -313,6 +329,9 @@ impl From<(&Graph<String, u32>, &Vec<Vec<f64>>, FeatureType)> for NetworkxDiGrap
                     i as i64,
                     node_vector,
                 )))),
+                FeatureType::Tiknib => {
+                    Some(NodeType::Tiknib(TiknibNode::from((i as i64, node_vector))))
+                }
                 _ => None,
             };
 
@@ -395,6 +414,25 @@ impl From<NetworkxDiGraph<NodeType>> for NetworkxDiGraph<DiscovreNode> {
             .nodes
             .into_iter()
             .map(|el| *el.as_discovere().unwrap())
+            .collect();
+
+        NetworkxDiGraph {
+            adjacency: src.adjacency,
+            directed: src.directed,
+            graph: vec![],
+            multigraph: false,
+            nodes: inner_nodes_types,
+        }
+    }
+}
+
+impl From<NetworkxDiGraph<NodeType>> for NetworkxDiGraph<TiknibNode> {
+    fn from(src: NetworkxDiGraph<NodeType>) -> NetworkxDiGraph<TiknibNode> {
+        let inner_nodes_types: Vec<TiknibNode> = src
+            .clone()
+            .nodes
+            .into_iter()
+            .map(|el| *el.as_tiknib().unwrap())
             .collect();
 
         NetworkxDiGraph {

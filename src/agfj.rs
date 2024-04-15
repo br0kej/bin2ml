@@ -1,7 +1,7 @@
 use crate::bb::{ACFJBlock, FeatureType, TikNibFeaturesBB};
 #[cfg(feature = "inference")]
 use crate::inference::InferenceJob;
-use crate::networkx::{DGISNode, DiscovreNode, GeminiNode, NetworkxDiGraph, NodeType};
+use crate::networkx::{DGISNode, DiscovreNode, GeminiNode, NetworkxDiGraph, NodeType, TiknibNode};
 use crate::utils::{average, check_or_create_dir, get_save_file_path};
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
@@ -346,7 +346,9 @@ impl AGFJFunc {
 
         let fname_string = format!(
             "{}/{}-{}.json",
-            &full_output_path.to_string_lossy(), binary_name[0], function_name
+            &full_output_path.to_string_lossy(),
+            binary_name[0],
+            function_name
         );
 
         if !Path::new(&fname_string).is_file() {
@@ -400,6 +402,15 @@ impl AGFJFunc {
                             &networkx_graph_inners,
                         )
                         .expect("Unable to write JSON");
+                    } else if feature_type == FeatureType::Tiknib {
+                        let networkx_graph_inners: NetworkxDiGraph<TiknibNode> =
+                            NetworkxDiGraph::<TiknibNode>::from(networkx_graph);
+                        info!("Saving to JSON..");
+                        serde_json::to_writer(
+                            &File::create(fname_string).expect("Failed to create writer"),
+                            &networkx_graph_inners,
+                        )
+                        .expect("Unable to write JSON");
                     }
                 } else {
                     info!("Function {} has no edges. Skipping...", self.name)
@@ -427,11 +438,24 @@ impl AGFJFunc {
         }
     }
 
-    pub fn generate_tiknib_cfg_features(&self, architecture: &String) -> TikNibFunc {
+    /*
+    pub fn generate_tikinib_cfg_features(&self, architecture: &String) -> TiknibNode {
         let mut basic_block_features = Vec::new();
 
         for block in &self.blocks {
-            let feats = block.get_tiknib_features(architecture);
+            let feats = block.get_tiknib_features_vec(architecture);
+            basic_block_features.push(feats)
+        }
+
+        TiknibNode::from((&self.name, basic_block_features))
+    }
+    */
+
+    pub fn generate_tiknib_cfg_global_features(&self, architecture: &String) -> TikNibFunc {
+        let mut basic_block_features = Vec::new();
+
+        for block in &self.blocks {
+            let feats = block.get_tiknib_features_bb(architecture);
             basic_block_features.push(feats)
         }
 

@@ -108,7 +108,7 @@ enum GenerateSubCommands {
         output_path: PathBuf,
 
         /// The type of features to generate per basic block (node)
-        #[arg(short, long, value_name = "FEATURE_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["gemini", "discovre", "dgis"])
+        #[arg(short, long, value_name = "FEATURE_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["gemini", "discovre", "dgis", "tiknib"])
         .map(|s| s.parse::<String>().unwrap()),)]
         feature_type: Option<String>,
 
@@ -438,6 +438,7 @@ fn main() {
                             "discovre" => FeatureType::DiscovRE,
                             "dgis" => FeatureType::DGIS,
                             "encode" => FeatureType::Encoded,
+                            "tiknib" => FeatureType::Tiknib,
                             #[cfg(feature = "inference")]
                             "embed" => FeatureType::ModelEmbedded,
                             _ => FeatureType::Invalid,
@@ -449,6 +450,7 @@ fn main() {
                         } else if feature_vec_type == FeatureType::Gemini
                             || feature_vec_type == FeatureType::DiscovRE
                             || feature_vec_type == FeatureType::DGIS
+                            || feature_vec_type == FeatureType::Tiknib
                         {
                             info!(
                                 "Creating graphs with {:?} feature vectors.",
