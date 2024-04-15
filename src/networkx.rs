@@ -30,6 +30,8 @@ pub enum NodeType {
     Dgis(DGISNode),
     Discovere(DiscovreNode),
     Tiknib(TiknibNode),
+    Disasm(DisasmNode),
+    Esil(EsilNode),
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize, EnumAsInner)]
@@ -56,6 +58,36 @@ impl CallGraphNodeFeatureType {
             "cgname" => CallGraphNodeFeatureType::CGName,
             "tiknib" => CallGraphNodeFeatureType::TikNib,
             _ => unreachable!("Invalid node type"),
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DisasmNode {
+    pub id: i64,
+    pub features: Vec<String>,
+}
+
+impl From<(i64, &Vec<String>)> for DisasmNode {
+    fn from(src: (i64, &Vec<String>)) -> DisasmNode {
+        DisasmNode {
+            id: src.0,
+            features: src.1.to_owned(),
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EsilNode {
+    pub id: i64,
+    pub features: Vec<String>,
+}
+
+impl From<(i64, &Vec<String>)> for EsilNode {
+    fn from(src: (i64, &Vec<String>)) -> EsilNode {
+        EsilNode {
+            id: src.0,
+            features: src.1.to_owned(),
         }
     }
 }
@@ -372,6 +404,53 @@ impl From<(Graph<String, u32>, &Vec<FinfoTiknib>)>
     }
 }
 
+impl From<(&Graph<String, u32>, &Vec<Vec<String>>, FeatureType)> for NetworkxDiGraph<NodeType> {
+    fn from(
+        input: (&Graph<String, u32>, &Vec<Vec<String>>, FeatureType),
+    ) -> NetworkxDiGraph<NodeType> {
+        let mut nodes: Vec<NodeType> = vec![];
+
+        for (i, node_vector) in input.1.iter().enumerate() {
+            let node: Option<NodeType> = match input.2 {
+                FeatureType::Disasm => {
+                    Some(NodeType::Disasm(DisasmNode::from((i as i64, node_vector))))
+                }
+                FeatureType::Esil => Some(NodeType::Esil(EsilNode::from((i as i64, node_vector)))),
+                _ => None,
+            };
+            if let Some(node) = node {
+                nodes.push(node);
+            } else {
+                error!("Failed to create node for input!")
+            }
+        }
+
+        let mut adjacency: Vec<Vec<Adjacency>> = vec![];
+        let node_indices = input.0.node_indices();
+
+        for node in node_indices {
+            let mut node_adjacency_vec = vec![];
+            let node_edges = input.0.edges(node);
+            for edge in node_edges {
+                let edge_entry = Adjacency {
+                    id: edge.target().index(),
+                    weight: edge.weight().to_owned(),
+                };
+                node_adjacency_vec.push(edge_entry)
+            }
+            adjacency.push(node_adjacency_vec)
+        }
+
+        NetworkxDiGraph {
+            adjacency,
+            directed: "True".to_string(),
+            graph: vec![],
+            multigraph: false,
+            nodes,
+        }
+    }
+}
+
 impl From<(&Graph<String, u32>, &Vec<Vec<f64>>, FeatureType)> for NetworkxDiGraph<NodeType> {
     fn from(
         input: (&Graph<String, u32>, &Vec<Vec<f64>>, FeatureType),
@@ -392,6 +471,7 @@ impl From<(&Graph<String, u32>, &Vec<Vec<f64>>, FeatureType)> for NetworkxDiGrap
                 FeatureType::Tiknib => {
                     Some(NodeType::Tiknib(TiknibNode::from((i as i64, node_vector))))
                 }
+
                 _ => None,
             };
 
@@ -493,6 +573,44 @@ impl From<NetworkxDiGraph<NodeType>> for NetworkxDiGraph<TiknibNode> {
             .nodes
             .into_iter()
             .map(|el| *el.as_tiknib().unwrap())
+            .collect();
+
+        NetworkxDiGraph {
+            adjacency: src.adjacency,
+            directed: src.directed,
+            graph: vec![],
+            multigraph: false,
+            nodes: inner_nodes_types,
+        }
+    }
+}
+
+impl From<NetworkxDiGraph<NodeType>> for NetworkxDiGraph<DisasmNode> {
+    fn from(src: NetworkxDiGraph<NodeType>) -> NetworkxDiGraph<DisasmNode> {
+        let inner_nodes_types: Vec<DisasmNode> = src
+            .clone()
+            .nodes
+            .into_iter()
+            .map(|el| el.as_disasm().unwrap().clone())
+            .collect();
+
+        NetworkxDiGraph {
+            adjacency: src.adjacency,
+            directed: src.directed,
+            graph: vec![],
+            multigraph: false,
+            nodes: inner_nodes_types,
+        }
+    }
+}
+
+impl From<NetworkxDiGraph<NodeType>> for NetworkxDiGraph<EsilNode> {
+    fn from(src: NetworkxDiGraph<NodeType>) -> NetworkxDiGraph<EsilNode> {
+        let inner_nodes_types: Vec<EsilNode> = src
+            .clone()
+            .nodes
+            .into_iter()
+            .map(|el| el.as_esil().unwrap().clone())
             .collect();
 
         NetworkxDiGraph {

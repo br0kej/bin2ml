@@ -19,6 +19,8 @@ pub enum FeatureType {
     DiscovRE,
     DGIS,
     Tiknib,
+    Disasm,
+    Esil,
     ModelEmbedded,
     Encoded,
     Invalid,
@@ -217,7 +219,26 @@ impl ACFJBlock {
         };
 
         if feature_vector.is_empty() {
-            println!("Empty feature vector. This means that the feature type is wrong!")
+            error!("Empty feature vector. This means that the feature type is wrong!")
+        } else {
+            feature_vecs.push(feature_vector);
+        }
+    }
+
+    pub fn generate_bb_feature_strings(
+        &self,
+        feature_vecs: &mut Vec<Vec<String>>,
+        feature_type: FeatureType,
+        normalise: bool,
+    ) {
+        let feature_vector: Vec<String> = match feature_type {
+            FeatureType::Disasm => self.get_disasm_bb(normalise),
+            FeatureType::Esil => self.get_esil_bb(normalise),
+            _ => unreachable!(),
+        };
+
+        if feature_vector.is_empty() {
+            error!("Empty feature vector. This means that the feature type is wrong!")
         } else {
             feature_vecs.push(feature_vector);
         }
