@@ -380,7 +380,7 @@ enum DedupSubCommands {
 
 fn main() {
     let env = Env::default()
-        .filter_or("LOG_LEVEL", "error")
+        .filter_or("LOG_LEVEL", "warn")
         .write_style_or("LOG_STYLE", "always");
 
     env_logger::init_from_env(env);
@@ -908,6 +908,10 @@ fn main() {
             use_curl_pdb,
         } => {
             info!("Creating extraction job");
+            if !output_dir.exists() {
+                error!("Output directory does not exist - {:?}. Create the directory and re-run again. Exiting...", output_dir);
+                exit(1)
+            }
             let job = ExtractionJob::new(
                 fpath,
                 output_dir,

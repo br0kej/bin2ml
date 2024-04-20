@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 use std::string::String;
 
 use std::{fs, vec};
+use std::process::exit;
 use walkdir::{DirEntry, WalkDir};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -104,7 +105,7 @@ impl EsilFuncStringCorpus {
             .into_iter()
             .filter_map(|file| file.ok())
         {
-            if file.path().to_string_lossy().ends_with(".json") {
+            if file.path().to_string_lossy().ends_with("efs.json") {
                 filepaths.push(file.clone());
 
                 let file_path_string = file
@@ -123,10 +124,14 @@ impl EsilFuncStringCorpus {
             }
         }
 
-        let mut output_path = output_path.to_owned();
-        if !output_path.to_string_lossy().to_string().ends_with('/') {
-            output_path.push("/");
-        };
+        if filepaths.len() == 0 {
+            error!("No files found that match the expected format (*-efs.json). Exiting.");
+            exit(1);
+        }
+
+        if filepaths.len() == 1 {
+            warn!("Only one file has been provided. This is likely not a corpus and there will be no duplicates.");
+        }
 
         Ok(EsilFuncStringCorpus {
             loaded_data: None,
@@ -277,7 +282,10 @@ impl EsilFuncStringCorpus {
 
         if !just_stats {
             let uniques_to_drop = json!(unique_func_hash_tuples);
-            let fname_string = format!("{:?}{}-dedup.json", self.output_path, &target_binary_name);
+            let mut fname_string = PathBuf::new();
+            fname_string.push(self.output_path.clone());
+            fname_string.push(format!("{}-dedup.json", &target_binary_name));
+
             serde_json::to_writer(
                 &File::create(fname_string).expect("Failed to create writer"),
                 &uniques_to_drop,
