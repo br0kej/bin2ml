@@ -274,7 +274,7 @@ enum Commands {
         output_dir: PathBuf,
 
         /// The extraction mode
-        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "reg", "cfg", "xrefs","cg"])
+        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "reg", "cfg", "xrefs","cg", "decomp"])
         .map(|s| s.parse::<String>().unwrap()),)]
         mode: String,
 
@@ -290,6 +290,9 @@ enum Commands {
 
         #[arg(long, default_value = "true")]
         use_curl_pdb: bool,
+
+        #[arg(long, default_value = "false")]
+        with_annotations: bool,
     },
     /// Generate single embeddings on the fly
     ///
@@ -911,7 +914,9 @@ fn main() {
             debug,
             extended_analysis,
             use_curl_pdb,
+            with_annotations,
         } => {
+
             info!("Creating extraction job");
             if !output_dir.exists() {
                 error!("Output directory does not exist - {:?}. Create the directory and re-run again. Exiting...", output_dir);
@@ -924,6 +929,7 @@ fn main() {
                 debug,
                 extended_analysis,
                 use_curl_pdb,
+                with_annotations
             )
             .unwrap();
 
@@ -976,6 +982,14 @@ fn main() {
                         .par_iter()
                         .progress()
                         .for_each(|path| path.extract_function_info());
+                } else if job.job_type == ExtractionJobType::Decompilation {
+                    info!("Extraction Job Type: Decompilation");
+                    info!("Starting Parallel generation.");
+                    #[allow(clippy::redundant_closure)]
+                    job.files_to_be_processed
+                        .par_iter()
+                        .progress()
+                        .for_each(|path| path.extract_decompilation());
                 }
             } else if job.input_path_type == PathType::File {
                 info!("Single file found");
@@ -994,6 +1008,9 @@ fn main() {
                 } else if job.job_type == ExtractionJobType::FuncInfo {
                     info!("Extraction Job type: Function Info");
                     job.files_to_be_processed[0].extract_function_info()
+                } else if job.job_type == ExtractionJobType::Decompilation {
+                    info!("Extraction Job type: Decompilation");
+                    job.files_to_be_processed[0].extract_decompilation()
                 }
                 info!("Extraction complete for {:?}", fpath)
             }
