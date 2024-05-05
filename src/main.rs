@@ -832,6 +832,11 @@ fn main() {
                     _ => FormatMode::Invalid,
                 };
 
+                if format_type == FormatMode::FuncAsString && *pairs {
+                    error!("The pairs option is not supported for 'funcstring' format. Only 'single' is supported");
+                    exit(1)
+                };
+
                 if format_type == FormatMode::Invalid {
                     error!("Invalid format type: {:?}", format_type);
                     exit(1)
