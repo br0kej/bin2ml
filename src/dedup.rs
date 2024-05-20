@@ -124,7 +124,7 @@ impl EsilFuncStringCorpus {
             }
         }
 
-        if filepaths.len() == 0 {
+        if filepaths.is_empty() {
             error!("No files found that match the expected format (*-efs.json). Exiting.");
             exit(1);
         }
