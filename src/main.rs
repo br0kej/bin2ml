@@ -274,7 +274,7 @@ enum Commands {
         output_dir: PathBuf,
 
         /// The extraction mode
-        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "reg", "cfg", "xrefs","cg", "decomp", "pcode-func", "pcode-bb"])
+        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "reg", "cfg", "func-xrefs","cg", "decomp", "pcode-func", "pcode-bb", "localvar-xrefs"])
         .map(|s| s.parse::<String>().unwrap()),)]
         mode: String,
 
@@ -1005,6 +1005,14 @@ fn main() {
                         .par_iter()
                         .progress()
                         .for_each(|path| path.extract_pcode_basic_block());
+                } else if  job.job_type == ExtractionJobType::LocalVariableXrefs {
+                    info!("Extraction Job Type: Local Variable Xrefs");
+                    info!("Starting Parallel generation.");
+                    #[allow(clippy::redundant_closure)]
+                    job.files_to_be_processed
+                        .par_iter()
+                        .progress()
+                        .for_each(|path| path.extract_local_variable_xrefs());
                 }
             } else if job.input_path_type == PathType::File {
                 info!("Single file found");
@@ -1030,6 +1038,8 @@ fn main() {
                     job.files_to_be_processed[0].extract_pcode_function()
                 } else if job.job_type == ExtractionJobType::PCodeBB {
                     job.files_to_be_processed[0].extract_pcode_basic_block()
+                } else if job.job_type == ExtractionJobType::LocalVariableXrefs {
+                    job.files_to_be_processed[0].extract_local_variable_xrefs()
                 }
                 info!("Extraction complete for {:?}", fpath)
             }

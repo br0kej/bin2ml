@@ -41,6 +41,7 @@ pub enum ExtractionJobType {
     Decompilation,
     PCodeFunc,
     PCodeBB,
+    LocalVariableXrefs,
 }
 
 #[derive(Debug)]
@@ -280,6 +281,25 @@ pub struct BasicBlockEntry {
     pub traced: bool,
 }
 
+// Structs for axvj - Local Variable Xref JSON output
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LocalVariableXrefs {
+    pub reads: Vec<Reads>,
+    pub writes: Vec<Writes>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Reads {
+    pub name: String,
+    pub addrs: Vec<i64>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Writes {
+    pub name: String,
+    pub addrs: Vec<i64>,
+}
+
 impl ExtractionJob {
     pub fn new(
         input_path: &PathBuf,
@@ -309,11 +329,12 @@ impl ExtractionJob {
                 "finfo" => Ok(ExtractionJobType::FuncInfo),
                 "reg" => Ok(ExtractionJobType::RegisterBehaviour),
                 "cfg" => Ok(ExtractionJobType::CFG),
-                "xrefs" => Ok(ExtractionJobType::FunctionXrefs),
+                "func-xrefs" => Ok(ExtractionJobType::FunctionXrefs),
                 "cg" => Ok(ExtractionJobType::CallGraphs),
                 "decomp" => Ok(ExtractionJobType::Decompilation),
                 "pcode-func" => Ok(ExtractionJobType::PCodeFunc),
                 "pcode-bb" => Ok(ExtractionJobType::PCodeBB),
+                "localvar-xrefs" => Ok(ExtractionJobType::LocalVariableXrefs),
                 _ => bail!("Incorrect command type - got {}", mode),
             }
         }
@@ -631,6 +652,31 @@ impl FileToBeProcessed {
         }
     }
 
+    pub fn extract_local_variable_xrefs(&self) {
+        info!("Starting local variable xref extraction");
+        let mut r2p = self.setup_r2_pipe();
+        let function_details = self.get_function_name_list(&mut r2p);
+        let mut function_local_variable_xrefs: HashMap<String, LocalVariableXrefs> = HashMap::new();
+
+        if function_details.is_ok() {
+            for function in function_details.unwrap().iter() {
+                let ret = self.get_local_variable_xref_details(function.offset, &mut r2p);
+                function_local_variable_xrefs.insert(function.name.clone(), ret.unwrap());
+            }
+            info!("Local variable xrefs extracted successfully for all functions.");
+            r2p.close();
+            info!("r2p closed");
+
+            info!("Writing extracted data to file");
+            self.write_to_json(&json!(function_local_variable_xrefs))
+        } else {
+            error!(
+                "Failed to extract local variable xrefs - Error in r2 extraction for {:?}",
+                self.file_path
+            )
+        }
+    }
+
     // r2 commands to structs
     fn get_ghidra_pcode_function(
         &self,
@@ -714,6 +760,21 @@ impl FileToBeProcessed {
             let bb_addresses: BasicBlockInfo = serde_json::from_str(json_str.as_ref())
                 .expect("Unable to convert returned object into a BasicBlockInfo struct!");
             Ok(bb_addresses)
+        } else {
+            Err(json.unwrap_err())
+        }
+    }
+
+    fn get_local_variable_xref_details(&self, function_addr: u64, r2p: &mut R2Pipe) -> Result<LocalVariableXrefs, r2pipe::Error> {
+        info!("Getting local variable xref details");
+        Self::go_to_address(r2p, function_addr);
+        let json = r2p.cmd("axvj").expect("axvj command failed");
+
+        // Convert returned JSON into a BasicBlockInfo struct
+        if let Ok(json_str) = json {
+            let local_variable_xrefs: LocalVariableXrefs = serde_json::from_str(json_str.as_ref())
+                .expect("Unable to convert returned object into a BasicBlockInfo struct!");
+            Ok(local_variable_xrefs)
         } else {
             Err(json.unwrap_err())
         }
