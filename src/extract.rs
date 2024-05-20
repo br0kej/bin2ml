@@ -39,6 +39,7 @@ pub enum ExtractionJobType {
     CallGraphs,
     FuncInfo,
     Decompilation,
+    PCode,
 }
 
 #[derive(Debug)]
@@ -246,6 +247,15 @@ pub struct Annotation {
     pub offset: Option<i64>,
 }
 
+
+// Structs  for pdgsd - Ghidra PCode JSON output
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PCodeJSON {
+    pub pcode: Vec<String>,
+    pub asm: Option<Vec<String>>,
+}
+
 impl ExtractionJob {
     pub fn new(
         input_path: &PathBuf,
@@ -278,6 +288,7 @@ impl ExtractionJob {
                 "xrefs" => Ok(ExtractionJobType::FunctionXrefs),
                 "cg" => Ok(ExtractionJobType::CallGraphs),
                 "decomp" => Ok(ExtractionJobType::Decompilation),
+                "pcode" => Ok(ExtractionJobType::PCode),
                 _ => bail!("Incorrect command type - got {}", mode),
             }
         }
@@ -533,7 +544,52 @@ impl FileToBeProcessed {
 
     }
 
+    pub fn extract_pcode_function(&self) {
+        info!("Starting pcode extraction");
+        let mut r2p = self.setup_r2_pipe();
+        let function_details = self.get_function_name_list(&mut r2p);
+        let mut function_pcode: HashMap<String, PCodeJSON> = HashMap::new();
+
+        if function_details.is_ok() {
+            for function in function_details.unwrap().iter() {
+                let ret = self.get_ghidra_pcode_function(function.offset, function.ninstrs, &mut r2p);
+                function_pcode.insert(function.name.clone(), ret.unwrap());
+            }
+            info!("Pcode extracted successfully for all functions.");
+            r2p.close();
+            info!("r2p closed");
+            info!("Writing extracted data to file");
+            self.write_to_json(&json!(function_pcode))
+        } else {
+            error!(
+                "Failed to extract function decompilation - Error in r2 extraction for {:?}",
+                self.file_path
+            )
+        }
+    }
+
     // r2 commands to structs
+    fn get_ghidra_pcode_function(&self, function_addr: u64, num_instructons: i64, r2p: &mut R2Pipe) -> Result<PCodeJSON, r2pipe::Error> {
+        Self::go_to_address(r2p, function_addr);
+        let pcode_ret = r2p.cmd(format!("pdgsd {}", num_instructons).as_str())?;
+        let lines = pcode_ret.lines();
+        let mut asm_ins = Vec::new();
+        let mut pcode_ins = Vec::new();
+
+        for line in lines {
+            if line.starts_with("0x") {
+                asm_ins.push(line.trim().to_string());
+            } else {
+                pcode_ins.push(line.trim().to_string());
+            }
+        }
+
+        Ok(PCodeJSON {
+            pcode: pcode_ins,
+            asm: Some(asm_ins),
+        })
+    }
+
     fn get_ghidra_decomp(&self, function_addr: u64, r2p: &mut R2Pipe) -> Result<DecompJSON, r2pipe::Error> {
         Self::go_to_address(r2p, function_addr);
         let json = r2p.cmd("pdgj")?;
