@@ -39,7 +39,8 @@ pub enum ExtractionJobType {
     CallGraphs,
     FuncInfo,
     Decompilation,
-    PCode,
+    PCodeFunc,
+    PCodeBB,
 }
 
 #[derive(Debug)]
@@ -247,13 +248,36 @@ pub struct Annotation {
     pub offset: Option<i64>,
 }
 
-
 // Structs  for pdgsd - Ghidra PCode JSON output
-
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PCodeJSON {
     pub pcode: Vec<String>,
     pub asm: Option<Vec<String>>,
+}
+
+// Structs for pdgsd + basic block connectivity - Ghidra PCode JSON Output + afbj
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PCodeJsonWithBB {
+    pub pcode: Vec<String>,
+    pub asm: Option<Vec<String>>,
+    pub bb_info: BasicBlockEntry,
+}
+
+// Structs for afbj - Basic Block JSON output
+pub type BasicBlockInfo = Vec<BasicBlockEntry>;
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BasicBlockEntry {
+    pub addr: i64,
+    pub size: i64,
+    pub jump: Option<i64>,
+    pub fail: Option<i64>,
+    pub opaddr: f64,
+    pub inputs: i64,
+    pub outputs: i64,
+    pub ninstr: i64,
+    pub instrs: Vec<i64>,
+    pub traced: bool,
 }
 
 impl ExtractionJob {
@@ -288,7 +312,8 @@ impl ExtractionJob {
                 "xrefs" => Ok(ExtractionJobType::FunctionXrefs),
                 "cg" => Ok(ExtractionJobType::CallGraphs),
                 "decomp" => Ok(ExtractionJobType::Decompilation),
-                "pcode" => Ok(ExtractionJobType::PCode),
+                "pcode-func" => Ok(ExtractionJobType::PCodeFunc),
+                "pcode-bb" => Ok(ExtractionJobType::PCodeBB),
                 _ => bail!("Incorrect command type - got {}", mode),
             }
         }
@@ -541,18 +566,18 @@ impl FileToBeProcessed {
                 self.file_path
             )
         }
-
     }
 
     pub fn extract_pcode_function(&self) {
-        info!("Starting pcode extraction");
+        info!("Starting pcode extraction at a function level");
         let mut r2p = self.setup_r2_pipe();
         let function_details = self.get_function_name_list(&mut r2p);
         let mut function_pcode: HashMap<String, PCodeJSON> = HashMap::new();
 
         if function_details.is_ok() {
             for function in function_details.unwrap().iter() {
-                let ret = self.get_ghidra_pcode_function(function.offset, function.ninstrs, &mut r2p);
+                let ret =
+                    self.get_ghidra_pcode_function(function.offset, function.ninstrs, &mut r2p);
                 function_pcode.insert(function.name.clone(), ret.unwrap());
             }
             info!("Pcode extracted successfully for all functions.");
@@ -568,8 +593,51 @@ impl FileToBeProcessed {
         }
     }
 
+    pub fn extract_pcode_basic_block(&self) {
+        info!("Starting pcode extraction for each basic block in each function within the binary");
+        let mut r2p = self.setup_r2_pipe();
+        let function_details = self.get_function_name_list(&mut r2p);
+        let mut function_pcode: HashMap<String, HashMap<String, PCodeJsonWithBB>> = HashMap::new();
+
+        if function_details.is_ok() {
+            for function in function_details.unwrap().iter() {
+                let bb_addresses = self.get_basic_block_addresses(function.offset, &mut r2p);
+                let mut bb_pcode: HashMap<String, PCodeJsonWithBB> = HashMap::new();
+                for bb in bb_addresses.unwrap().iter() {
+                    let ret = self.get_ghidra_pcode_function(bb.addr as u64, bb.ninstr, &mut r2p);
+                    if ret.is_ok() {
+                        let ret = ret.unwrap();
+                        let pcode_json = PCodeJsonWithBB {
+                            pcode: ret.pcode,
+                            asm: ret.asm,
+                            bb_info: bb.clone(),
+                        };
+                        bb_pcode.insert(bb.addr.to_string(), pcode_json);
+                    }
+                }
+
+                function_pcode.insert(function.name.clone(), bb_pcode);
+            }
+            info!("Pcode extracted successfully for all functions.");
+            r2p.close();
+            info!("r2p closed");
+            info!("Writing extracted data to file");
+            self.write_to_json(&json!(function_pcode))
+        } else {
+            error!(
+                "Failed to extract function decompilation - Error in r2 extraction for {:?}",
+                self.file_path
+            )
+        }
+    }
+
     // r2 commands to structs
-    fn get_ghidra_pcode_function(&self, function_addr: u64, num_instructons: i64, r2p: &mut R2Pipe) -> Result<PCodeJSON, r2pipe::Error> {
+    fn get_ghidra_pcode_function(
+        &self,
+        function_addr: u64,
+        num_instructons: i64,
+        r2p: &mut R2Pipe,
+    ) -> Result<PCodeJSON, r2pipe::Error> {
         Self::go_to_address(r2p, function_addr);
         let pcode_ret = r2p.cmd(format!("pdgsd {}", num_instructons).as_str())?;
         let lines = pcode_ret.lines();
@@ -590,7 +658,11 @@ impl FileToBeProcessed {
         })
     }
 
-    fn get_ghidra_decomp(&self, function_addr: u64, r2p: &mut R2Pipe) -> Result<DecompJSON, r2pipe::Error> {
+    fn get_ghidra_decomp(
+        &self,
+        function_addr: u64,
+        r2p: &mut R2Pipe,
+    ) -> Result<DecompJSON, r2pipe::Error> {
         Self::go_to_address(r2p, function_addr);
         let json = r2p.cmd("pdgj")?;
 
@@ -619,6 +691,29 @@ impl FileToBeProcessed {
             let json_obj: Vec<AFIJFunctionInfo> =
                 serde_json::from_str(json_str.as_ref()).expect("Unable to convert to JSON object!");
             Ok(json_obj)
+        } else {
+            Err(json.unwrap_err())
+        }
+    }
+
+    fn get_basic_block_addresses(
+        &self,
+        function_addr: u64,
+        r2p: &mut R2Pipe,
+    ) -> Result<BasicBlockInfo, r2pipe::Error> {
+        info!(
+            "Getting the basic block information for function @ {}",
+            function_addr
+        );
+        Self::go_to_address(r2p, function_addr);
+        // Get basic block information
+        let json = r2p.cmd("afbj");
+
+        // Convert returned JSON into a BasicBlockInfo struct
+        if let Ok(json_str) = json {
+            let bb_addresses: BasicBlockInfo = serde_json::from_str(json_str.as_ref())
+                .expect("Unable to convert returned object into a BasicBlockInfo struct!");
+            Ok(bb_addresses)
         } else {
             Err(json.unwrap_err())
         }

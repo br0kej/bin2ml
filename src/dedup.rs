@@ -14,8 +14,8 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::string::String;
 
-use std::{fs, vec};
 use std::process::exit;
+use std::{fs, vec};
 use walkdir::{DirEntry, WalkDir};
 
 #[derive(Serialize, Deserialize, Debug)]

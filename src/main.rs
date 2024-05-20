@@ -274,7 +274,7 @@ enum Commands {
         output_dir: PathBuf,
 
         /// The extraction mode
-        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "reg", "cfg", "xrefs","cg", "decomp", "pcode"])
+        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "reg", "cfg", "xrefs","cg", "decomp", "pcode-func", "pcode-bb"])
         .map(|s| s.parse::<String>().unwrap()),)]
         mode: String,
 
@@ -916,7 +916,6 @@ fn main() {
             use_curl_pdb,
             with_annotations,
         } => {
-
             info!("Creating extraction job");
             if !output_dir.exists() {
                 error!("Output directory does not exist - {:?}. Create the directory and re-run again. Exiting...", output_dir);
@@ -929,7 +928,7 @@ fn main() {
                 debug,
                 extended_analysis,
                 use_curl_pdb,
-                with_annotations
+                with_annotations,
             )
             .unwrap();
 
@@ -990,14 +989,22 @@ fn main() {
                         .par_iter()
                         .progress()
                         .for_each(|path| path.extract_decompilation());
-                } else if job.job_type == ExtractionJobType::PCode {
-                    info!("Extraction Job Type: PCode");
+                } else if job.job_type == ExtractionJobType::PCodeFunc {
+                    info!("Extraction Job Type: PCode Function");
                     info!("Starting Parallel generation.");
                     #[allow(clippy::redundant_closure)]
                     job.files_to_be_processed
                         .par_iter()
                         .progress()
                         .for_each(|path| path.extract_pcode_function());
+                } else if job.job_type == ExtractionJobType::PCodeBB {
+                    info!("Extraction Job Type: PCode Basic Block");
+                    info!("Starting Parallel generation.");
+                    #[allow(clippy::redundant_closure)]
+                    job.files_to_be_processed
+                        .par_iter()
+                        .progress()
+                        .for_each(|path| path.extract_pcode_basic_block());
                 }
             } else if job.input_path_type == PathType::File {
                 info!("Single file found");
@@ -1019,8 +1026,10 @@ fn main() {
                 } else if job.job_type == ExtractionJobType::Decompilation {
                     info!("Extraction Job type: Decompilation");
                     job.files_to_be_processed[0].extract_decompilation()
-                } else if job.job_type == ExtractionJobType::PCode {
+                } else if job.job_type == ExtractionJobType::PCodeFunc {
                     job.files_to_be_processed[0].extract_pcode_function()
+                } else if job.job_type == ExtractionJobType::PCodeBB {
+                    job.files_to_be_processed[0].extract_pcode_basic_block()
                 }
                 info!("Extraction complete for {:?}", fpath)
             }
