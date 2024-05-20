@@ -152,9 +152,9 @@ impl AGFJFile {
         let fname_string: PathBuf =
             get_save_file_path(&self.filename, &self.output_path, None, None, None);
         let fname_string = if esil {
-            format!("{:?}-esil-singles-rwdfs.txt", fname_string)
+            format!("{}-esil-singles-rwdfs.txt", fname_string.to_string_lossy())
         } else {
-            format!("{:?}-dis-singles-rwdfs.txt", fname_string)
+            format!("{}-dis-singles-rwdfs.txt", fname_string.to_string_lossy())
         };
 
         if !Path::new(&fname_string).exists() {

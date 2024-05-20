@@ -178,25 +178,25 @@ impl AGFJFunc {
                 if hop_counter >= max_hops {
                     hop_counter = 0;
                     break;
-                } else {
-                    let block_offset = self.addr_idx.as_ref().unwrap()[visited.index()];
-                    let basic_block: Vec<&ACFJBlock> = self
-                        .blocks
-                        .iter()
-                        .filter(|x| x.offset == block_offset)
-                        .collect();
-
-                    if !basic_block.is_empty() {
-                        if esil {
-                            let bb_esil = basic_block.first().unwrap().get_esil_bb(reg_norm);
-                            single_disasm_walk.push(bb_esil)
-                        } else {
-                            let bb_ins = basic_block.first().unwrap().get_ins(reg_norm);
-                            single_disasm_walk.push(bb_ins)
-                        }
-                    }
-                    hop_counter += 1;
                 }
+                let block_offset = self.addr_idx.as_ref().unwrap()[visited.index()];
+                let basic_block: Vec<&ACFJBlock> = self
+                    .blocks
+                    .iter()
+                    .filter(|x| x.offset == block_offset)
+                    .collect();
+
+                if !basic_block.is_empty() {
+                    if esil {
+                        let bb_esil = basic_block.first().unwrap().get_esil_bb(reg_norm);
+                        single_disasm_walk.push(bb_esil)
+                    } else {
+                        let bb_ins = basic_block.first().unwrap().get_ins(reg_norm);
+                        single_disasm_walk.push(bb_ins)
+                    }
+                }
+                hop_counter += 1;
+
             }
             if pairs {
                 let single_disasm_walk: Vec<String> =

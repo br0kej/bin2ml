@@ -274,7 +274,7 @@ enum Commands {
         output_dir: PathBuf,
 
         /// The extraction mode
-        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "reg", "cfg", "xrefs","cg"])
+        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "reg", "cfg", "func-xrefs","cg", "decomp", "pcode-func", "pcode-bb", "localvar-xrefs"])
         .map(|s| s.parse::<String>().unwrap()),)]
         mode: String,
 
@@ -290,6 +290,9 @@ enum Commands {
 
         #[arg(long, default_value = "true")]
         use_curl_pdb: bool,
+
+        #[arg(long, default_value = "false")]
+        with_annotations: bool,
     },
     /// Generate single embeddings on the fly
     ///
@@ -911,6 +914,7 @@ fn main() {
             debug,
             extended_analysis,
             use_curl_pdb,
+            with_annotations,
         } => {
             info!("Creating extraction job");
             if !output_dir.exists() {
@@ -924,6 +928,7 @@ fn main() {
                 debug,
                 extended_analysis,
                 use_curl_pdb,
+                with_annotations,
             )
             .unwrap();
 
@@ -976,6 +981,38 @@ fn main() {
                         .par_iter()
                         .progress()
                         .for_each(|path| path.extract_function_info());
+                } else if job.job_type == ExtractionJobType::Decompilation {
+                    info!("Extraction Job Type: Decompilation");
+                    info!("Starting Parallel generation.");
+                    #[allow(clippy::redundant_closure)]
+                    job.files_to_be_processed
+                        .par_iter()
+                        .progress()
+                        .for_each(|path| path.extract_decompilation());
+                } else if job.job_type == ExtractionJobType::PCodeFunc {
+                    info!("Extraction Job Type: PCode Function");
+                    info!("Starting Parallel generation.");
+                    #[allow(clippy::redundant_closure)]
+                    job.files_to_be_processed
+                        .par_iter()
+                        .progress()
+                        .for_each(|path| path.extract_pcode_function());
+                } else if job.job_type == ExtractionJobType::PCodeBB {
+                    info!("Extraction Job Type: PCode Basic Block");
+                    info!("Starting Parallel generation.");
+                    #[allow(clippy::redundant_closure)]
+                    job.files_to_be_processed
+                        .par_iter()
+                        .progress()
+                        .for_each(|path| path.extract_pcode_basic_block());
+                } else if  job.job_type == ExtractionJobType::LocalVariableXrefs {
+                    info!("Extraction Job Type: Local Variable Xrefs");
+                    info!("Starting Parallel generation.");
+                    #[allow(clippy::redundant_closure)]
+                    job.files_to_be_processed
+                        .par_iter()
+                        .progress()
+                        .for_each(|path| path.extract_local_variable_xrefs());
                 }
             } else if job.input_path_type == PathType::File {
                 info!("Single file found");
@@ -994,6 +1031,15 @@ fn main() {
                 } else if job.job_type == ExtractionJobType::FuncInfo {
                     info!("Extraction Job type: Function Info");
                     job.files_to_be_processed[0].extract_function_info()
+                } else if job.job_type == ExtractionJobType::Decompilation {
+                    info!("Extraction Job type: Decompilation");
+                    job.files_to_be_processed[0].extract_decompilation()
+                } else if job.job_type == ExtractionJobType::PCodeFunc {
+                    job.files_to_be_processed[0].extract_pcode_function()
+                } else if job.job_type == ExtractionJobType::PCodeBB {
+                    job.files_to_be_processed[0].extract_pcode_basic_block()
+                } else if job.job_type == ExtractionJobType::LocalVariableXrefs {
+                    job.files_to_be_processed[0].extract_local_variable_xrefs()
                 }
                 info!("Extraction complete for {:?}", fpath)
             }
