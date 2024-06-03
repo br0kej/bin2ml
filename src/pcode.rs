@@ -149,14 +149,7 @@ impl PCodeFile {
     }
 
     pub fn execute_data_generation(mut self) {
-        match self.pcode_file_type {
-            PCodeFileTypes::PCodeJsonFile => {
-                self.process_pcode_json();
-            }
-            PCodeFileTypes::PCodeWithBBFile => {
-                self.process_pcode_with_bb_info();
-            }
-        }
+        self.process_pcode_json()
     }
 
     /// Process a PCodeJSON file and output each PCode instruction as a line within a text file
@@ -166,7 +159,7 @@ impl PCodeFile {
     /// corresponds to two instructions that are sequential and are only ever
     /// sampled from within a given function (i.e you won't get the last of one function and
     /// then the first of another)
-    fn pcode_json_sngle_instruction(&mut self, fname_string: PathBuf) {
+    fn pcode_json_single_instruction(&mut self, fname_string: PathBuf) {
         let pcode_obj = self.pcode_obj.clone().unwrap();
 
         let (sender, receiver) = channel();
@@ -274,40 +267,20 @@ impl PCodeFile {
                 exit(1)
             }
 
-            match self.format_type {
-                FormatMode::SingleInstruction => {
-                    self.pcode_json_sngle_instruction(fname_string);
+            match (self.format_type, self.pcode_file_type.clone()) {
+                (FormatMode::SingleInstruction, PCodeFileTypes::PCodeJsonFile) => {
+                    self.pcode_json_single_instruction(fname_string);
                 }
-                FormatMode::FuncAsString => {
+                (FormatMode::FuncAsString, PCodeFileTypes::PCodeJsonFile) => {
                     self.pcode_json_func_as_string(fname_string);
                 }
-                _ => {
-                    println!("Invalid Format Mode");
-                }
-            }
-        } else {
-            error!("File already exists: {:?}", fname_string);
-        }
-    }
-
-    fn process_pcode_with_bb_info(&mut self) {
-        let fname_string: PathBuf = self.get_output_filepath();
-
-        if !Path::new(&fname_string).exists() {
-            let ret = self.load_and_deserialize();
-
-            if ret.is_err() {
-                error!("Error loading and deserializing PCode file");
-                exit(1)
-            }
-
-            match self.format_type {
-                FormatMode::SingleInstruction => {
+                (FormatMode::SingleInstruction, PCodeFileTypes::PCodeWithBBFile) => {
                     self.pcode_json_with_bb_info_single_instruction(fname_string);
                 }
-                FormatMode::FuncAsString => {
+                (FormatMode::FuncAsString, PCodeFileTypes::PCodeWithBBFile) => {
                     self.pcode_json_with_bb_info_func_as_string(fname_string);
                 }
+
                 _ => {
                     println!("Invalid Format Mode");
                 }

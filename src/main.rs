@@ -897,7 +897,10 @@ fn main() {
                                 .expect("Unable to load PCode file");
                             file.execute_data_generation();
                         }
-                        _ => {}
+                        _ => {
+                            error!("Invalid instruction type: {:?}. Exiting..", instruction_type);
+                            exit(1)
+                        }
                     }
                 } else {
                     info!("Multiple files found. Will parallel process.");
