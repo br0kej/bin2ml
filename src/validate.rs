@@ -31,6 +31,7 @@ fn check_file_is_expected_type(filepath: &Path, command: &str) {
         x if x.contains("_cfg.json") => "controlflow",
         x if x.contains("_finfo.json") => "function_info",
         x if x.contains("_pcode-func.json") => "pcode",
+        x if x.contains("_pcode-bb.json") => "pcode",
         _ => "",
     };
 
