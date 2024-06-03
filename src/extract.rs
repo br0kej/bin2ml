@@ -256,28 +256,42 @@ pub struct PCodeJSON {
     pub asm: Option<Vec<String>>,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PCodeJSONWithFuncName {
+    pub function_name: String,
+    pub pcode: PCodeJSON,
+}
+
+
 // Structs for pdgsd + basic block connectivity - Ghidra PCode JSON Output + afbj
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PCodeJsonWithBB {
+    pub block_start_adr: u64,
     pub pcode: Vec<String>,
     pub asm: Option<Vec<String>>,
-    pub bb_info: BasicBlockEntry,
+    pub bb_info: BasicBlockMetadataEntry,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PCodeJsonWithBBAndFuncName {
+    pub function_name: String,
+    pub pcode_blocks: Vec<PCodeJsonWithBB>,
 }
 
 // Structs for afbj - Basic Block JSON output
-pub type BasicBlockInfo = Vec<BasicBlockEntry>;
+pub type BasicBlockInfo = Vec<BasicBlockMetadataEntry>;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct BasicBlockEntry {
-    pub addr: i64,
-    pub size: i64,
-    pub jump: Option<i64>,
-    pub fail: Option<i64>,
+pub struct BasicBlockMetadataEntry {
+    pub addr: u64,
+    pub size: u64,
+    pub jump: Option<u64>,
+    pub fail: Option<u64>,
     pub opaddr: f64,
-    pub inputs: i64,
-    pub outputs: i64,
-    pub ninstr: i64,
-    pub instrs: Vec<i64>,
+    pub inputs: u64,
+    pub outputs: u64,
+    pub ninstr: u64,
+    pub instrs: Vec<u64>,
     pub traced: bool,
 }
 
@@ -593,13 +607,19 @@ impl FileToBeProcessed {
         info!("Starting pcode extraction at a function level");
         let mut r2p = self.setup_r2_pipe();
         let function_details = self.get_function_name_list(&mut r2p);
-        let mut function_pcode: HashMap<String, PCodeJSON> = HashMap::new();
+        let mut function_pcode = Vec::new();
 
         if function_details.is_ok() {
             for function in function_details.unwrap().iter() {
                 let ret =
                     self.get_ghidra_pcode_function(function.offset, function.ninstrs, &mut r2p);
-                function_pcode.insert(function.name.clone(), ret.unwrap());
+
+                let formatted_obj = PCodeJSONWithFuncName {
+                    function_name: function.name.clone(),
+                    pcode: ret.unwrap(),
+                };
+
+                function_pcode.push(formatted_obj);
             }
             info!("Pcode extracted successfully for all functions.");
             r2p.close();
@@ -618,26 +638,30 @@ impl FileToBeProcessed {
         info!("Starting pcode extraction for each basic block in each function within the binary");
         let mut r2p = self.setup_r2_pipe();
         let function_details = self.get_function_name_list(&mut r2p);
-        let mut function_pcode: HashMap<String, HashMap<String, PCodeJsonWithBB>> = HashMap::new();
+        let mut function_pcode = Vec::new();
 
         if function_details.is_ok() {
             for function in function_details.unwrap().iter() {
                 let bb_addresses = self.get_basic_block_addresses(function.offset, &mut r2p);
-                let mut bb_pcode: HashMap<String, PCodeJsonWithBB> = HashMap::new();
+                let mut bb_pcode: Vec<PCodeJsonWithBB> = Vec::new();
                 for bb in bb_addresses.unwrap().iter() {
-                    let ret = self.get_ghidra_pcode_function(bb.addr as u64, bb.ninstr, &mut r2p);
+                    let ret = self.get_ghidra_pcode_function(bb.addr as u64, bb.ninstr.try_into().unwrap(), &mut r2p);
                     if ret.is_ok() {
                         let ret = ret.unwrap();
                         let pcode_json = PCodeJsonWithBB {
+                            block_start_adr: bb.addr,
                             pcode: ret.pcode,
                             asm: ret.asm,
                             bb_info: bb.clone(),
                         };
-                        bb_pcode.insert(bb.addr.to_string(), pcode_json);
+                        bb_pcode.push(pcode_json);
                     }
                 }
 
-                function_pcode.insert(function.name.clone(), bb_pcode);
+                function_pcode.push(PCodeJsonWithBBAndFuncName {
+                    function_name: function.name.clone(),
+                    pcode_blocks: bb_pcode,
+                });
             }
             info!("Pcode extracted successfully for all functions.");
             r2p.close();

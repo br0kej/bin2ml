@@ -1,8 +1,7 @@
 use crate::agfj::AGFJFunc;
-use crate::extract::{BasicBlockEntry, PCodeJSON, PCodeJsonWithBB};
+use crate::extract::{PCodeJSON, PCodeJsonWithBBAndFuncName};
 use crate::files::FormatMode;
 use crate::utils::get_save_file_path;
-use enum_as_inner;
 use enum_as_inner::EnumAsInner;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::prelude::{IntoParallelRefMutIterator, ParallelIterator};
@@ -18,7 +17,7 @@ use std::sync::mpsc::channel;
 #[serde(untagged)]
 pub enum PCodeDataTypes {
     PCodeJSON(PCodeJSON),
-    PCodeJsonWithBB(PCodeJsonWithBB),
+    PCodeJsonWithBB(PCodeJsonWithBBAndFuncName),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -74,19 +73,19 @@ impl PCodeToNLP for PCodeJSON {
     }
 }
 
-impl PCodeToNLP for PCodeJsonWithBB {
-    fn get_linear_walk(&self, pairs: bool) {
-
+impl PCodeToNLP for PCodeJsonWithBBAndFuncName {
+    fn get_linear_walk(&self, pairs: bool) -> Vec<String> {
+        todo!("need to implement this")
     }
 
-    fn get_func_string(&self, fname: &String) {
-        todo!("need to implmenet this")
+    fn get_func_string(&self, fname: &String) -> HashMap<String, Vec<String>> {
+        todo!("need to implement this")
     }
 }
 
-impl PCodeJsonWithBB {
+impl PCodeJsonWithBBAndFuncName {
     pub fn get_func_string_with_metdata(&self, fname: &String) {
-        todo!("need to implmenet this")
+        todo!("need to implement this")
     }
 }
 
@@ -218,7 +217,7 @@ impl PCodeFile {
         let fname_string: PathBuf =
             get_save_file_path(&self.filename, &self.output_path, None, None, None);
 
-        let fname_string = match (self.format_type.clone(), self.pcode_file_type.clone()) {
+        let fname_string = match (self.format_type, self.pcode_file_type.clone()) {
             (FormatMode::SingleInstruction, PCodeFileTypes::PCodeJsonFile) => {
                 format!("{}-pcode-singles.txt", fname_string.to_string_lossy())
             }
@@ -242,7 +241,12 @@ impl PCodeFile {
         let fname_string: PathBuf = self.get_output_filepath();
 
         if !Path::new(&fname_string).exists() {
-            self.load_and_deserialize();
+            let ret = self.load_and_deserialize();
+
+            if ret.is_err() {
+                error!("Error loading and deserializing PCode file");
+                exit(1)
+            }
 
             match self.format_type {
                 FormatMode::SingleInstruction => {
