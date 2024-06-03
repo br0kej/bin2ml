@@ -1,10 +1,9 @@
-use crate::agfj::AGFJFunc;
 use crate::extract::{PCodeJSONWithFuncName, PCodeJsonWithBB, PCodeJsonWithBBAndFuncName};
 use crate::files::FormatMode;
 use crate::utils::get_save_file_path;
 use enum_as_inner::EnumAsInner;
 use rayon::iter::IntoParallelRefIterator;
-use rayon::prelude::{IntoParallelRefMutIterator, ParallelIterator};
+use rayon::prelude::ParallelIterator;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{read_to_string, File};
@@ -46,7 +45,7 @@ impl PCodeToNLP for PCodeJSONWithFuncName {
     fn get_linear_walk(&self, pairs: bool) -> Vec<String> {
         if pairs {
             let pcode: &Vec<String> = self.pcode.pcode.as_ref();
-            let mut ret = pcode.iter().zip(pcode.iter().skip(1)).collect::<Vec<_>>();
+            let ret = pcode.iter().zip(pcode.iter().skip(1)).collect::<Vec<_>>();
 
             let ret = ret
                 .iter()
@@ -79,7 +78,7 @@ impl PCodeToNLP for PCodeJsonWithBBAndFuncName {
         if pairs {
             for block in pcode_blocks {
                 let pcode: &Vec<String> = block.pcode.as_ref();
-                let mut ret_inner = pcode.iter().zip(pcode.iter().skip(1)).collect::<Vec<_>>();
+                let ret_inner = pcode.iter().zip(pcode.iter().skip(1)).collect::<Vec<_>>();
                 let ret_inner: Vec<String> = ret_inner
                     .iter()
                     .map(|(x, y)| format!("{} ---- {}", x, y))
@@ -111,13 +110,8 @@ impl PCodeToNLP for PCodeJsonWithBBAndFuncName {
     }
 }
 
-impl PCodeJsonWithBBAndFuncName {
-    pub fn get_func_string_with_metdata(&self, fname: &String) {
-        todo!("need to implement this")
-    }
-}
-
 impl PCodeFile {
+    #[allow(dead_code)]
     pub fn new(
         filename: PathBuf,
         output_path: PathBuf,
@@ -133,7 +127,7 @@ impl PCodeFile {
             min_blocks,
             instruction_pairs,
             format_type,
-            pcode_file_type: pcode_file_type,
+            pcode_file_type,
         }
     }
 
@@ -154,14 +148,6 @@ impl PCodeFile {
         self.pcode_obj = Some(pcode_obj);
     }
 
-    pub fn get_pcode_obj(&self) -> Option<&Vec<PCodeDataTypes>> {
-        self.pcode_obj.as_ref()
-    }
-
-    pub fn get_pcode_obj_mut(&mut self) -> Option<&mut Vec<PCodeDataTypes>> {
-        self.pcode_obj.as_mut()
-    }
-
     pub fn execute_data_generation(mut self) {
         match self.pcode_file_type {
             PCodeFileTypes::PCodeJsonFile => {
@@ -169,10 +155,6 @@ impl PCodeFile {
             }
             PCodeFileTypes::PCodeWithBBFile => {
                 self.process_pcode_with_bb_info();
-            }
-            _ => {
-                error!("Invalid PCode File Type - Exiting");
-                exit(1)
             }
         }
     }
@@ -185,7 +167,7 @@ impl PCodeFile {
     /// sampled from within a given function (i.e you won't get the last of one function and
     /// then the first of another)
     fn pcode_json_sngle_instruction(&mut self, fname_string: PathBuf) {
-        let mut pcode_obj = self.pcode_obj.clone().unwrap();
+        let pcode_obj = self.pcode_obj.clone().unwrap();
 
         let (sender, receiver) = channel();
 
@@ -216,7 +198,7 @@ impl PCodeFile {
     ///
     /// A function string is each pcode instruction within a function concatenated together
     fn pcode_json_func_as_string(&mut self, fname_string: PathBuf) {
-        let mut pcode_obj = self.pcode_obj.clone().unwrap();
+        let pcode_obj = self.pcode_obj.clone().unwrap();
 
         let (sender, receiver) = channel();
 
@@ -336,7 +318,7 @@ impl PCodeFile {
     }
 
     fn pcode_json_with_bb_info_single_instruction(&mut self, fname_string: PathBuf) {
-        let mut pcode_obj = self.pcode_obj.clone().unwrap();
+        let pcode_obj = self.pcode_obj.clone().unwrap();
 
         let (sender, receiver) = channel();
 
@@ -364,7 +346,7 @@ impl PCodeFile {
     }
 
     fn pcode_json_with_bb_info_func_as_string(&mut self, fname_string: PathBuf) {
-        let mut pcode_obj = self.pcode_obj.clone().unwrap();
+        let pcode_obj = self.pcode_obj.clone().unwrap();
 
         let (sender, receiver) = channel();
 

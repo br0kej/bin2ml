@@ -890,7 +890,7 @@ fn main() {
                                 min_blocks: Option::from(*min_blocks),
                                 instruction_pairs: *pairs,
                                 format_type,
-                                pcode_file_type: pcode_file_type,
+                                pcode_file_type,
                             };
 
                             file.load_and_deserialize()

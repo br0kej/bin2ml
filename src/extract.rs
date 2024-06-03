@@ -645,7 +645,7 @@ impl FileToBeProcessed {
                 let mut bb_pcode: Vec<PCodeJsonWithBB> = Vec::new();
                 for bb in bb_addresses.unwrap().iter() {
                     let ret = self.get_ghidra_pcode_function(
-                        bb.addr as u64,
+                        bb.addr,
                         bb.ninstr.try_into().unwrap(),
                         &mut r2p,
                     );
