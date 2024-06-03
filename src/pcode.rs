@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::fs::{read_to_string, File};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
+use std::process::exit;
 use std::sync::mpsc::channel;
 
 #[derive(Serialize, Deserialize, Debug, EnumAsInner, Clone)]
@@ -37,8 +38,14 @@ pub struct PCodeFile {
     pub pcode_file_type: PCodeFileTypes,
 }
 
-impl PCodeJSON {
-    pub fn get_linear_walk(&self, pairs: bool) -> Vec<String> {
+pub trait PCodeToNLP {
+    fn get_linear_walk(&self, pairs: bool) -> Vec<String>;
+    fn get_func_string(&self, fname: &String) -> HashMap<String, Vec<String>>;
+
+}
+
+impl PCodeToNLP for PCodeJSON {
+    fn get_linear_walk(&self, pairs: bool) -> Vec<String> {
         if pairs {
             let mut ret = self
                 .pcode
@@ -56,7 +63,7 @@ impl PCodeJSON {
         }
     }
 
-    pub fn get_func_string(&self, fname: &String) -> HashMap<String, Vec<String>> {
+    fn get_func_string(&self, fname: &String) -> HashMap<String, Vec<String>> {
         let mut func_string_mapping: HashMap<String, Vec<String>> = HashMap::new();
         let func_string = self
             .pcode
@@ -66,6 +73,23 @@ impl PCodeJSON {
         func_string_mapping
     }
 }
+
+impl PCodeToNLP for PCodeJsonWithBB {
+    fn get_linear_walk(&self, pairs: bool) {
+
+    }
+
+    fn get_func_string(&self, fname: &String) {
+        todo!("need to implmenet this")
+    }
+}
+
+impl PCodeJsonWithBB {
+    pub fn get_func_string_with_metdata(&self, fname: &String) {
+        todo!("need to implmenet this")
+    }
+}
+
 
 impl PCodeFile {
     pub fn new(
@@ -121,11 +145,19 @@ impl PCodeFile {
                 self.process_pcode_json_with_bb_info();
             }
             _ => {
-                println!("Invalid PCode File Type");
+                error!("Invalid PCode File Type - Exiting");
+                exit(1)
             }
         }
     }
 
+    /// Process a PCodeJSON file and output each PCode instruction as a line within a text file
+    ///
+    /// This function is able to output create a text file with either single PCode
+    /// instructions per line or pairs of PCode instructions. A single pair of PCode
+    /// corresponds to two instructions that are sequential and are only ever
+    /// sampled from within a given function (i.e you won't get the last of one function and
+    /// then the first of another)
     fn pcode_json_sngle_instruction(&mut self, fname_string: PathBuf) {
         let mut pcode_obj = self.pcode_obj.clone().unwrap();
 
@@ -155,6 +187,9 @@ impl PCodeFile {
         }
     }
 
+    /// Process a PCodeJSON file and output each functions PCode as a function string
+    ///
+    /// A function string is each pcode instruction within a function concatenated together
     fn pcode_json_func_as_string(&mut self, fname_string: PathBuf) {
         let mut pcode_obj = self.pcode_obj.clone().unwrap();
 
@@ -177,6 +212,8 @@ impl PCodeFile {
         }
     }
 
+    /// Build the output filepath for a given PCodeFile based on the desired output
+    /// format type and input PCode file type.
     fn get_output_filepath(&self) -> PathBuf {
         let fname_string: PathBuf =
             get_save_file_path(&self.filename, &self.output_path, None, None, None);
@@ -196,6 +233,11 @@ impl PCodeFile {
 
         PathBuf::from(fname_string)
     }
+
+    /// Process a PCodeJSON file and output the desired format type
+    ///
+    /// This is a helper function which matches on the format type to
+    /// trigger the appropriate processing function
     fn process_pcode_json(&mut self) {
         let fname_string: PathBuf = self.get_output_filepath();
 
@@ -217,6 +259,7 @@ impl PCodeFile {
             error!("File already exists: {:?}", fname_string);
         }
     }
+
     fn process_pcode_json_with_bb_info(&mut self) {
         let fname_string: PathBuf = self.get_output_filepath();
     }
