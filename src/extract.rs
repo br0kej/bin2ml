@@ -262,7 +262,6 @@ pub struct PCodeJSONWithFuncName {
     pub pcode: PCodeJSON,
 }
 
-
 // Structs for pdgsd + basic block connectivity - Ghidra PCode JSON Output + afbj
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PCodeJsonWithBB {
@@ -645,7 +644,11 @@ impl FileToBeProcessed {
                 let bb_addresses = self.get_basic_block_addresses(function.offset, &mut r2p);
                 let mut bb_pcode: Vec<PCodeJsonWithBB> = Vec::new();
                 for bb in bb_addresses.unwrap().iter() {
-                    let ret = self.get_ghidra_pcode_function(bb.addr as u64, bb.ninstr.try_into().unwrap(), &mut r2p);
+                    let ret = self.get_ghidra_pcode_function(
+                        bb.addr as u64,
+                        bb.ninstr.try_into().unwrap(),
+                        &mut r2p,
+                    );
                     if ret.is_ok() {
                         let ret = ret.unwrap();
                         let pcode_json = PCodeJsonWithBB {
