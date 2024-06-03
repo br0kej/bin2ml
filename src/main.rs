@@ -33,6 +33,7 @@ pub mod files;
 pub mod inference;
 pub mod networkx;
 pub mod normalisation;
+mod pcode;
 pub mod processors;
 pub mod tokeniser;
 pub mod utils;
@@ -46,6 +47,7 @@ use crate::utils::get_save_file_path;
 
 use crate::combos::{ComboJob, FinfoTiknibFile};
 use crate::networkx::CallGraphNodeFeatureType;
+use crate::pcode::{PCodeFile, PCodeFileTypes};
 use crate::validate::validate_input;
 use bb::{FeatureType, InstructionMode};
 #[cfg(feature = "goblin")]
@@ -168,7 +170,7 @@ enum GenerateSubCommands {
         path: PathBuf,
 
         /// The type of data to be generated
-        #[arg(short, long, value_name = "DATA_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["esil", "disasm"])
+        #[arg(short, long, value_name = "DATA_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["esil", "disasm", "pcode"])
         .map(|s| s.parse::<String>().unwrap()),)]
         instruction_type: String,
 
@@ -196,6 +198,11 @@ enum GenerateSubCommands {
         /// Toggle to determine if pairs should be generated
         #[arg(long, default_value = "false")]
         pairs: bool,
+
+        /// Determine the pcode filetype
+        #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(["pcode", "pcode-with-bb-info"])
+        .map(|s| s.parse::<String>().unwrap()))]
+        pcode_file_format: String,
     },
     /// Generate metadata/feature subsets from extracted data
     Metadata {
@@ -817,10 +824,12 @@ fn main() {
                 random_walk,
                 reg_norm,
                 pairs,
+                pcode_file_format,
             } => {
                 let instruction_type = match instruction_type.as_str() {
                     "esil" => InstructionMode::ESIL,
                     "disasm" => InstructionMode::Disasm,
+                    "pcode" => InstructionMode::PCode,
                     _ => InstructionMode::Invalid,
                 };
 
@@ -848,17 +857,48 @@ fn main() {
                 if Path::new(path).is_file() {
                     info!("Single file found");
                     validate_input(path, "nlp");
-                    let file = AGFJFile {
-                        functions: None,
-                        filename: path.to_owned(),
-                        output_path: data_out_path.to_owned(),
-                        min_blocks: *min_blocks,
-                        feature_type: None,
-                        architecture: None,
-                        reg_norm: *reg_norm,
-                    };
+                    match instruction_type {
+                        InstructionMode::ESIL | InstructionMode::Disasm => {
+                            let file = AGFJFile {
+                                functions: None,
+                                filename: path.to_owned(),
+                                output_path: data_out_path.to_owned(),
+                                min_blocks: *min_blocks,
+                                feature_type: None,
+                                architecture: None,
+                                reg_norm: *reg_norm,
+                            };
 
-                    file.execute_data_generation(format_type, instruction_type, random_walk, *pairs)
+                            file.execute_data_generation(
+                                format_type,
+                                instruction_type,
+                                random_walk,
+                                *pairs,
+                            )
+                        }
+                        InstructionMode::PCode => {
+                            let pcode_file_type = match pcode_file_format.as_str() {
+                                "pcode" => PCodeFileTypes::PCodeJsonFile,
+                                "pcode-with-bb-info" => PCodeFileTypes::PCodeWithBBFile,
+                                _ => unreachable!("Invalid PCode file type"),
+                            };
+
+                            let mut file = PCodeFile {
+                                filename: path.to_owned(),
+                                pcode_obj: None,
+                                output_path: data_out_path.to_owned(),
+                                min_blocks: Option::from(*min_blocks),
+                                instruction_pairs: *pairs,
+                                format_type,
+                                pcode_file_type: pcode_file_type,
+                            };
+
+                            file.load_and_deserialize()
+                                .expect("Unable to load PCode file");
+                            file.execute_data_generation();
+                        }
+                        _ => {}
+                    }
                 } else {
                     info!("Multiple files found. Will parallel process.");
                     let file_paths_vec = get_json_paths_from_dir(path, Some("_cfg".to_string()));
@@ -1005,7 +1045,7 @@ fn main() {
                         .par_iter()
                         .progress()
                         .for_each(|path| path.extract_pcode_basic_block());
-                } else if  job.job_type == ExtractionJobType::LocalVariableXrefs {
+                } else if job.job_type == ExtractionJobType::LocalVariableXrefs {
                     info!("Extraction Job Type: Local Variable Xrefs");
                     info!("Starting Parallel generation.");
                     #[allow(clippy::redundant_closure)]

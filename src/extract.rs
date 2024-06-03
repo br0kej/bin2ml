@@ -765,7 +765,11 @@ impl FileToBeProcessed {
         }
     }
 
-    fn get_local_variable_xref_details(&self, function_addr: u64, r2p: &mut R2Pipe) -> Result<LocalVariableXrefs, r2pipe::Error> {
+    fn get_local_variable_xref_details(
+        &self,
+        function_addr: u64,
+        r2p: &mut R2Pipe,
+    ) -> Result<LocalVariableXrefs, r2pipe::Error> {
         info!("Getting local variable xref details");
         Self::go_to_address(r2p, function_addr);
         let json = r2p.cmd("axvj");
