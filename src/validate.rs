@@ -30,6 +30,8 @@ fn check_file_is_expected_type(filepath: &Path, command: &str) {
         x if x.contains("_cg.json") => "callgraph",
         x if x.contains("_cfg.json") => "controlflow",
         x if x.contains("_finfo.json") => "function_info",
+        x if x.contains("_pcode-func.json") => "pcode",
+        x if x.contains("_pcode-bb.json") => "pcode",
         _ => "",
     };
 
@@ -38,7 +40,7 @@ fn check_file_is_expected_type(filepath: &Path, command: &str) {
         "cg" => file_type_provided == "callgraph",
         "metadata_finfo" => file_type_provided == "function_info",
         "metadata_tiknib" => file_type_provided == "controlflow",
-        "nlp" => file_type_provided == "controlflow",
+        "nlp" => (file_type_provided == "controlflow") | (file_type_provided == "pcode"),
         _ => false,
     };
 

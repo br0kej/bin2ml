@@ -1,0 +1,175 @@
+{
+  "entry.init0": {
+    "reads": [],
+    "writes": []
+  },
+  "entry0": {
+    "reads": [
+      {
+        "addrs": [
+          4198
+        ],
+        "name": "arg3"
+      }
+    ],
+    "writes": [
+      {
+        "addrs": [],
+        "name": "arg3"
+      }
+    ]
+  },
+  "loc.imp._ITM_deregisterTMCloneTable": {
+    "reads": [
+      {
+        "addrs": [
+          96,
+          104
+        ],
+        "name": "arg3"
+      },
+      {
+        "addrs": [
+          61,
+          63,
+          208,
+          216,
+          347
+        ],
+        "name": "arg2"
+      },
+      {
+        "addrs": [
+          2,
+          18,
+          343
+        ],
+        "name": "arg4"
+      },
+      {
+        "addrs": [
+          263
+        ],
+        "name": "arg_2h"
+      }
+    ],
+    "writes": [
+      {
+        "addrs": [],
+        "name": "arg3"
+      },
+      {
+        "addrs": [],
+        "name": "arg2"
+      },
+      {
+        "addrs": [],
+        "name": "arg4"
+      },
+      {
+        "addrs": [],
+        "name": "arg_2h"
+      }
+    ]
+  },
+  "main": {
+    "reads": [
+      {
+        "addrs": [
+          4461,
+          4503
+        ],
+        "name": "var_8h"
+      },
+      {
+        "addrs": [
+          4512,
+          4537
+        ],
+        "name": "var_4h"
+      }
+    ],
+    "writes": [
+      {
+        "addrs": [
+          4454
+        ],
+        "name": "var_8h"
+      },
+      {
+        "addrs": [
+          4509
+        ],
+        "name": "var_4h"
+      }
+    ]
+  },
+  "sym..plt.got": {
+    "reads": [],
+    "writes": []
+  },
+  "sym.__do_global_dtors_aux": {
+    "reads": [],
+    "writes": []
+  },
+  "sym.__libc_csu_fini": {
+    "reads": [],
+    "writes": []
+  },
+  "sym.__libc_csu_init": {
+    "reads": [
+      {
+        "addrs": [
+          4607
+        ],
+        "name": "arg3"
+      },
+      {
+        "addrs": [
+          4612
+        ],
+        "name": "arg2"
+      },
+      {
+        "addrs": [
+          4617
+        ],
+        "name": "arg1"
+      }
+    ],
+    "writes": [
+      {
+        "addrs": [],
+        "name": "arg3"
+      },
+      {
+        "addrs": [],
+        "name": "arg2"
+      },
+      {
+        "addrs": [],
+        "name": "arg1"
+      }
+    ]
+  },
+  "sym._fini": {
+    "reads": [],
+    "writes": []
+  },
+  "sym._init": {
+    "reads": [],
+    "writes": []
+  },
+  "sym.deregister_tm_clones": {
+    "reads": [],
+    "writes": []
+  },
+  "sym.imp.printf": {
+    "reads": [],
+    "writes": []
+  },
+  "sym.register_tm_clones": {
+    "reads": [],
+    "writes": []
+  }
+}

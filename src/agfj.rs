@@ -196,7 +196,6 @@ impl AGFJFunc {
                     }
                 }
                 hop_counter += 1;
-
             }
             if pairs {
                 let single_disasm_walk: Vec<String> =

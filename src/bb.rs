@@ -30,6 +30,7 @@ pub enum FeatureType {
 pub enum InstructionMode {
     ESIL,
     Disasm,
+    PCode,
     Invalid,
 }
 
@@ -168,7 +169,7 @@ impl ACFJBlock {
         inference_job: Arc<InferenceJob>,
     ) {
         let mut basic_block: Vec<_> = Vec::new();
-        let normalised_esil = self.get_esil_bb();
+        let normalised_esil = self.get_esil_bb(false);
         for normed_esil_ins in normalised_esil {
             let embedded_esil: Vec<i32> = inference_job.encode(normed_esil_ins.as_str());
             let casted_esil: Vec<f64> = embedded_esil.iter().map(|&val| val as f64).collect();
