@@ -200,7 +200,7 @@ enum GenerateSubCommands {
         pairs: bool,
 
         /// Determine the pcode filetype
-        #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(["pcode", "pcode-with-bb-info"])
+        #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(["pcode-func", "pcode-bb"])
         .map(|s| s.parse::<String>().unwrap()))]
         pcode_file_format: String,
     },
@@ -826,6 +826,12 @@ fn main() {
                 pairs,
                 pcode_file_format,
             } => {
+
+                if !path.exists() {
+                    error!("The path {:?} does not exist!", path);
+                    exit(1)
+                }
+
                 let instruction_type = match instruction_type.as_str() {
                     "esil" => InstructionMode::ESIL,
                     "disasm" => InstructionMode::Disasm,
@@ -878,8 +884,8 @@ fn main() {
                         }
                         InstructionMode::PCode => {
                             let pcode_file_type = match pcode_file_format.as_str() {
-                                "pcode" => PCodeFileTypes::PCodeJsonFile,
-                                "pcode-with-bb-info" => PCodeFileTypes::PCodeWithBBFile,
+                                "pcode-func" => PCodeFileTypes::PCodeJsonFile,
+                                "pcode-bb" => PCodeFileTypes::PCodeWithBBFile,
                                 _ => unreachable!("Invalid PCode file type"),
                             };
 
