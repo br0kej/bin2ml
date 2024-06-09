@@ -826,7 +826,6 @@ fn main() {
                 pairs,
                 pcode_file_format,
             } => {
-
                 if !path.exists() {
                     error!("The path {:?} does not exist!", path);
                     exit(1)
@@ -904,7 +903,10 @@ fn main() {
                             file.execute_data_generation();
                         }
                         _ => {
-                            error!("Invalid instruction type: {:?}. Exiting..", instruction_type);
+                            error!(
+                                "Invalid instruction type: {:?}. Exiting..",
+                                instruction_type
+                            );
                             exit(1)
                         }
                     }
