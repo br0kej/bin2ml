@@ -673,7 +673,7 @@ impl FileToBeProcessed {
             self.write_to_json(&json!(function_pcode))
         } else {
             error!(
-                "Failed to extract function decompilation - Error in r2 extraction for {:?}",
+                "Failed to extract function pcode - Error in r2 extraction for {:?}",
                 self.file_path
             )
         }
@@ -847,7 +847,11 @@ impl FileToBeProcessed {
             .to_string_lossy()
             .to_string();
 
-        fp_filename = fp_filename + "_" + &self.job_type_suffix.clone() + ".json";
+        fp_filename = if self.with_annotations {
+            fp_filename + "_" + &self.job_type_suffix.clone() + "_annotations" + ".json"
+        } else {
+            fp_filename + "_" + &self.job_type_suffix.clone() + ".json"
+        };
 
         let mut output_filepath = PathBuf::new();
         output_filepath.push(self.output_path.clone());
