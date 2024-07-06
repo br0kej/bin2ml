@@ -412,6 +412,7 @@ impl AGFJFunc {
                         info!("Invalid Feature Type. Skipping..");
                         return;
                     }
+                    _ => {}
                 };
 
                 if !edge_list.is_empty() {
