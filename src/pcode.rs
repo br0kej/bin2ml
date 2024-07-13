@@ -11,6 +11,9 @@ use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::sync::mpsc::channel;
+use indicatif::ParallelProgressIterator;
+use petgraph::Graph;
+use crate::networkx::{NetworkxDiGraph, NodeType, PCodeNode};
 
 #[derive(Serialize, Deserialize, Debug, EnumAsInner, Clone)]
 #[serde(untagged)]
@@ -338,5 +341,139 @@ impl PCodeFile {
                 .write_all(string.as_bytes())
                 .expect("Unable to write bytes.");
         }
+    }
+
+    pub fn pcode_json_with_bb_info_generate_cfg(&mut self) -> Result<(), ()>{
+
+        let pcode_obj = self.pcode_obj.clone().unwrap();
+
+        pcode_obj.par_iter().progress().for_each(|function| {
+            let function_name = function.as_p_code_json_with_bb().unwrap().function_name.clone();
+            let pcode_json_with_bb = function.as_p_code_json_with_bb().unwrap();
+            let (graph, start_addrs) = pcode_json_with_bb.get_cfg();
+            let nx_graph = NetworkxDiGraph::from((&graph, pcode_json_with_bb, start_addrs));
+            let mut file_out_path = get_save_file_path(&self.filename, &self.output_path, None, None, None);
+            file_out_path.push(&format!("{}_pcode_cfg.json", &function_name));
+
+            if !file_out_path.parent().unwrap().exists() {
+                std::fs::create_dir_all(&file_out_path.parent().unwrap()).unwrap();
+            }
+
+            let ret = nx_graph.save_to_json(&file_out_path);
+            if ret.is_ok() {
+                debug!("Successfully saved CFG for function: {}", &function_name);
+            } else {
+                error!("Error saving CFG for function: {} - Error: {}", &function_name, ret.err().unwrap());
+            }
+        }
+        );
+        /*
+        for function in pcode_obj {
+            let function_name = function.as_p_code_json_with_bb().unwrap().function_name.clone();
+            let pcode_json_with_bb = function.as_p_code_json_with_bb().unwrap();
+            let (graph, start_addrs) = pcode_json_with_bb.get_cfg();
+            let nx_graph = NetworkxDiGraph::from((&graph, pcode_json_with_bb, start_addrs));
+            let mut file_out_path = get_save_file_path(&self.filename, &self.output_path, None, None, None);
+            file_out_path.push(&format!("{}_pcode_cfg.json", &function_name));
+
+            if !file_out_path.parent().unwrap().exists() {
+                std::fs::create_dir_all(&file_out_path.parent().unwrap()).unwrap();
+            }
+
+            let ret = nx_graph.save_to_json(&file_out_path);
+            if ret.is_ok() {
+                debug!("Successfully saved CFG for function: {}", &function_name);
+            } else {
+                error!("Error saving CFG for function: {} - Error: {}", &function_name, ret.err().unwrap());
+            }
+        }*/
+        Ok(())
+    }
+}
+
+impl PCodeJsonWithBBAndFuncName {
+    pub fn get_cfg(&self) -> (Graph<String, u32>, Vec<u32>) {
+        let pcode_blocks: &Vec<PCodeJsonWithBB> = self.pcode_blocks.as_ref();
+        let mut edge_list: Vec<(u32, u32, u32)> = Vec::new();
+        let mut start_addrs: Vec<u32> = Vec::new();
+        if pcode_blocks.len() == 1 {
+            let mut graph: Graph<String, u32> = Graph::new();
+            graph.add_node(pcode_blocks[0].block_start_adr.to_string());
+            start_addrs.push(pcode_blocks[0].block_start_adr as u32);
+            return (graph, start_addrs)
+        }
+
+        for block in pcode_blocks {
+            if !start_addrs.contains(&(block.block_start_adr as u32)) {
+                start_addrs.push(block.block_start_adr as u32);
+            }
+
+            let block_start_idx = start_addrs.iter().position(|&p| p == block.block_start_adr as u32);
+
+            if block.bb_info.fail.is_some() {
+                let fail = block.bb_info.fail.unwrap();
+                if !start_addrs.contains(&(fail as u32)) {
+                    start_addrs.push(fail as u32);
+                }
+                let fail_idx = start_addrs.iter().position(|&p| p == fail as u32);
+                edge_list.push((block_start_idx.unwrap() as u32, fail_idx.unwrap() as u32, 0));
+            }
+
+            if block.bb_info.jump.is_some() {
+                let jump = block.bb_info.jump.unwrap();
+                if !start_addrs.contains(&(jump as u32)) {
+                    start_addrs.push(jump as u32);
+                }
+                let jump_idx = start_addrs.iter().position(|&p| p == jump as u32);
+                edge_list.push((block_start_idx.unwrap() as u32, jump_idx.unwrap() as u32, 1));
+            }
+
+
+        }
+        (Graph::from_edges(&edge_list), start_addrs)
+    }
+}
+
+
+mod tests {
+    use std::path::PathBuf;
+    use petgraph::visit::NodeCount;
+    use crate::files::FormatMode;
+    use crate::networkx::{NetworkxDiGraph, NodeType, PCodeNode};
+    use crate::pcode::{PCodeDataTypes, PCodeFile, PCodeFileTypes};
+
+    #[test]
+    fn test_pcode_graph_gen() {
+
+        let mut pcode_file = PCodeFile {
+            filename: PathBuf::from("/Users/br0kej/Codez/bin2ml/test_bin_pcode-bb.json"),
+            pcode_obj: None,
+            output_path: Default::default(),
+            min_blocks: None,
+            instruction_pairs: false,
+            format_type: FormatMode::SingleInstruction,
+            pcode_file_type: PCodeFileTypes::PCodeWithBBFile,
+        };
+
+        pcode_file.load_and_deserialize().expect("TODO: panic message");
+
+        // Test the case where a CFG only has a single node
+        let pcode_binding = pcode_file.pcode_obj.unwrap();
+        let pcode_json_with_bb = pcode_binding[0].as_p_code_json_with_bb().unwrap();
+        let (graph, start_addrs) = pcode_json_with_bb.get_cfg();
+        assert_eq!(graph.node_count(), 1);
+        let nx_graph: NetworkxDiGraph<PCodeNode> = NetworkxDiGraph::from((&graph, pcode_json_with_bb, start_addrs));
+        assert_eq!(nx_graph.nodes.len(), 1);
+
+        // Test the case where the CFG has several nodes
+        let pcode_json_with_bb = pcode_binding[10].as_p_code_json_with_bb().unwrap();
+        let (graph, start_addrs) = pcode_json_with_bb.get_cfg();
+        assert_eq!(graph.node_count(), 9);
+        assert_eq!(graph.edge_count(), 11);
+        let nx_graph: NetworkxDiGraph<PCodeNode> = NetworkxDiGraph::from((&graph, pcode_json_with_bb, start_addrs));
+        assert_eq!(nx_graph.nodes.len(), 9);
+        let save_ret = nx_graph.save_to_json("test_pcode_graph.json").is_ok();
+        assert_eq!(save_ret, true);
+        std::fs::remove_file("test_pcode_graph.json").unwrap()
     }
 }

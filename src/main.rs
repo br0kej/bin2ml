@@ -114,7 +114,7 @@ enum GenerateSubCommands {
         output_path: PathBuf,
 
         /// The type of features to generate per basic block (node)
-        #[arg(short, long, value_name = "FEATURE_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["gemini", "discovre", "dgis", "tiknib", "disasm", "esil"])
+        #[arg(short, long, value_name = "FEATURE_TYPE", value_parser = clap::builder::PossibleValuesParser::new(["gemini", "discovre", "dgis", "tiknib", "disasm", "esil", "pcode"])
         .map(|s| s.parse::<String>().unwrap()),)]
         feature_type: Option<String>,
 
@@ -460,6 +460,7 @@ fn main() {
                             "esil" => FeatureType::Esil,
                             #[cfg(feature = "inference")]
                             "embed" => FeatureType::ModelEmbedded,
+                            "pcode" => FeatureType::Pcode,
                             _ => FeatureType::Invalid,
                         };
 
@@ -493,7 +494,7 @@ fn main() {
                                     WalkDir::new(path).into_iter().filter_map(|file| file.ok())
                                 {
                                     if file.path().to_string_lossy().ends_with(".json") {
-                                        validate_input(path, "cfg");
+                                        validate_input(file.path(), "cfg");
                                         agfj_graph_statistical_features(
                                             file.path(),
                                             &min_blocks.unwrap(),
@@ -522,6 +523,56 @@ fn main() {
                                         mean_pool,
                                         embed_dim,
                                     );
+                                }
+                            }
+                        } else if feature_vec_type == FeatureType::Pcode {
+                            if Path::new(path).is_file() {
+                                validate_input(path, "cfg");
+                                info!("Single file found");
+                                let mut file = PCodeFile {
+                                    filename: path.to_owned(),
+                                    pcode_obj: None,
+                                    output_path: output_path.to_owned(),
+                                    min_blocks: *min_blocks,
+                                    instruction_pairs: false,
+                                    format_type: FormatMode::SingleInstruction,
+                                    pcode_file_type: PCodeFileTypes::PCodeJsonFile,
+                                };
+                                let file_ret = file.load_and_deserialize().is_ok();
+                                if file_ret {
+                                    let cfg_gen_ret = file.pcode_json_with_bb_info_generate_cfg().is_ok();
+                                    if cfg_gen_ret {
+                                        info!("Successfully generated CFG's with PCode features")
+                                    } else {
+                                        error!("Failed to generate CFG's with PCode features")
+                                    }
+                                }
+                            } else {
+                                info!("[L551] Multiple files found. Will parallel process.");
+                                for file in
+                                    WalkDir::new(path).into_iter().filter_map(|file| file.ok())
+                                {
+                                    if file.path().to_string_lossy().ends_with(".json") {
+                                        validate_input(file.path(), "cfg");
+                                        let mut file = PCodeFile {
+                                            filename: file.path().to_owned(),
+                                            pcode_obj: None,
+                                            output_path: output_path.to_owned(),
+                                            min_blocks: *min_blocks,
+                                            instruction_pairs: false,
+                                            format_type: FormatMode::SingleInstruction,
+                                            pcode_file_type: PCodeFileTypes::PCodeJsonFile,
+                                        };
+                                        let file_ret = file.load_and_deserialize().is_ok();
+                                        if file_ret {
+                                            let cfg_gen_ret = file.pcode_json_with_bb_info_generate_cfg().is_ok();
+                                            if cfg_gen_ret {
+                                                info!("Successfully generated CFG's with PCode features")
+                                            } else {
+                                                error!("Failed to generate CFG's with PCode features")
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

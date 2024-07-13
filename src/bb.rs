@@ -24,6 +24,7 @@ pub enum FeatureType {
     ModelEmbedded,
     Encoded,
     Invalid,
+    Pcode,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]

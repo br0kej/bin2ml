@@ -375,7 +375,8 @@ impl AGFJFunc {
                     FeatureType::ModelEmbedded | FeatureType::Encoded | FeatureType::Invalid => {
                         info!("Invalid Feature Type. Skipping..");
                         return;
-                    }
+                    },
+                    FeatureType::Pcode => StringOrF64::String(Vec::new()),
                 };
 
                 let min_offset: u64 = self.offset;
