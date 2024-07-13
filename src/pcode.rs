@@ -367,26 +367,6 @@ impl PCodeFile {
             }
         }
         );
-        /*
-        for function in pcode_obj {
-            let function_name = function.as_p_code_json_with_bb().unwrap().function_name.clone();
-            let pcode_json_with_bb = function.as_p_code_json_with_bb().unwrap();
-            let (graph, start_addrs) = pcode_json_with_bb.get_cfg();
-            let nx_graph = NetworkxDiGraph::from((&graph, pcode_json_with_bb, start_addrs));
-            let mut file_out_path = get_save_file_path(&self.filename, &self.output_path, None, None, None);
-            file_out_path.push(&format!("{}_pcode_cfg.json", &function_name));
-
-            if !file_out_path.parent().unwrap().exists() {
-                std::fs::create_dir_all(&file_out_path.parent().unwrap()).unwrap();
-            }
-
-            let ret = nx_graph.save_to_json(&file_out_path);
-            if ret.is_ok() {
-                debug!("Successfully saved CFG for function: {}", &function_name);
-            } else {
-                error!("Error saving CFG for function: {} - Error: {}", &function_name, ret.err().unwrap());
-            }
-        }*/
         Ok(())
     }
 }
