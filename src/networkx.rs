@@ -659,9 +659,9 @@ impl From<(u64, u64, &Vec<String>)> for PCodeNode {
     }
 }
 
-impl From<(&Graph<String, u32>, &PCodeJsonWithBBAndFuncName, Vec<u32>)> for NetworkxDiGraph<PCodeNode> {
+impl From<(&Graph<String, u32>, &PCodeJsonWithBBAndFuncName, &Vec<u32>)> for NetworkxDiGraph<PCodeNode> {
     fn from(
-        input: (&Graph<String, u32>, &PCodeJsonWithBBAndFuncName, Vec<u32>),
+        input: (&Graph<String, u32>, &PCodeJsonWithBBAndFuncName, &Vec<u32>),
     ) -> NetworkxDiGraph<PCodeNode> {
 
         let mut nodes: Vec<NodeType> = vec![];
