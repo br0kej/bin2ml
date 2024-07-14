@@ -669,7 +669,7 @@ impl From<(&Graph<String, u32>, &PCodeJsonWithBBAndFuncName, &Vec<u32>)> for Net
         for (idx, address) in input.2.iter().enumerate() {
             let pcode_node = input.1.pcode_blocks.iter().find(|ele| ele.block_start_adr as u32 == *address);
             if let Some(pcode_node) = pcode_node {
-                nodes.push(NodeType::PCode(PCodeNode::from((idx as u64, pcode_node.block_start_adr as u64, &pcode_node.pcode))))
+                nodes.push(NodeType::PCode(PCodeNode::from((idx as u64, pcode_node.block_start_adr, &pcode_node.pcode))))
             }
         }
 

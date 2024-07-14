@@ -13,7 +13,7 @@ use std::process::exit;
 use std::sync::mpsc::channel;
 use indicatif::ParallelProgressIterator;
 use petgraph::Graph;
-use crate::networkx::{NetworkxDiGraph, NodeType, PCodeNode};
+use crate::networkx::NetworkxDiGraph;
 
 #[derive(Serialize, Deserialize, Debug, EnumAsInner, Clone)]
 #[serde(untagged)]
@@ -356,7 +356,7 @@ impl PCodeFile {
             file_out_path.push(&format!("{}_pcode_cfg.json", &function_name));
 
             if !file_out_path.parent().unwrap().exists() {
-                std::fs::create_dir_all(&file_out_path.parent().unwrap()).unwrap();
+                std::fs::create_dir_all(file_out_path.parent().unwrap()).unwrap();
             }
 
             let ret = nx_graph.save_to_json(&file_out_path);
@@ -415,20 +415,20 @@ impl PCodeJsonWithBBAndFuncName {
 }
 
 
+#[cfg(test)]
 mod tests {
     use std::path::PathBuf;
-    use petgraph::{EdgeDirection, Incoming, Outgoing};
+    use petgraph::{Incoming, Outgoing};
     use petgraph::graph::NodeIndex;
-    use petgraph::visit::NodeCount;
     use crate::files::FormatMode;
-    use crate::networkx::{NetworkxDiGraph, NodeType, PCodeNode};
-    use crate::pcode::{PCodeDataTypes, PCodeFile, PCodeFileTypes};
+    use crate::networkx::{NetworkxDiGraph, PCodeNode};
+    use crate::pcode::{PCodeFile, PCodeFileTypes};
 
     #[test]
     fn test_pcode_graph_gen() {
 
         let mut pcode_file = PCodeFile {
-            filename: PathBuf::from("/Users/br0kej/Codez/bin2ml/test_bin_pcode-bb.json"),
+            filename: PathBuf::from("test-files/test_bin_pcode-bb.json"),
             pcode_obj: None,
             output_path: Default::default(),
             min_blocks: None,
@@ -437,7 +437,7 @@ mod tests {
             pcode_file_type: PCodeFileTypes::PCodeWithBBFile,
         };
 
-        pcode_file.load_and_deserialize().expect("TODO: panic message");
+        pcode_file.load_and_deserialize().expect("Unable to load and deserialize PCode file");
 
         // Test the case where a CFG only has a single node
         let pcode_binding = pcode_file.pcode_obj.unwrap();
@@ -447,7 +447,7 @@ mod tests {
         let nx_graph: NetworkxDiGraph<PCodeNode> = NetworkxDiGraph::from((&graph, pcode_json_with_bb, &start_addrs));
         assert_eq!(nx_graph.nodes.len(), 1);
 
-        // Test the case where the CFG has several nodes
+        // Test the case where the CFG has several nodes - Index 10 = main of test_bin
         let pcode_json_with_bb = pcode_binding[10].as_p_code_json_with_bb().unwrap();
         let (graph, start_addrs) = pcode_json_with_bb.get_cfg();
 
