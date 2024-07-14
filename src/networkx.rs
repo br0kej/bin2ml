@@ -1,15 +1,15 @@
-use std::fs::File;
-use std::io::Write;
-use std::path::Path;
 use crate::afij::AFIJFeatureSubset;
 use crate::agfj::TikNibFunc;
 use crate::bb::{FeatureType, TikNibFeaturesBB};
 use crate::combos::FinfoTiknib;
+use crate::extract::PCodeJsonWithBBAndFuncName;
 use enum_as_inner::EnumAsInner;
 use petgraph::prelude::Graph;
 use petgraph::visit::EdgeRef;
 use serde::{Deserialize, Serialize};
-use crate::extract::PCodeJsonWithBBAndFuncName;
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -641,7 +641,6 @@ impl From<NetworkxDiGraph<NodeType>> for NetworkxDiGraph<EsilNode> {
     }
 }
 
-
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PCodeNode {
     pub id: u64,
@@ -659,17 +658,26 @@ impl From<(u64, u64, &Vec<String>)> for PCodeNode {
     }
 }
 
-impl From<(&Graph<String, u32>, &PCodeJsonWithBBAndFuncName, &Vec<u32>)> for NetworkxDiGraph<PCodeNode> {
+impl From<(&Graph<String, u32>, &PCodeJsonWithBBAndFuncName, &Vec<u32>)>
+    for NetworkxDiGraph<PCodeNode>
+{
     fn from(
         input: (&Graph<String, u32>, &PCodeJsonWithBBAndFuncName, &Vec<u32>),
     ) -> NetworkxDiGraph<PCodeNode> {
-
         let mut nodes: Vec<NodeType> = vec![];
 
         for (idx, address) in input.2.iter().enumerate() {
-            let pcode_node = input.1.pcode_blocks.iter().find(|ele| ele.block_start_adr as u32 == *address);
+            let pcode_node = input
+                .1
+                .pcode_blocks
+                .iter()
+                .find(|ele| ele.block_start_adr as u32 == *address);
             if let Some(pcode_node) = pcode_node {
-                nodes.push(NodeType::PCode(PCodeNode::from((idx as u64, pcode_node.block_start_adr, &pcode_node.pcode))))
+                nodes.push(NodeType::PCode(PCodeNode::from((
+                    idx as u64,
+                    pcode_node.block_start_adr,
+                    &pcode_node.pcode,
+                ))))
             }
         }
 
@@ -704,4 +712,3 @@ impl From<(&Graph<String, u32>, &PCodeJsonWithBBAndFuncName, &Vec<u32>)> for Net
         }
     }
 }
-

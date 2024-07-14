@@ -540,7 +540,8 @@ fn main() {
                                 };
                                 let file_ret = file.load_and_deserialize().is_ok();
                                 if file_ret {
-                                    let cfg_gen_ret = file.pcode_json_with_bb_info_generate_cfg().is_ok();
+                                    let cfg_gen_ret =
+                                        file.pcode_json_with_bb_info_generate_cfg().is_ok();
                                     if cfg_gen_ret {
                                         info!("Successfully generated CFG's with PCode features")
                                     } else {
@@ -565,11 +566,14 @@ fn main() {
                                         };
                                         let file_ret = file.load_and_deserialize().is_ok();
                                         if file_ret {
-                                            let cfg_gen_ret = file.pcode_json_with_bb_info_generate_cfg().is_ok();
+                                            let cfg_gen_ret =
+                                                file.pcode_json_with_bb_info_generate_cfg().is_ok();
                                             if cfg_gen_ret {
                                                 info!("Successfully generated CFG's with PCode features")
                                             } else {
-                                                error!("Failed to generate CFG's with PCode features")
+                                                error!(
+                                                    "Failed to generate CFG's with PCode features"
+                                                )
                                             }
                                         }
                                     }

@@ -1,7 +1,10 @@
 use crate::extract::{PCodeJSONWithFuncName, PCodeJsonWithBB, PCodeJsonWithBBAndFuncName};
 use crate::files::FormatMode;
+use crate::networkx::NetworkxDiGraph;
 use crate::utils::get_save_file_path;
 use enum_as_inner::EnumAsInner;
+use indicatif::ParallelProgressIterator;
+use petgraph::Graph;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::prelude::ParallelIterator;
 use serde::{Deserialize, Serialize};
@@ -11,9 +14,6 @@ use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::sync::mpsc::channel;
-use indicatif::ParallelProgressIterator;
-use petgraph::Graph;
-use crate::networkx::NetworkxDiGraph;
 
 #[derive(Serialize, Deserialize, Debug, EnumAsInner, Clone)]
 #[serde(untagged)]
@@ -343,16 +343,20 @@ impl PCodeFile {
         }
     }
 
-    pub fn pcode_json_with_bb_info_generate_cfg(&mut self) -> Result<(), ()>{
-
+    pub fn pcode_json_with_bb_info_generate_cfg(&mut self) -> Result<(), ()> {
         let pcode_obj = self.pcode_obj.clone().unwrap();
 
         pcode_obj.par_iter().progress().for_each(|function| {
-            let function_name = function.as_p_code_json_with_bb().unwrap().function_name.clone();
+            let function_name = function
+                .as_p_code_json_with_bb()
+                .unwrap()
+                .function_name
+                .clone();
             let pcode_json_with_bb = function.as_p_code_json_with_bb().unwrap();
             let (graph, start_addrs) = pcode_json_with_bb.get_cfg();
             let nx_graph = NetworkxDiGraph::from((&graph, pcode_json_with_bb, &start_addrs));
-            let mut file_out_path = get_save_file_path(&self.filename, &self.output_path, None, None, None);
+            let mut file_out_path =
+                get_save_file_path(&self.filename, &self.output_path, None, None, None);
             file_out_path.push(&format!("{}_pcode_cfg.json", &function_name));
 
             if !file_out_path.parent().unwrap().exists() {
@@ -363,10 +367,13 @@ impl PCodeFile {
             if ret.is_ok() {
                 debug!("Successfully saved CFG for function: {}", &function_name);
             } else {
-                error!("Error saving CFG for function: {} - Error: {}", &function_name, ret.err().unwrap());
+                error!(
+                    "Error saving CFG for function: {} - Error: {}",
+                    &function_name,
+                    ret.err().unwrap()
+                );
             }
-        }
-        );
+        });
         Ok(())
     }
 }
@@ -380,7 +387,7 @@ impl PCodeJsonWithBBAndFuncName {
             let mut graph: Graph<String, u32> = Graph::new();
             graph.add_node(pcode_blocks[0].block_start_adr.to_string());
             start_addrs.push(pcode_blocks[0].block_start_adr as u32);
-            return (graph, start_addrs)
+            return (graph, start_addrs);
         }
 
         for block in pcode_blocks {
@@ -388,7 +395,9 @@ impl PCodeJsonWithBBAndFuncName {
                 start_addrs.push(block.block_start_adr as u32);
             }
 
-            let block_start_idx = start_addrs.iter().position(|&p| p == block.block_start_adr as u32);
+            let block_start_idx = start_addrs
+                .iter()
+                .position(|&p| p == block.block_start_adr as u32);
 
             if block.bb_info.fail.is_some() {
                 let fail = block.bb_info.fail.unwrap();
@@ -407,26 +416,22 @@ impl PCodeJsonWithBBAndFuncName {
                 let jump_idx = start_addrs.iter().position(|&p| p == jump as u32);
                 edge_list.push((block_start_idx.unwrap() as u32, jump_idx.unwrap() as u32, 1));
             }
-
-
         }
         (Graph::from_edges(&edge_list), start_addrs)
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-    use petgraph::{Incoming, Outgoing};
-    use petgraph::graph::NodeIndex;
     use crate::files::FormatMode;
     use crate::networkx::{NetworkxDiGraph, PCodeNode};
     use crate::pcode::{PCodeFile, PCodeFileTypes};
+    use petgraph::graph::NodeIndex;
+    use petgraph::{Incoming, Outgoing};
+    use std::path::PathBuf;
 
     #[test]
     fn test_pcode_graph_gen() {
-
         let mut pcode_file = PCodeFile {
             filename: PathBuf::from("test-files/test_bin_pcode-bb.json"),
             pcode_obj: None,
@@ -437,14 +442,17 @@ mod tests {
             pcode_file_type: PCodeFileTypes::PCodeWithBBFile,
         };
 
-        pcode_file.load_and_deserialize().expect("Unable to load and deserialize PCode file");
+        pcode_file
+            .load_and_deserialize()
+            .expect("Unable to load and deserialize PCode file");
 
         // Test the case where a CFG only has a single node
         let pcode_binding = pcode_file.pcode_obj.unwrap();
         let pcode_json_with_bb = pcode_binding[0].as_p_code_json_with_bb().unwrap();
         let (graph, start_addrs) = pcode_json_with_bb.get_cfg();
         assert_eq!(graph.node_count(), 1);
-        let nx_graph: NetworkxDiGraph<PCodeNode> = NetworkxDiGraph::from((&graph, pcode_json_with_bb, &start_addrs));
+        let nx_graph: NetworkxDiGraph<PCodeNode> =
+            NetworkxDiGraph::from((&graph, pcode_json_with_bb, &start_addrs));
         assert_eq!(nx_graph.nodes.len(), 1);
 
         // Test the case where the CFG has several nodes - Index 10 = main of test_bin
@@ -461,18 +469,23 @@ mod tests {
         // Outgoing Edges from Nodes
         let expected_outgoing_edges = vec![2, 1, 1, 2, 1, 2, 0, 1, 1];
         for (idx, _) in start_addrs.iter().enumerate() {
-            let outgoing_edges = graph.edges_directed(NodeIndex::from(idx as u32), Outgoing).count();
+            let outgoing_edges = graph
+                .edges_directed(NodeIndex::from(idx as u32), Outgoing)
+                .count();
             assert_eq!(expected_outgoing_edges[idx], outgoing_edges);
         }
         // Incoming Edges to Nodes
-        let expected_incoming_edges = vec![0, 1, 1, 2 ,1, 1, 3, 1, 1];
+        let expected_incoming_edges = vec![0, 1, 1, 2, 1, 1, 3, 1, 1];
         for (idx, _) in start_addrs.iter().enumerate() {
-            let outgoing_edges = graph.edges_directed(NodeIndex::from(idx as u32), Incoming).count();
+            let outgoing_edges = graph
+                .edges_directed(NodeIndex::from(idx as u32), Incoming)
+                .count();
             assert_eq!(expected_incoming_edges[idx], outgoing_edges);
         }
 
         // Check conversion + mapping of node data
-        let nx_graph: NetworkxDiGraph<PCodeNode> = NetworkxDiGraph::from((&graph, pcode_json_with_bb, &start_addrs));
+        let nx_graph: NetworkxDiGraph<PCodeNode> =
+            NetworkxDiGraph::from((&graph, pcode_json_with_bb, &start_addrs));
         assert_eq!(nx_graph.nodes.len(), 9);
 
         // Check node start addresses which are used to map features -> nodes
