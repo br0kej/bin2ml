@@ -41,8 +41,6 @@ pub enum ComboFileTypes {
 #[derive(Debug)]
 pub struct ComboJob {
     pub combo_type: ComboTypes,
-    pub file_type_one: ComboFileTypes,
-    pub file_type_two: ComboFileTypes,
     pub input_path: PathBuf,
     pub output_path: PathBuf,
 }
@@ -53,11 +51,8 @@ impl ComboJob {
         let combo_file_types = combo_type.to_combo_file_types();
 
         if combo_file_types.is_ok() {
-            let combo_file_types = combo_file_types.unwrap();
             Ok(ComboJob {
                 combo_type,
-                file_type_one: combo_file_types.0,
-                file_type_two: combo_file_types.1,
                 input_path: input_path.to_path_buf(),
                 output_path: output_path.to_path_buf(),
             })
