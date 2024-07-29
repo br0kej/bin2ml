@@ -332,6 +332,8 @@ impl CGCorpus {
             }
         }
 
+        filepaths.sort_unstable();
+
         info!("Returning One Hop CG Corpus Struct");
         let output_path = output_path.to_owned();
 
