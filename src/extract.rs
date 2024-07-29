@@ -286,7 +286,7 @@ pub struct BasicBlockMetadataEntry {
     pub size: u64,
     pub jump: Option<u64>,
     pub fail: Option<u64>,
-    pub opaddr: f64,
+    pub opaddr: u64,
     pub inputs: u64,
     pub outputs: u64,
     pub ninstr: u64,

@@ -105,7 +105,7 @@ pub fn check_or_create_dir(full_output_path: &PathBuf) {
     }
 }
 
-/// Average
+/// Calculates the average of a vector of f32's
 pub fn average(numbers: Vec<f32>) -> f32 {
     numbers.iter().sum::<f32>() / numbers.len() as f32
 }

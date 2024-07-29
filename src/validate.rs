@@ -8,7 +8,9 @@ pub fn validate_input(filepath: &Path, command: &str) {
 }
 
 fn check_file_is_json(filepath: &Path) {
+    debug!("Filepath: {}", filepath.display());
     let file_extension = filepath.extension();
+    debug!("File extension: {:?}", file_extension);
     if Some(OsStr::new("json")) == file_extension {
         debug!("Found the correct file format!")
     } else {
@@ -36,7 +38,7 @@ fn check_file_is_expected_type(filepath: &Path, command: &str) {
     };
 
     let valid = match command {
-        "cfg" => file_type_provided == "controlflow",
+        "cfg" => (file_type_provided == "controlflow") | (file_type_provided == "pcode"),
         "cg" => file_type_provided == "callgraph",
         "metadata_finfo" => file_type_provided == "function_info",
         "metadata_tiknib" => file_type_provided == "controlflow",

@@ -376,6 +376,7 @@ impl AGFJFunc {
                         info!("Invalid Feature Type. Skipping..");
                         return;
                     }
+                    FeatureType::Pcode => StringOrF64::String(Vec::new()),
                 };
 
                 let min_offset: u64 = self.offset;
@@ -412,6 +413,7 @@ impl AGFJFunc {
                         info!("Invalid Feature Type. Skipping..");
                         return;
                     }
+                    _ => {}
                 };
 
                 if !edge_list.is_empty() {

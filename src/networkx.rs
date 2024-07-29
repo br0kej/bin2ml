@@ -2,10 +2,14 @@ use crate::afij::AFIJFeatureSubset;
 use crate::agfj::TikNibFunc;
 use crate::bb::{FeatureType, TikNibFeaturesBB};
 use crate::combos::FinfoTiknib;
+use crate::extract::PCodeJsonWithBBAndFuncName;
 use enum_as_inner::EnumAsInner;
 use petgraph::prelude::Graph;
 use petgraph::visit::EdgeRef;
 use serde::{Deserialize, Serialize};
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -15,6 +19,19 @@ pub struct NetworkxDiGraph<N> {
     pub graph: Vec<char>,
     pub multigraph: bool,
     pub nodes: Vec<N>,
+}
+
+impl<N: Serialize> NetworkxDiGraph<N> {
+    pub fn save_to_json<P: AsRef<Path>>(&self, path: P) -> std::io::Result<()> {
+        // Serialize the struct to a JSON string
+        let json = serde_json::to_string(self)?;
+
+        // Open the file and write the JSON string
+        let mut file = File::create(path)?;
+        file.write_all(json.as_bytes())?;
+
+        Ok(())
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -32,6 +49,7 @@ pub enum NodeType {
     Tiknib(TiknibNode),
     Disasm(DisasmNode),
     Esil(EsilNode),
+    PCode(PCodeNode),
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize, EnumAsInner)]
@@ -616,6 +634,78 @@ impl From<NetworkxDiGraph<NodeType>> for NetworkxDiGraph<EsilNode> {
         NetworkxDiGraph {
             adjacency: src.adjacency,
             directed: src.directed,
+            graph: vec![],
+            multigraph: false,
+            nodes: inner_nodes_types,
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PCodeNode {
+    pub id: u64,
+    pub start_addr: u64,
+    pub features: Vec<String>,
+}
+
+impl From<(u64, u64, &Vec<String>)> for PCodeNode {
+    fn from(src: (u64, u64, &Vec<String>)) -> PCodeNode {
+        PCodeNode {
+            id: src.0,
+            start_addr: src.1,
+            features: src.2.to_owned(),
+        }
+    }
+}
+
+impl From<(&Graph<String, u32>, &PCodeJsonWithBBAndFuncName, &Vec<u32>)>
+    for NetworkxDiGraph<PCodeNode>
+{
+    fn from(
+        input: (&Graph<String, u32>, &PCodeJsonWithBBAndFuncName, &Vec<u32>),
+    ) -> NetworkxDiGraph<PCodeNode> {
+        let mut nodes: Vec<NodeType> = vec![];
+
+        for (idx, address) in input.2.iter().enumerate() {
+            let pcode_node = input
+                .1
+                .pcode_blocks
+                .iter()
+                .find(|ele| ele.block_start_adr as u32 == *address);
+            if let Some(pcode_node) = pcode_node {
+                nodes.push(NodeType::PCode(PCodeNode::from((
+                    idx as u64,
+                    pcode_node.block_start_adr,
+                    &pcode_node.pcode,
+                ))))
+            }
+        }
+
+        // Sort edges out
+        let mut adjacency: Vec<Vec<Adjacency>> = vec![];
+        let node_indices = input.0.node_indices();
+
+        for node in node_indices {
+            let mut node_adjacency_vec = vec![];
+            let node_edges = input.0.edges(node);
+            for edge in node_edges {
+                let edge_entry = Adjacency {
+                    id: edge.target().index(),
+                    weight: edge.weight().to_owned(),
+                };
+                node_adjacency_vec.push(edge_entry)
+            }
+            adjacency.push(node_adjacency_vec)
+        }
+
+        let inner_nodes_types: Vec<PCodeNode> = nodes
+            .into_iter()
+            .map(|el| el.as_p_code().unwrap().clone())
+            .collect();
+
+        NetworkxDiGraph {
+            adjacency,
+            directed: "True".to_string(),
             graph: vec![],
             multigraph: false,
             nodes: inner_nodes_types,
