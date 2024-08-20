@@ -50,7 +50,7 @@ pub enum NodeType {
     Disasm(DisasmNode),
     Esil(EsilNode),
     PCode(PCodeNode),
-    Pseudo(PseudoNode)
+    Pseudo(PseudoNode),
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize, EnumAsInner)]
@@ -114,7 +114,7 @@ impl From<(i64, &Vec<String>)> for EsilNode {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PseudoNode {
     pub id: i64,
-    pub features: Vec<String>
+    pub features: Vec<String>,
 }
 
 impl From<(i64, &Vec<String>)> for PseudoNode {
@@ -125,7 +125,6 @@ impl From<(i64, &Vec<String>)> for PseudoNode {
         }
     }
 }
-
 
 #[derive(Copy, Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TiknibNode {
@@ -451,8 +450,10 @@ impl From<(&Graph<String, u32>, &Vec<Vec<String>>, FeatureType)> for NetworkxDiG
                     Some(NodeType::Disasm(DisasmNode::from((i as i64, node_vector))))
                 }
                 FeatureType::Esil => Some(NodeType::Esil(EsilNode::from((i as i64, node_vector)))),
-                FeatureType::Pseudo => Some(NodeType::Pseudo(PseudoNode::from((i as i64, node_vector)))),
-                _ => todo!()
+                FeatureType::Pseudo => {
+                    Some(NodeType::Pseudo(PseudoNode::from((i as i64, node_vector))))
+                }
+                _ => todo!(),
             };
             if let Some(node) = node {
                 nodes.push(node);
@@ -677,7 +678,6 @@ impl From<NetworkxDiGraph<NodeType>> for NetworkxDiGraph<PseudoNode> {
         }
     }
 }
-
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PCodeNode {

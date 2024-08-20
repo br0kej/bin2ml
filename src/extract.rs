@@ -903,7 +903,12 @@ impl FileToBeProcessed {
             debug!("Creating r2 handle without debugging");
             R2PipeSpawnOptions {
                 exepath: "radare2".to_owned(),
-                args: vec!["-e bin.cache=true", "-e log.level=1", "-2", "-e asm.pseudo=true"],
+                args: vec![
+                    "-e bin.cache=true",
+                    "-e log.level=1",
+                    "-2",
+                    "-e asm.pseudo=true",
+                ],
             }
         };
 

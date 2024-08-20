@@ -26,7 +26,7 @@ pub enum FeatureType {
     Encoded,
     Invalid,
     Pcode,
-    Pseudo
+    Pseudo,
 }
 
 impl fmt::Display for FeatureType {
@@ -42,7 +42,7 @@ impl fmt::Display for FeatureType {
             FeatureType::Encoded => "encoded",
             FeatureType::Invalid => "invalid",
             FeatureType::Pcode => "pcode",
-            FeatureType::Pseudo => "pseudo"
+            FeatureType::Pseudo => "pseudo",
         };
         write!(f, "{}", feature_type_str)
     }
