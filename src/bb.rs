@@ -7,6 +7,7 @@ use serde_aux::prelude::*;
 use serde_json::Value;
 use serde_with::{serde_as, DefaultOnError};
 use std::collections::HashMap;
+use std::fmt;
 use std::string::String;
 #[cfg(feature = "inference")]
 use std::sync::Arc;
@@ -25,6 +26,26 @@ pub enum FeatureType {
     Encoded,
     Invalid,
     Pcode,
+    Pseudo,
+}
+
+impl fmt::Display for FeatureType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let feature_type_str = match self {
+            FeatureType::Gemini => "gemini",
+            FeatureType::DiscovRE => "discovre",
+            FeatureType::DGIS => "dgis",
+            FeatureType::Tiknib => "tiknib",
+            FeatureType::Disasm => "disasm",
+            FeatureType::Esil => "esil",
+            FeatureType::ModelEmbedded => "embedded",
+            FeatureType::Encoded => "encoded",
+            FeatureType::Invalid => "invalid",
+            FeatureType::Pcode => "pcode",
+            FeatureType::Pseudo => "pseudo",
+        };
+        write!(f, "{}", feature_type_str)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]
@@ -236,9 +257,9 @@ impl ACFJBlock {
         let feature_vector: Vec<String> = match feature_type {
             FeatureType::Disasm => self.get_disasm_bb(normalise),
             FeatureType::Esil => self.get_esil_bb(normalise),
+            FeatureType::Pseudo => self.get_psuedo_bb(normalise),
             _ => unreachable!(),
         };
-
         if feature_vector.is_empty() {
             error!("Empty feature vector. This means that the feature type is wrong!")
         } else {
@@ -262,7 +283,7 @@ impl ACFJBlock {
         for ins in self.ops.iter() {
             if ins.r#type != "invalid" {
                 let opcode = ins
-                    .opcode
+                    .disasm
                     .as_ref()
                     .unwrap()
                     .split_whitespace()
@@ -327,7 +348,7 @@ impl ACFJBlock {
         for ins in self.ops.iter() {
             if ins.r#type != "invalid" {
                 let opcode = ins
-                    .opcode
+                    .disasm
                     .as_ref()
                     .unwrap()
                     .split_whitespace()
@@ -520,6 +541,18 @@ impl ACFJBlock {
             }
         }
         disasm_ins
+    }
+
+    pub fn get_psuedo_bb(&self, reg_norm: bool) -> Vec<String> {
+        let mut psuedo_ins: Vec<String> = Vec::new();
+        for op in &self.ops {
+            if op.opcode.is_some() && op.opcode.as_ref().unwrap().len() > 1 {
+                let opcode_single = &op.opcode.as_ref().unwrap();
+                let normd = normalise_disasm_simple(opcode_single, reg_norm);
+                psuedo_ins.push((*normd).to_string());
+            }
+        }
+        psuedo_ins
     }
 
     pub fn get_ins(&self, reg_norm: bool) -> Vec<String> {
