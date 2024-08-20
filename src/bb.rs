@@ -26,6 +26,7 @@ pub enum FeatureType {
     Encoded,
     Invalid,
     Pcode,
+    Pseudo
 }
 
 impl fmt::Display for FeatureType {
@@ -41,6 +42,7 @@ impl fmt::Display for FeatureType {
             FeatureType::Encoded => "encoded",
             FeatureType::Invalid => "invalid",
             FeatureType::Pcode => "pcode",
+            FeatureType::Pseudo => "pseudo"
         };
         write!(f, "{}", feature_type_str)
     }
@@ -255,9 +257,9 @@ impl ACFJBlock {
         let feature_vector: Vec<String> = match feature_type {
             FeatureType::Disasm => self.get_disasm_bb(normalise),
             FeatureType::Esil => self.get_esil_bb(normalise),
+            FeatureType::Pseudo => self.get_psuedo_bb(normalise),
             _ => unreachable!(),
         };
-
         if feature_vector.is_empty() {
             error!("Empty feature vector. This means that the feature type is wrong!")
         } else {
@@ -539,6 +541,18 @@ impl ACFJBlock {
             }
         }
         disasm_ins
+    }
+
+    pub fn get_psuedo_bb(&self, reg_norm: bool) -> Vec<String> {
+        let mut psuedo_ins: Vec<String> = Vec::new();
+        for op in &self.ops {
+            if op.opcode.is_some() && op.opcode.as_ref().unwrap().len() > 1 {
+                let opcode_single = &op.opcode.as_ref().unwrap();
+                let normd = normalise_disasm_simple(opcode_single, reg_norm);
+                psuedo_ins.push((*normd).to_string());
+            }
+        }
+        psuedo_ins
     }
 
     pub fn get_ins(&self, reg_norm: bool) -> Vec<String> {

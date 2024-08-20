@@ -50,6 +50,7 @@ pub enum NodeType {
     Disasm(DisasmNode),
     Esil(EsilNode),
     PCode(PCodeNode),
+    Pseudo(PseudoNode)
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize, EnumAsInner)]
@@ -109,6 +110,22 @@ impl From<(i64, &Vec<String>)> for EsilNode {
         }
     }
 }
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PseudoNode {
+    pub id: i64,
+    pub features: Vec<String>
+}
+
+impl From<(i64, &Vec<String>)> for PseudoNode {
+    fn from(src: (i64, &Vec<String>)) -> PseudoNode {
+        PseudoNode {
+            id: src.0,
+            features: src.1.to_owned(),
+        }
+    }
+}
+
 
 #[derive(Copy, Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TiknibNode {
@@ -434,7 +451,8 @@ impl From<(&Graph<String, u32>, &Vec<Vec<String>>, FeatureType)> for NetworkxDiG
                     Some(NodeType::Disasm(DisasmNode::from((i as i64, node_vector))))
                 }
                 FeatureType::Esil => Some(NodeType::Esil(EsilNode::from((i as i64, node_vector)))),
-                _ => None,
+                FeatureType::Pseudo => Some(NodeType::Pseudo(PseudoNode::from((i as i64, node_vector)))),
+                _ => todo!()
             };
             if let Some(node) = node {
                 nodes.push(node);
@@ -640,6 +658,26 @@ impl From<NetworkxDiGraph<NodeType>> for NetworkxDiGraph<EsilNode> {
         }
     }
 }
+
+impl From<NetworkxDiGraph<NodeType>> for NetworkxDiGraph<PseudoNode> {
+    fn from(src: NetworkxDiGraph<NodeType>) -> NetworkxDiGraph<PseudoNode> {
+        let inner_nodes_types: Vec<PseudoNode> = src
+            .clone()
+            .nodes
+            .into_iter()
+            .map(|el| el.as_pseudo().unwrap().clone())
+            .collect();
+
+        NetworkxDiGraph {
+            adjacency: src.adjacency,
+            directed: src.directed,
+            graph: vec![],
+            multigraph: false,
+            nodes: inner_nodes_types,
+        }
+    }
+}
+
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PCodeNode {

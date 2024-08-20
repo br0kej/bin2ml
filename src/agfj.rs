@@ -1,9 +1,7 @@
 use crate::bb::{ACFJBlock, FeatureType, TikNibFeaturesBB};
 #[cfg(feature = "inference")]
 use crate::inference::InferenceJob;
-use crate::networkx::{
-    DGISNode, DisasmNode, DiscovreNode, EsilNode, GeminiNode, NetworkxDiGraph, NodeType, TiknibNode,
-};
+use crate::networkx::{DGISNode, DisasmNode, DiscovreNode, EsilNode, GeminiNode, NetworkxDiGraph, NodeType, PseudoNode, TiknibNode};
 use crate::utils::{average, check_or_create_dir, get_save_file_path};
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
@@ -110,6 +108,29 @@ impl AGFJFunc {
         }
     }
 
+    pub fn get_psuedo_function_string(
+        &self,
+        min_blocks: &u16,
+        reg_norm: bool,
+    ) -> Option<(String, String)> {
+        let mut psuedo_function = Vec::<String>::new();
+        if self.blocks.len() >= (*min_blocks).into() && self.blocks[0].offset != 1 {
+            for bb in &self.blocks {
+                let psuedo: Vec<String> = bb.get_psuedo_bb(reg_norm);
+                for ins in psuedo.iter() {
+                    if !ins.is_empty() {
+                        let split: Vec<String> = ins.split(',').map(|s| s.to_string()).collect();
+                        let split_joined = split.join(" ");
+                        psuedo_function.push(split_joined);
+                    }
+                }
+            }
+            let joined = psuedo_function.join(" ");
+            Some((self.name.clone(), joined))
+        } else {
+            None
+        }
+    }
     pub fn create_bb_edge_list(&mut self, min_blocks: &u16) {
         if self.blocks.len() > (*min_blocks).into() && self.blocks[0].offset != 1 {
             let mut addr_idxs = Vec::<i64>::new();
@@ -371,12 +392,11 @@ impl AGFJFunc {
                     | FeatureType::Gemini
                     | FeatureType::DiscovRE
                     | FeatureType::DGIS => StringOrF64::F64(Vec::new()),
-                    FeatureType::Esil | FeatureType::Disasm => StringOrF64::String(Vec::new()),
+                    FeatureType::Esil | FeatureType::Disasm | FeatureType::Pseudo | FeatureType::Pcode => StringOrF64::String(Vec::new()),
                     FeatureType::ModelEmbedded | FeatureType::Encoded | FeatureType::Invalid => {
                         info!("Invalid Feature Type. Skipping..");
                         return;
                     }
-                    FeatureType::Pcode => StringOrF64::String(Vec::new()),
                 };
 
                 let min_offset: u64 = self.offset;
@@ -397,7 +417,7 @@ impl AGFJFunc {
                             bb.generate_bb_feature_vec(feature_vecs, feature_type, architecture);
                         }
                     }
-                    FeatureType::Esil | FeatureType::Disasm => {
+                    FeatureType::Esil | FeatureType::Disasm | FeatureType::Pseudo => {
                         let feature_vecs = feature_vecs.as_string_mut().unwrap();
                         for bb in &self.blocks {
                             bb.get_block_edges(
@@ -408,6 +428,7 @@ impl AGFJFunc {
                             );
                             bb.generate_bb_feature_strings(feature_vecs, feature_type, true);
                         }
+                        debug!("Number of Feature Vecs: {}", feature_vecs.len())
                     }
                     FeatureType::ModelEmbedded | FeatureType::Encoded | FeatureType::Invalid => {
                         info!("Invalid Feature Type. Skipping..");
@@ -416,6 +437,7 @@ impl AGFJFunc {
                     _ => {}
                 };
 
+                debug!("Edge List Empty: {} Edge List Dims: {}", edge_list.is_empty(), edge_list.len());
                 if !edge_list.is_empty() {
                     let mut graph = Graph::<std::string::String, u32>::from_edges(&edge_list);
 
@@ -438,7 +460,7 @@ impl AGFJFunc {
                             &File::create(fname_string).expect("Failed to create writer"),
                             &networkx_graph_inners,
                         )
-                        .expect("Unable to write JSON");
+                            .expect("Unable to write JSON");
                     } else if feature_type == FeatureType::DGIS {
                         let networkx_graph: NetworkxDiGraph<NodeType> =
                             NetworkxDiGraph::<NodeType>::from((
@@ -454,7 +476,7 @@ impl AGFJFunc {
                             &File::create(fname_string).expect("Failed to create writer"),
                             &networkx_graph_inners,
                         )
-                        .expect("Unable to write JSON");
+                            .expect("Unable to write JSON");
                     } else if feature_type == FeatureType::DiscovRE {
                         let networkx_graph: NetworkxDiGraph<NodeType> =
                             NetworkxDiGraph::<NodeType>::from((
@@ -470,7 +492,7 @@ impl AGFJFunc {
                             &File::create(fname_string).expect("Failed to create writer"),
                             &networkx_graph_inners,
                         )
-                        .expect("Unable to write JSON");
+                            .expect("Unable to write JSON");
                     } else if feature_type == FeatureType::Tiknib {
                         let networkx_graph: NetworkxDiGraph<NodeType> =
                             NetworkxDiGraph::<NodeType>::from((
@@ -486,7 +508,7 @@ impl AGFJFunc {
                             &File::create(fname_string).expect("Failed to create writer"),
                             &networkx_graph_inners,
                         )
-                        .expect("Unable to write JSON");
+                            .expect("Unable to write JSON");
                     } else if feature_type == FeatureType::Disasm {
                         let networkx_graph: NetworkxDiGraph<NodeType> =
                             NetworkxDiGraph::<NodeType>::from((
@@ -502,7 +524,7 @@ impl AGFJFunc {
                             &File::create(fname_string).expect("Failed to create writer"),
                             &networkx_graph_inners,
                         )
-                        .expect("Unable to write JSON");
+                            .expect("Unable to write JSON");
                     } else if feature_type == FeatureType::Esil {
                         let networkx_graph: NetworkxDiGraph<NodeType> =
                             NetworkxDiGraph::<NodeType>::from((
@@ -518,22 +540,38 @@ impl AGFJFunc {
                             &File::create(fname_string).expect("Failed to create writer"),
                             &networkx_graph_inners,
                         )
-                        .expect("Unable to write JSON");
+                            .expect("Unable to write JSON");
+                    } else if feature_type == FeatureType::Pseudo {
+                        let networkx_graph: NetworkxDiGraph<NodeType> =
+                            NetworkxDiGraph::<NodeType>::from((
+                                &graph,
+                                feature_vecs.as_string().unwrap(),
+                                feature_type,
+                            ));
+
+                        let networkx_graph_inners: NetworkxDiGraph<PseudoNode> =
+                            NetworkxDiGraph::<PseudoNode>::from(networkx_graph);
+                        info!("Saving to JSON..");
+                        serde_json::to_writer(
+                            &File::create(fname_string).expect("Failed to create writer"),
+                            &networkx_graph_inners,
+                        )
+                            .expect("Unable to write JSON");
+                    } else {
+                        info!("Function {} has no edges. Skipping...", self.name)
                     }
                 } else {
-                    info!("Function {} has no edges. Skipping...", self.name)
-                }
-            } else {
-                info!(
+                    info!(
                     "Function {} has less than the minimum number of blocks. Skipping..",
                     self.name
                 );
-            }
-        } else {
-            info!(
+                }
+            } else {
+                info!(
                 "Function {} has already been processed. Skipping...",
                 self.name
             )
+            }
         }
     }
 
