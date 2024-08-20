@@ -281,7 +281,7 @@ impl ACFJBlock {
         for ins in self.ops.iter() {
             if ins.r#type != "invalid" {
                 let opcode = ins
-                    .opcode
+                    .disasm
                     .as_ref()
                     .unwrap()
                     .split_whitespace()
@@ -346,7 +346,7 @@ impl ACFJBlock {
         for ins in self.ops.iter() {
             if ins.r#type != "invalid" {
                 let opcode = ins
-                    .opcode
+                    .disasm
                     .as_ref()
                     .unwrap()
                     .split_whitespace()
