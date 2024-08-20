@@ -7,6 +7,7 @@ use serde_aux::prelude::*;
 use serde_json::Value;
 use serde_with::{serde_as, DefaultOnError};
 use std::collections::HashMap;
+use std::fmt;
 use std::string::String;
 #[cfg(feature = "inference")]
 use std::sync::Arc;
@@ -25,6 +26,24 @@ pub enum FeatureType {
     Encoded,
     Invalid,
     Pcode,
+}
+
+impl fmt::Display for FeatureType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let feature_type_str = match self {
+            FeatureType::Gemini => "gemini",
+            FeatureType::DiscovRE => "discovre",
+            FeatureType::DGIS => "dgis",
+            FeatureType::Tiknib => "tiknib",
+            FeatureType::Disasm => "disasm",
+            FeatureType::Esil => "esil",
+            FeatureType::ModelEmbedded => "embedded",
+            FeatureType::Encoded => "encoded",
+            FeatureType::Invalid => "invalid",
+            FeatureType::Pcode => "pcode",
+        };
+        write!(f, "{}", feature_type_str)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]

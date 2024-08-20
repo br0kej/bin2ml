@@ -340,7 +340,7 @@ impl AGFJFunc {
         feature_type: FeatureType,
         architecture: &String,
     ) {
-        let full_output_path = get_save_file_path(path, output_path, None, None, None);
+        let full_output_path = get_save_file_path(path, output_path, None, Some(feature_type.to_string()), None);
         check_or_create_dir(&full_output_path);
         let file_name = path.file_name().unwrap();
         let binding = file_name.to_string_lossy().to_string();
