@@ -446,70 +446,21 @@ impl ACFJBlock {
         }
         num_offspring
     }
+    pub fn get_block_edges(&self, bb_start_addrs: &[i64], edge_list: &mut Vec<(u32, u32, u32)>) {
+        let offset_idx = bb_start_addrs.iter().position(|&p| p == self.offset);
 
-    // Get the edges associated with a given basic block.
-    // This function only considers valid edges as being
-    // fail, jumps or switchops that reside within the function itself.
-    // If there are edges that jump to another function outside of the program
-    // these edges are ignored.
-    //
-    // This function updates the provide mutable edge list with a three-tuple which
-    // represents (src, dst, weight). The weight in this case is the type of edge where
-    // 1 denotes jump, 2 denotes fail, 3 denotes switchop
-    pub fn get_block_edges(
-        &self,
-        addr_idxs: &mut Vec<i64>,
-        edge_list: &mut Vec<(u32, u32, u32)>,
-        max_offset: u64,
-        min_offset: u64,
-    ) {
-        let mut addr: i64 = self.offset;
-        let mut jump: i64 = self.jump;
-        let mut fail: i64 = self.fail;
-
-        if addr < min_offset.try_into().unwrap() || addr >= max_offset.try_into().unwrap() {
-            addr = -1;
-        }
-
-        if jump < min_offset.try_into().unwrap() || jump >= max_offset.try_into().unwrap() {
-            jump = -1;
-        }
-
-        if fail < min_offset.try_into().unwrap() || fail >= max_offset.try_into().unwrap() {
-            fail = -1;
-        }
-
-        if addr != -1 && !addr_idxs.contains(&addr) {
-            addr_idxs.push(addr);
-        }
-        if jump != -1 && !addr_idxs.contains(&jump) {
-            addr_idxs.push(jump)
-        }
-
-        if fail != -1 && !addr_idxs.contains(&fail) {
-            addr_idxs.push(fail)
-        }
-
-        let addr_idx = addr_idxs.iter().position(|&p| p == addr);
-
-        if let Some(addr_idx) = addr_idx {
-            if jump != -1 {
-                let jump_idx = addr_idxs.iter().position(|&p| p == jump).unwrap();
-                edge_list.push((addr_idx as u32, jump_idx as u32, 1));
+        if let Some(offset_idx) = offset_idx {
+            if self.jump != -1 {
+                let jump_idx = bb_start_addrs.iter().position(|&p| p == self.jump);
+                if let Some(jump_idx) = jump_idx {
+                    edge_list.push((offset_idx as u32, jump_idx as u32, 1));
+                }
             }
 
-            if fail != -1 {
-                let fail_idx = addr_idxs.iter().position(|&p| p == fail).unwrap();
-                edge_list.push((addr_idx as u32, fail_idx as u32, 2));
-            }
-
-            if self.switchop.is_some() {
-                for item in &self.switchop.as_ref().unwrap().cases {
-                    if !addr_idxs.contains(&item.jump) {
-                        addr_idxs.push(item.jump)
-                    }
-                    let item_addr_idx = addr_idxs.iter().position(|&p| p == item.jump).unwrap();
-                    edge_list.push((addr_idx as u32, item_addr_idx as u32, 3));
+            if self.fail != -1 {
+                let fail_idx = bb_start_addrs.iter().position(|&p| p == self.fail);
+                if let Some(fail_idx) = fail_idx {
+                    edge_list.push((offset_idx as u32, fail_idx as u32, 1));
                 }
             }
         }
