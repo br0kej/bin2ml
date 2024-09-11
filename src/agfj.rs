@@ -136,17 +136,13 @@ impl AGFJFunc {
     }
     pub fn create_bb_edge_list(&mut self, min_blocks: &u16) {
         if self.blocks.len() > (*min_blocks).into() && self.blocks[0].offset != 1 {
-            let mut addr_idxs = Vec::<i64>::new();
-
+            let bb_start_addrs: Vec<i64> = self.blocks.iter().map(|x| x.offset).collect::<Vec<_>>();
             let mut edge_list = Vec::<(u32, u32, u32)>::new();
 
-            let min_offset: u64 = self.offset;
-            let max_offset: u64 = self.offset + self.size.unwrap_or(0);
-
             for bb in &self.blocks {
-                bb.get_block_edges(&mut addr_idxs, &mut edge_list, max_offset, min_offset)
+                bb.get_block_edges(&bb_start_addrs, &mut edge_list)
             }
-            self.addr_idx = Some(addr_idxs);
+            self.addr_idx = Some(bb_start_addrs);
             self.edge_list = Some(edge_list);
         }
     }
@@ -279,6 +275,13 @@ impl AGFJFunc {
         feature_type: FeatureType,
         inference_job: &Option<Arc<InferenceJob>>,
     ) {
+        /*
+        This function needs some serious sorting out.
+
+        - Need to get GPU toggle-able
+        - Need to use new CFG edge builder
+        - General refactor
+         */
         info!("Processing {:?}", self.name);
         let full_output_path =
             get_save_file_path(path, output_path, Some(".json".to_string()), None, None);
@@ -286,16 +289,14 @@ impl AGFJFunc {
 
         // offset != 1 has been added to skip functions with invalid instructions
         if self.blocks.len() >= (*min_blocks).into() && self.blocks[0].offset != 1 {
-            let mut addr_idxs = Vec::<i64>::new();
-
+            let bb_start_addrs: Vec<i64> = self.blocks.iter().map(|x| x.offset).collect::<Vec<_>>();
             let mut edge_list = Vec::<(u32, u32, u32)>::new();
 
             let mut feature_vecs = Vec::<_>::new();
             let mut feature_vec_of_vecs = Vec::<_>::new();
-            let min_offset = self.offset;
-            let max_offset = self.offset + self.size.unwrap_or(0);
+
             for bb in &self.blocks {
-                bb.get_block_edges(&mut addr_idxs, &mut edge_list, max_offset, min_offset);
+                bb.get_block_edges(&bb_start_addrs, &mut edge_list);
                 if inference_job.is_some() {
                     let inference = inference_job.as_ref().unwrap().clone();
                     match feature_type {
@@ -393,7 +394,6 @@ impl AGFJFunc {
         if !Path::new(&fname_string).is_file() {
             // offset != 1 has been added to skip functions with invalid instructions
             if self.blocks.len() >= (*min_blocks).into() && self.blocks[0].offset != 1 {
-                let mut addr_idxs = Vec::<i64>::new();
                 let mut edge_list = Vec::<(u32, u32, u32)>::new();
 
                 let mut feature_vecs: StringOrF64 = match feature_type {
@@ -411,8 +411,9 @@ impl AGFJFunc {
                     }
                 };
 
-                let min_offset: u64 = self.offset;
-                let max_offset: u64 = self.offset + self.size.unwrap_or(0);
+                let bb_start_addrs: Vec<i64> =
+                    self.blocks.iter().map(|x| x.offset).collect::<Vec<_>>();
+
                 match feature_type {
                     FeatureType::Tiknib
                     | FeatureType::Gemini
@@ -420,27 +421,20 @@ impl AGFJFunc {
                     | FeatureType::DGIS => {
                         let feature_vecs = feature_vecs.as_f64_mut().unwrap();
                         for bb in &self.blocks {
-                            bb.get_block_edges(
-                                &mut addr_idxs,
-                                &mut edge_list,
-                                max_offset,
-                                min_offset,
-                            );
+                            bb.get_block_edges(&bb_start_addrs, &mut edge_list);
                             bb.generate_bb_feature_vec(feature_vecs, feature_type, architecture);
                         }
+                        debug!("Number of Feature Vecs: {}", feature_vecs.len());
+                        assert_eq!(self.blocks.len(), feature_vecs.len())
                     }
                     FeatureType::Esil | FeatureType::Disasm | FeatureType::Pseudo => {
                         let feature_vecs = feature_vecs.as_string_mut().unwrap();
                         for bb in &self.blocks {
-                            bb.get_block_edges(
-                                &mut addr_idxs,
-                                &mut edge_list,
-                                max_offset,
-                                min_offset,
-                            );
+                            bb.get_block_edges(&bb_start_addrs, &mut edge_list);
                             bb.generate_bb_feature_strings(feature_vecs, feature_type, true);
                         }
-                        debug!("Number of Feature Vecs: {}", feature_vecs.len())
+                        debug!("Number of Feature Vecs: {}", feature_vecs.len());
+                        assert_eq!(self.blocks.len(), feature_vecs.len())
                     }
                     FeatureType::ModelEmbedded | FeatureType::Encoded | FeatureType::Invalid => {
                         info!("Invalid Feature Type. Skipping..");
@@ -454,10 +448,16 @@ impl AGFJFunc {
                     edge_list.is_empty(),
                     edge_list.len()
                 );
-                if !edge_list.is_empty() {
-                    let mut graph = Graph::<std::string::String, u32>::from_edges(&edge_list);
 
-                    Self::str_to_hex_node_idxs(&mut graph, &mut addr_idxs);
+                if !edge_list.is_empty() {
+                    let mut graph = Graph::<String, u32>::from_edges(&edge_list);
+                    Self::str_to_hex_node_idxs(&mut graph, &bb_start_addrs);
+                    if graph.node_count() != self.blocks.len() {
+                        debug!("Graph for {} does not have the same number of nodes as basic blocks - N: {} B: {}. This suggests \
+                        there is something wrong with the CFG edge recovery. If this is a problem, please raise a GitHub issue!",
+                        self.name, graph.node_count(), self.blocks.len());
+                        return;
+                    }
 
                     // Unpack the NodeTypes to the inner Types
                     if feature_type == FeatureType::Gemini {
@@ -577,22 +577,24 @@ impl AGFJFunc {
                         info!("Function {} has no edges. Skipping...", self.name)
                     }
                 } else {
-                    info!(
+                    debug!(
                         "Function {} has less than the minimum number of blocks. Skipping..",
                         self.name
                     );
                 }
             } else {
-                info!(
-                    "Function {} has already been processed. Skipping...",
-                    self.name
-                )
+                trace!("Function has fewer basic blocks than the minimum. Skipping...");
             }
+        } else {
+            debug!(
+                "Function {} has already been processed. Skipping...",
+                self.name
+            )
         }
     }
 
     // Convert string memory address to hex / string
-    fn str_to_hex_node_idxs(graph: &mut Graph<String, u32>, addr_idxs: &mut [i64]) {
+    fn str_to_hex_node_idxs(graph: &mut Graph<String, u32>, addr_idxs: &[i64]) {
         for idx in graph.node_indices() {
             let i_idx = idx.index();
             let hex = addr_idxs[i_idx];
@@ -860,18 +862,19 @@ mod tests {
 
         // Check edge list output is the correct format
         let expected_edge_list = Some(vec![
+            (0, 2, 1),
             (0, 1, 1),
-            (0, 2, 2),
-            (2, 3, 1),
             (1, 3, 1),
+            (2, 3, 1),
+            (3, 5, 1),
             (3, 4, 1),
-            (3, 5, 2),
+            (4, 8, 1),
+            (5, 7, 1),
             (5, 6, 1),
-            (4, 7, 1),
-            (4, 8, 2),
-            (8, 6, 1),
-            (7, 6, 1),
+            (6, 8, 1),
+            (7, 8, 1),
         ]);
+
         assert_eq!(target_func.edge_list, expected_edge_list)
     }
 }
