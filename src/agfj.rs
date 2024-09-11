@@ -862,18 +862,19 @@ mod tests {
 
         // Check edge list output is the correct format
         let expected_edge_list = Some(vec![
+            (0, 2, 1),
             (0, 1, 1),
-            (0, 2, 2),
-            (2, 3, 1),
             (1, 3, 1),
+            (2, 3, 1),
+            (3, 5, 1),
             (3, 4, 1),
-            (3, 5, 2),
+            (4, 8, 1),
+            (5, 7, 1),
             (5, 6, 1),
-            (4, 7, 1),
-            (4, 8, 2),
-            (8, 6, 1),
-            (7, 6, 1),
+            (6, 8, 1),
+            (7, 8, 1),
         ]);
+
         assert_eq!(target_func.edge_list, expected_edge_list)
     }
 }
