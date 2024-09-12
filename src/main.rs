@@ -202,7 +202,7 @@ enum GenerateSubCommands {
         /// Determine the pcode filetype
         #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(["pcode-func", "pcode-bb"])
         .map(|s| s.parse::<String>().unwrap()))]
-        pcode_file_format: String,
+        pcode_file_format: Option<String>,
     },
     /// Generate metadata/feature subsets from extracted data
     Metadata {
@@ -895,6 +895,10 @@ fn main() {
                     _ => InstructionMode::Invalid,
                 };
 
+                if instruction_type == InstructionMode::PCode && pcode_file_format.is_none() {
+                    error!("--pcode-file-format is required when processed PCode")
+                }
+
                 if instruction_type == InstructionMode::Invalid {
                     error!("Invalid instruction mode: {:?}", instruction_type);
                     exit(1)
@@ -939,7 +943,7 @@ fn main() {
                             )
                         }
                         InstructionMode::PCode => {
-                            let pcode_file_type = match pcode_file_format.as_str() {
+                            let pcode_file_type = match pcode_file_format.as_ref().unwrap().as_str() {
                                 "pcode-func" => PCodeFileTypes::PCodeJsonFile,
                                 "pcode-bb" => PCodeFileTypes::PCodeWithBBFile,
                                 _ => unreachable!("Invalid PCode file type"),
