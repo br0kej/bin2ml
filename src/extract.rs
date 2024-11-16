@@ -42,6 +42,7 @@ pub enum ExtractionJobType {
     PCodeFunc,
     PCodeBB,
     LocalVariableXrefs,
+    GlobalStrings
 }
 
 #[derive(Debug)]
@@ -313,6 +314,19 @@ pub struct Writes {
     pub addrs: Vec<i64>,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StringEntry {
+    pub vaddr: i64,
+    pub paddr: i64,
+    pub ordinal: i64,
+    pub size: i64,
+    pub length: i64,
+    pub section: String,
+    #[serde(rename = "type")]
+    pub type_field: String,
+    pub string: String,
+}
+
 impl ExtractionJob {
     pub fn new(
         input_path: &PathBuf,
@@ -348,6 +362,7 @@ impl ExtractionJob {
                 "pcode-func" => Ok(ExtractionJobType::PCodeFunc),
                 "pcode-bb" => Ok(ExtractionJobType::PCodeBB),
                 "localvar-xrefs" => Ok(ExtractionJobType::LocalVariableXrefs),
+                "strings" => Ok(ExtractionJobType::GlobalStrings),
                 _ => bail!("Incorrect command type - got {}", mode),
             }
         }
@@ -592,6 +607,8 @@ impl FileToBeProcessed {
             r2p.close();
             info!("r2p closed");
 
+
+
             info!("Writing extracted data to file");
             self.write_to_json(&json!(function_decomp))
         } else {
@@ -701,6 +718,25 @@ impl FileToBeProcessed {
                 "Failed to extract local variable xrefs - Error in r2 extraction for {:?}",
                 self.file_path
             )
+        }
+    }
+
+    pub fn extract_global_strings(&self) {
+        info!("Stating Global String Extraction");
+        let mut r2p = self.setup_r2_pipe();
+        let json = r2p.cmd("izj");
+        r2p.close();
+        info!("r2p closed");
+
+        if json.is_ok() {
+            let json = json.unwrap();
+            debug!("{}", json);
+            let json_obj: Vec<StringEntry> =
+                serde_json::from_str(&json).expect("Unable to convert to JSON object!");
+
+            self.write_to_json(&json!(json_obj))
+        } else {
+            error!("Failed to execute axj command successfully")
         }
     }
 

@@ -281,7 +281,7 @@ enum Commands {
         output_dir: PathBuf,
 
         /// The extraction mode
-        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "reg", "cfg", "func-xrefs","cg", "decomp", "pcode-func", "pcode-bb", "localvar-xrefs"])
+        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "reg", "cfg", "func-xrefs","cg", "decomp", "pcode-func", "pcode-bb", "localvar-xrefs", "strings"])
         .map(|s| s.parse::<String>().unwrap()),)]
         mode: String,
 
@@ -1152,6 +1152,10 @@ fn main() {
                     job.files_to_be_processed[0].extract_pcode_basic_block()
                 } else if job.job_type == ExtractionJobType::LocalVariableXrefs {
                     job.files_to_be_processed[0].extract_local_variable_xrefs()
+                } else if job.job_type == ExtractionJobType::GlobalStrings {
+                    job.files_to_be_processed[0].extract_global_strings()
+                } else {
+                    error!("Unsupported ExtractionJobType of {:?}", job.job_type)
                 }
                 info!("Extraction complete for {:?}", fpath)
             }
