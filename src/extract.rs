@@ -42,7 +42,7 @@ pub enum ExtractionJobType {
     PCodeFunc,
     PCodeBB,
     LocalVariableXrefs,
-    GlobalStrings
+    GlobalStrings,
 }
 
 #[derive(Debug)]
@@ -606,8 +606,6 @@ impl FileToBeProcessed {
             info!("Decompilation extracted successfully for all functions.");
             r2p.close();
             info!("r2p closed");
-
-
 
             info!("Writing extracted data to file");
             self.write_to_json(&json!(function_decomp))

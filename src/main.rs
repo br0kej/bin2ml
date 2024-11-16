@@ -943,7 +943,8 @@ fn main() {
                             )
                         }
                         InstructionMode::PCode => {
-                            let pcode_file_type = match pcode_file_format.as_ref().unwrap().as_str() {
+                            let pcode_file_type = match pcode_file_format.as_ref().unwrap().as_str()
+                            {
                                 "pcode-func" => PCodeFileTypes::PCodeJsonFile,
                                 "pcode-bb" => PCodeFileTypes::PCodeWithBBFile,
                                 _ => unreachable!("Invalid PCode file type"),
