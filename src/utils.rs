@@ -109,6 +109,26 @@ pub fn check_or_create_dir(full_output_path: &PathBuf) {
 pub fn average(numbers: Vec<f32>) -> f32 {
     numbers.iter().sum::<f32>() / numbers.len() as f32
 }
+
+/// Parse hex string output from radare2 to remove characters and consume into Vec<u8>
+pub fn parse_hex_escapes(s: String) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    let mut chars = s.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '\\' && chars.peek() == Some(&'x') {
+            chars.next();
+            let hex: String = chars.by_ref().take(2).collect();
+            if hex.len() == 2 {
+                if let Ok(byte) = u8::from_str_radix(&hex, 16) {
+                    bytes.push(byte);
+                }
+            }
+        }
+    }
+    bytes
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

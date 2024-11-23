@@ -281,7 +281,7 @@ enum Commands {
         output_dir: PathBuf,
 
         /// The extraction mode
-        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "reg", "cfg", "func-xrefs","cg", "decomp", "pcode-func", "pcode-bb", "localvar-xrefs", "strings"])
+        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "reg", "cfg", "func-xrefs","cg", "decomp", "pcode-func", "pcode-bb", "localvar-xrefs", "strings", "bytes"])
         .map(|s| s.parse::<String>().unwrap()),)]
         mode: String,
 
@@ -1126,7 +1126,17 @@ fn main() {
                         .par_iter()
                         .progress()
                         .for_each(|path| path.extract_local_variable_xrefs());
-                }
+                } else if job.job_type == ExtractionJobType::GlobalStrings {
+                    job.files_to_be_processed
+                        .par_iter()
+                        .progress()
+                        .for_each(|path| path.extract_global_strings());
+                } else if job.job_type == ExtractionJobType::FunctionBytes {
+                    job.files_to_be_processed
+                        .par_iter()
+                        .progress()
+                        .for_each(|path| path.extract_function_bytes());
+                };
             } else if job.input_path_type == PathType::File {
                 info!("Single file found");
                 if job.job_type == ExtractionJobType::CFG {
@@ -1155,6 +1165,8 @@ fn main() {
                     job.files_to_be_processed[0].extract_local_variable_xrefs()
                 } else if job.job_type == ExtractionJobType::GlobalStrings {
                     job.files_to_be_processed[0].extract_global_strings()
+                } else if job.job_type == ExtractionJobType::FunctionBytes {
+                    job.files_to_be_processed[0].extract_function_bytes()
                 } else {
                     error!("Unsupported ExtractionJobType of {:?}", job.job_type)
                 }
