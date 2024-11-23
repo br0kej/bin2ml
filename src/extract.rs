@@ -18,7 +18,6 @@ use std::env;
 
 use std::fs;
 use std::fs::File;
-
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -42,6 +41,8 @@ pub enum ExtractionJobType {
     PCodeFunc,
     PCodeBB,
     LocalVariableXrefs,
+    GlobalStrings,
+    FunctionBytes,
 }
 
 #[derive(Debug)]
@@ -313,6 +314,24 @@ pub struct Writes {
     pub addrs: Vec<i64>,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StringEntry {
+    pub vaddr: i64,
+    pub paddr: i64,
+    pub ordinal: i64,
+    pub size: i64,
+    pub length: i64,
+    pub section: String,
+    #[serde(rename = "type")]
+    pub type_field: String,
+    pub string: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FuncBytes {
+    pub bytes: Vec<u8>,
+}
+
 impl ExtractionJob {
     pub fn new(
         input_path: &PathBuf,
@@ -348,6 +367,8 @@ impl ExtractionJob {
                 "pcode-func" => Ok(ExtractionJobType::PCodeFunc),
                 "pcode-bb" => Ok(ExtractionJobType::PCodeBB),
                 "localvar-xrefs" => Ok(ExtractionJobType::LocalVariableXrefs),
+                "strings" => Ok(ExtractionJobType::GlobalStrings),
+                "bytes" => Ok(ExtractionJobType::FunctionBytes),
                 _ => bail!("Incorrect command type - got {}", mode),
             }
         }
@@ -704,7 +725,71 @@ impl FileToBeProcessed {
         }
     }
 
+    pub fn extract_global_strings(&self) {
+        info!("Stating Global String Extraction");
+        let mut r2p = self.setup_r2_pipe();
+        let json = r2p.cmd("izj");
+        r2p.close();
+        info!("r2p closed");
+
+        if json.is_ok() {
+            let json = json.unwrap();
+            debug!("{}", json);
+            let json_obj: Vec<StringEntry> =
+                serde_json::from_str(&json).expect("Unable to convert to JSON object!");
+
+            self.write_to_json(&json!(json_obj))
+        } else {
+            error!("Failed to execute axj command successfully")
+        }
+    }
+
+    pub fn extract_function_bytes(&self) {
+        info!("Starting function bytes extraction");
+        let mut r2p = self.setup_r2_pipe();
+        let function_details = self.get_function_name_list(&mut r2p);
+
+        if function_details.is_ok() {
+            for function in function_details.unwrap().iter() {
+                debug!(
+                    "Function Name: {} Offset: {} Size: {}",
+                    function.name, function.offset, function.size
+                );
+                let function_bytes = self.get_bytes_function(function.offset, &mut r2p);
+                if let Ok(valid_bytes_obj) = function_bytes {
+                    Self::write_to_bin(self, &function.name, &valid_bytes_obj.bytes)
+                        .expect("Failed to write bytes to bin.");
+                };
+            }
+            info!("Function bytes successfully extracted");
+            r2p.close();
+            info!("r2p closed");
+        } else {
+            error!(
+                "Failed to extract function bytes - Error in r2 extraction for {:?}",
+                self.file_path
+            )
+        }
+    }
+
     // r2 commands to structs
+    fn get_bytes_function(
+        &self,
+        function_addr: u64,
+        r2p: &mut R2Pipe,
+    ) -> Result<FuncBytes, r2pipe::Error> {
+        Self::go_to_address(r2p, function_addr);
+
+        let function_bytes = r2p.cmd(format!("pcs @ {}", function_addr).as_str())?;
+        let function_bytes = function_bytes.replace('"', "");
+
+        let function_bytes = crate::utils::parse_hex_escapes(function_bytes);
+
+        Ok(FuncBytes {
+            bytes: function_bytes,
+        })
+    }
+
     fn get_ghidra_pcode_function(
         &self,
         function_addr: u64,
@@ -865,8 +950,29 @@ impl FileToBeProcessed {
         .unwrap_or_else(|_| panic!("the world is ending: {:?}", output_filepath));
     }
 
+    fn write_to_bin(&self, function_name: &String, func_bytes: &[u8]) -> Result<()> {
+        let mut fp_filename = self
+            .file_path
+            .file_name()
+            .expect("Unable to get filename")
+            .to_string_lossy()
+            .to_string();
+
+        fp_filename = fp_filename + "/" + function_name + ".bin";
+
+        let mut output_filepath = PathBuf::new();
+        output_filepath.push(self.output_path.clone());
+        output_filepath.push(fp_filename);
+
+        let prefix = output_filepath.parent().unwrap();
+        fs::create_dir_all(prefix).unwrap();
+
+        fs::write(output_filepath, func_bytes).unwrap();
+        Ok(())
+    }
+
     fn go_to_address(r2p: &mut R2Pipe, function_addr: u64) {
-        r2p.cmd(format!("s @ {}", function_addr).as_str())
+        r2p.cmd(format!("s {}", function_addr).as_str())
             .expect("failed to seek addr");
     }
 

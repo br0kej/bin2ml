@@ -202,7 +202,7 @@ enum GenerateSubCommands {
         /// Determine the pcode filetype
         #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(["pcode-func", "pcode-bb"])
         .map(|s| s.parse::<String>().unwrap()))]
-        pcode_file_format: String,
+        pcode_file_format: Option<String>,
     },
     /// Generate metadata/feature subsets from extracted data
     Metadata {
@@ -281,7 +281,7 @@ enum Commands {
         output_dir: PathBuf,
 
         /// The extraction mode
-        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "reg", "cfg", "func-xrefs","cg", "decomp", "pcode-func", "pcode-bb", "localvar-xrefs"])
+        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "reg", "cfg", "func-xrefs","cg", "decomp", "pcode-func", "pcode-bb", "localvar-xrefs", "strings", "bytes"])
         .map(|s| s.parse::<String>().unwrap()),)]
         mode: String,
 
@@ -895,6 +895,10 @@ fn main() {
                     _ => InstructionMode::Invalid,
                 };
 
+                if instruction_type == InstructionMode::PCode && pcode_file_format.is_none() {
+                    error!("--pcode-file-format is required when processed PCode")
+                }
+
                 if instruction_type == InstructionMode::Invalid {
                     error!("Invalid instruction mode: {:?}", instruction_type);
                     exit(1)
@@ -939,7 +943,8 @@ fn main() {
                             )
                         }
                         InstructionMode::PCode => {
-                            let pcode_file_type = match pcode_file_format.as_str() {
+                            let pcode_file_type = match pcode_file_format.as_ref().unwrap().as_str()
+                            {
                                 "pcode-func" => PCodeFileTypes::PCodeJsonFile,
                                 "pcode-bb" => PCodeFileTypes::PCodeWithBBFile,
                                 _ => unreachable!("Invalid PCode file type"),
@@ -1121,7 +1126,17 @@ fn main() {
                         .par_iter()
                         .progress()
                         .for_each(|path| path.extract_local_variable_xrefs());
-                }
+                } else if job.job_type == ExtractionJobType::GlobalStrings {
+                    job.files_to_be_processed
+                        .par_iter()
+                        .progress()
+                        .for_each(|path| path.extract_global_strings());
+                } else if job.job_type == ExtractionJobType::FunctionBytes {
+                    job.files_to_be_processed
+                        .par_iter()
+                        .progress()
+                        .for_each(|path| path.extract_function_bytes());
+                };
             } else if job.input_path_type == PathType::File {
                 info!("Single file found");
                 if job.job_type == ExtractionJobType::CFG {
@@ -1148,6 +1163,12 @@ fn main() {
                     job.files_to_be_processed[0].extract_pcode_basic_block()
                 } else if job.job_type == ExtractionJobType::LocalVariableXrefs {
                     job.files_to_be_processed[0].extract_local_variable_xrefs()
+                } else if job.job_type == ExtractionJobType::GlobalStrings {
+                    job.files_to_be_processed[0].extract_global_strings()
+                } else if job.job_type == ExtractionJobType::FunctionBytes {
+                    job.files_to_be_processed[0].extract_function_bytes()
+                } else {
+                    error!("Unsupported ExtractionJobType of {:?}", job.job_type)
                 }
                 info!("Extraction complete for {:?}", fpath)
             }
