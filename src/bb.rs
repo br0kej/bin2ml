@@ -267,6 +267,27 @@ impl ACFJBlock {
         }
     }
 
+    fn retrieve_opcode<'a>(&self, ins: &'a Op) -> Option<&'a str> {
+        if ins.r#type == "invalid" {
+            return None;
+        }
+
+        if ins.r#type == "nop" {
+            return Some("nop");
+        }
+
+        // Get the opcode string reference directly from ins
+        let opcode = ins.opcode.as_ref()?;
+        let first_word = opcode.split_whitespace().next()?;
+
+        if first_word.is_empty() {
+            error!("Found empty opcode for instruction {:?}", ins);
+            None
+        } else {
+            Some(first_word)
+        }
+    }
+
     // Generates the features from the Gemini paper
     //
     // Setting reduced = True is equivalent of generating the basic block
@@ -281,15 +302,9 @@ impl ACFJBlock {
         let mut feature_vector: Vec<f64> = vec![0.0; n_features];
 
         for ins in self.ops.iter() {
-            if ins.r#type != "invalid" {
-                let opcode = ins
-                    .disasm
-                    .as_ref()
-                    .unwrap()
-                    .split_whitespace()
-                    .next()
-                    .unwrap();
-
+            let opcode = self.retrieve_opcode(ins);
+            if opcode.is_some() {
+                let opcode = opcode.unwrap();
                 if architecture == "ARM" {
                     if ARM_CALL.contains(&opcode) {
                         feature_vector[0] += 1. // Number of Calls
@@ -345,15 +360,11 @@ impl ACFJBlock {
     // The feature list is taken from Table 1 within the paper
     pub fn dgis_features(&self, architecture: &String) -> Vec<f64> {
         let mut feature_vector: Vec<f64> = vec![0.0; 8];
+
         for ins in self.ops.iter() {
-            if ins.r#type != "invalid" {
-                let opcode = ins
-                    .disasm
-                    .as_ref()
-                    .unwrap()
-                    .split_whitespace()
-                    .next()
-                    .unwrap();
+            let opcode = self.retrieve_opcode(ins);
+            if opcode.is_some() {
+                let opcode = opcode.unwrap();
                 if architecture == "ARM" {
                     if ARM_STACK.contains(&opcode) {
                         feature_vector[0] += 1. // No. of Stack Operations
@@ -540,14 +551,9 @@ impl ACFJBlock {
         };
 
         for ins in self.ops.iter() {
-            if ins.r#type != "invalid" {
-                let opcode = ins
-                    .opcode
-                    .as_ref()
-                    .unwrap()
-                    .split_whitespace()
-                    .next()
-                    .unwrap();
+            let opcode = self.retrieve_opcode(ins);
+            if opcode.is_some() {
+                let opcode = opcode.unwrap();
                 if architecture == "ARM" {
                     // Arith + Shifts
                     if ARM_GRP_ARITH.contains(&opcode) || ARM_GRP_SHIFT.contains(&opcode) {
