@@ -541,14 +541,9 @@ impl ACFJBlock {
 
         for ins in self.ops.iter() {
             if ins.r#type != "invalid" {
-                let opcode = ins
-                    .opcode
-                    .as_ref()
-                    .unwrap()
-                    .split_whitespace()
-                    .next();
+                let opcode = ins.opcode.as_ref().unwrap().split_whitespace().next();
 
-                if opcode.is_none() && ins.r#type != "nop"{
+                if opcode.is_none() && ins.r#type != "nop" {
                     error!("Found none opcode for instruction {:?}", ins)
                 } else {
                     let opcode = if ins.r#type == "nop" {
