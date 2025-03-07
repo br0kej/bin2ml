@@ -267,6 +267,27 @@ impl ACFJBlock {
         }
     }
 
+    fn retrieve_opcode<'a>(&self, ins: &'a Op) -> Option<&'a str> {
+        if ins.r#type == "invalid" {
+            return None;
+        }
+
+        if ins.r#type == "nop" {
+            return Some("nop");
+        }
+
+        // Get the opcode string reference directly from ins
+        let opcode = ins.opcode.as_ref()?;
+        let first_word = opcode.split_whitespace().next()?;
+
+        if first_word.is_empty() {
+            error!("Found empty opcode for instruction {:?}", ins);
+            None
+        } else {
+            Some(first_word)
+        }
+    }
+
     // Generates the features from the Gemini paper
     //
     // Setting reduced = True is equivalent of generating the basic block
@@ -281,15 +302,9 @@ impl ACFJBlock {
         let mut feature_vector: Vec<f64> = vec![0.0; n_features];
 
         for ins in self.ops.iter() {
-            if ins.r#type != "invalid" {
-                let opcode = ins
-                    .disasm
-                    .as_ref()
-                    .unwrap()
-                    .split_whitespace()
-                    .next()
-                    .unwrap();
-
+            let opcode = self.retrieve_opcode(ins);
+            if opcode.is_some() {
+                let opcode = opcode.unwrap();
                 if architecture == "ARM" {
                     if ARM_CALL.contains(&opcode) {
                         feature_vector[0] += 1. // Number of Calls
@@ -345,15 +360,11 @@ impl ACFJBlock {
     // The feature list is taken from Table 1 within the paper
     pub fn dgis_features(&self, architecture: &String) -> Vec<f64> {
         let mut feature_vector: Vec<f64> = vec![0.0; 8];
+
         for ins in self.ops.iter() {
-            if ins.r#type != "invalid" {
-                let opcode = ins
-                    .disasm
-                    .as_ref()
-                    .unwrap()
-                    .split_whitespace()
-                    .next()
-                    .unwrap();
+            let opcode = self.retrieve_opcode(ins);
+            if opcode.is_some() {
+                let opcode = opcode.unwrap();
                 if architecture == "ARM" {
                     if ARM_STACK.contains(&opcode) {
                         feature_vector[0] += 1. // No. of Stack Operations
@@ -540,126 +551,116 @@ impl ACFJBlock {
         };
 
         for ins in self.ops.iter() {
-            if ins.r#type != "invalid" {
-                let opcode = ins.opcode.as_ref().unwrap().split_whitespace().next();
-
-                if opcode.is_none() && ins.r#type != "nop" {
-                    error!("Found none opcode for instruction {:?}", ins)
-                } else {
-                    let opcode = if ins.r#type == "nop" {
-                        "nop"
-                    } else {
-                        opcode.unwrap()
-                    };
-
-                    if architecture == "ARM" {
-                        // Arith + Shifts
-                        if ARM_GRP_ARITH.contains(&opcode) || ARM_GRP_SHIFT.contains(&opcode) {
-                            features.arithshift += 1.0
-                        }
-                        // Compare
-                        if ARM_GRP_CMP.contains(&opcode) || ARM_GRP_FLOAT_CMP.contains(&opcode) {
-                            features.compare += 1.0
-                        }
-                        // Call Transfer
-                        if ARM_GRP_CTRANSFER.contains(&opcode) {
-                            features.ctransfer += 1.0
-                        }
-                        // Call Transfer + Cond
-                        if ARM_GRP_CTRANSFER.contains(&opcode)
-                            || ARM_GRP_COND_CTRANSFER.contains(&opcode)
-                        {
-                            features.ctransfercond += 1.0
-                        }
-                        // Data Transfer
-                        if ARM_GRP_DTRANSFER.contains(&opcode)
-                            || ARM_GRP_FLOAT_DTRANSFER.contains(&opcode)
-                        {
-                            features.dtransfer += 1.0
-                        }
-
-                        // FLoat Operations
-                        if ARM_GRP_FLOAT_DTRANSFER.contains(&opcode)
-                            || ARM_GRP_FLOAT_CMP.contains(&opcode)
-                            || ARM_GRP_FLOAT_ARITH.contains(&opcode)
-                        {
-                            features.float += 1.0
-                        }
-                        // total
-                        features.total += 1.0
-                    } else if architecture == "MIPS" {
-                        // Arith + Shifts
-                        if MIPS_GRP_ARITH.contains(&opcode) || MIPS_GRP_SHIFT.contains(&opcode) {
-                            features.arithshift += 1.0
-                        }
-                        // Compare
-                        if MIPS_GRP_CMP.contains(&opcode) || MIPS_GRP_FLOAT_CMP.contains(&opcode) {
-                            features.compare += 1.0
-                        }
-                        // Call Transfer
-                        if MIPS_GRP_CTRANSFER.contains(&opcode) {
-                            features.ctransfer += 1.0
-                        }
-                        // Call Transfer + Cond
-                        if MIPS_GRP_CTRANSFER.contains(&opcode)
-                            || MIPS_GRP_COND_CTRANSFER.contains(&opcode)
-                        {
-                            features.ctransfercond += 1.0
-                        }
-                        // Data Transfer
-                        if MIPS_GRP_DTRANSFER.contains(&opcode)
-                            || MIPS_GRP_FLOAT_DTRANSFER.contains(&opcode)
-                        {
-                            features.dtransfer += 1.0
-                        }
-
-                        // FLoat Operations
-                        if MIPS_GRP_FLOAT_DTRANSFER.contains(&opcode)
-                            || MIPS_GRP_FLOAT_CMP.contains(&opcode)
-                            || MIPS_GRP_FLOAT_ARITH.contains(&opcode)
-                        {
-                            features.float += 1.0
-                        }
-                        // total
-                        features.total += 1.0
-                    } else if architecture == "X86" {
-                        // Arith + Shifts
-                        if X86_GRP_ARITH.contains(&opcode) || X86_GRP_SHIFT.contains(&opcode) {
-                            features.arithshift += 1.0
-                        }
-                        // Compare
-                        if X86_GRP_CMP.contains(&opcode) || X86_GRP_FLOAT_CMP.contains(&opcode) {
-                            features.compare += 1.0
-                        }
-                        // Call Transfer
-                        if X86_GRP_CTRANSFER.contains(&opcode) {
-                            features.ctransfer += 1.0
-                        }
-                        // Call Transfer + Cond
-                        if X86_GRP_CTRANSFER.contains(&opcode)
-                            || X86_GRP_COND_CTRANSFER.contains(&opcode)
-                        {
-                            features.ctransfercond += 1.0
-                        }
-                        // Data Transfer
-                        if X86_GRP_DTRANSFER.contains(&opcode)
-                            || X86_GRP_FLOAT_DTRANSFER.contains(&opcode)
-                        {
-                            features.dtransfer += 1.0
-                        }
-
-                        // FLoat Operations
-                        if X86_GRP_FLOAT_DTRANSFER.contains(&opcode)
-                            || X86_GRP_FLOAT_CMP.contains(&opcode)
-                            || X86_GRP_FLOAT_ARITH.contains(&opcode)
-                        {
-                            features.float += 1.0
-                        }
-                        // total
-                        features.total += 1.0
-                    } else {
-                        unreachable!("The architecture provided is not possible.")
+            let opcode = self.retrieve_opcode(ins);
+            if opcode.is_some() {
+                let opcode = opcode.unwrap();
+                if architecture == "ARM" {
+                    // Arith + Shifts
+                    if ARM_GRP_ARITH.contains(&opcode) || ARM_GRP_SHIFT.contains(&opcode) {
+                        features.arithshift += 1.0
                     }
+                    // Compare
+                    if ARM_GRP_CMP.contains(&opcode) || ARM_GRP_FLOAT_CMP.contains(&opcode) {
+                        features.compare += 1.0
+                    }
+                    // Call Transfer
+                    if ARM_GRP_CTRANSFER.contains(&opcode) {
+                        features.ctransfer += 1.0
+                    }
+                    // Call Transfer + Cond
+                    if ARM_GRP_CTRANSFER.contains(&opcode)
+                        || ARM_GRP_COND_CTRANSFER.contains(&opcode)
+                    {
+                        features.ctransfercond += 1.0
+                    }
+                    // Data Transfer
+                    if ARM_GRP_DTRANSFER.contains(&opcode)
+                        || ARM_GRP_FLOAT_DTRANSFER.contains(&opcode)
+                    {
+                        features.dtransfer += 1.0
+                    }
+
+                    // FLoat Operations
+                    if ARM_GRP_FLOAT_DTRANSFER.contains(&opcode)
+                        || ARM_GRP_FLOAT_CMP.contains(&opcode)
+                        || ARM_GRP_FLOAT_ARITH.contains(&opcode)
+                    {
+                        features.float += 1.0
+                    }
+                    // total
+                    features.total += 1.0
+                } else if architecture == "MIPS" {
+                    // Arith + Shifts
+                    if MIPS_GRP_ARITH.contains(&opcode) || MIPS_GRP_SHIFT.contains(&opcode) {
+                        features.arithshift += 1.0
+                    }
+                    // Compare
+                    if MIPS_GRP_CMP.contains(&opcode) || MIPS_GRP_FLOAT_CMP.contains(&opcode) {
+                        features.compare += 1.0
+                    }
+                    // Call Transfer
+                    if MIPS_GRP_CTRANSFER.contains(&opcode) {
+                        features.ctransfer += 1.0
+                    }
+                    // Call Transfer + Cond
+                    if MIPS_GRP_CTRANSFER.contains(&opcode)
+                        || MIPS_GRP_COND_CTRANSFER.contains(&opcode)
+                    {
+                        features.ctransfercond += 1.0
+                    }
+                    // Data Transfer
+                    if MIPS_GRP_DTRANSFER.contains(&opcode)
+                        || MIPS_GRP_FLOAT_DTRANSFER.contains(&opcode)
+                    {
+                        features.dtransfer += 1.0
+                    }
+
+                    // FLoat Operations
+                    if MIPS_GRP_FLOAT_DTRANSFER.contains(&opcode)
+                        || MIPS_GRP_FLOAT_CMP.contains(&opcode)
+                        || MIPS_GRP_FLOAT_ARITH.contains(&opcode)
+                    {
+                        features.float += 1.0
+                    }
+                    // total
+                    features.total += 1.0
+                } else if architecture == "X86" {
+                    // Arith + Shifts
+                    if X86_GRP_ARITH.contains(&opcode) || X86_GRP_SHIFT.contains(&opcode) {
+                        features.arithshift += 1.0
+                    }
+                    // Compare
+                    if X86_GRP_CMP.contains(&opcode) || X86_GRP_FLOAT_CMP.contains(&opcode) {
+                        features.compare += 1.0
+                    }
+                    // Call Transfer
+                    if X86_GRP_CTRANSFER.contains(&opcode) {
+                        features.ctransfer += 1.0
+                    }
+                    // Call Transfer + Cond
+                    if X86_GRP_CTRANSFER.contains(&opcode)
+                        || X86_GRP_COND_CTRANSFER.contains(&opcode)
+                    {
+                        features.ctransfercond += 1.0
+                    }
+                    // Data Transfer
+                    if X86_GRP_DTRANSFER.contains(&opcode)
+                        || X86_GRP_FLOAT_DTRANSFER.contains(&opcode)
+                    {
+                        features.dtransfer += 1.0
+                    }
+
+                    // FLoat Operations
+                    if X86_GRP_FLOAT_DTRANSFER.contains(&opcode)
+                        || X86_GRP_FLOAT_CMP.contains(&opcode)
+                        || X86_GRP_FLOAT_ARITH.contains(&opcode)
+                    {
+                        features.float += 1.0
+                    }
+                    // total
+                    features.total += 1.0
+                } else {
+                    unreachable!("The architecture provided is not possible.")
                 }
             }
         }
