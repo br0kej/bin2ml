@@ -1,17 +1,17 @@
 # Binary Data Extraction
 ## Core Functionality
-`bin2ml` generates ML-ready data from JSON files, which contain raw data about software binaries, extracted with Radare2. In the example below we produce one of such JSON files from a binary file called `target_bin`: 
+`bin2ml` generates ML-ready data from JSON files, which contain raw data about software binaries, extracted with Radare2. In the example below we produce one of such JSON files from a binary called `target_bin`: 
 
 ```bash
 bin2ml extract --fpath path/to/target_bin --output-dir path/to/output_dir --modes cfg
 ``` 
 
-The argument `--fpath` can also accepd a directory path to recursively extract data from all binaries within that folder. As a result, `bin2ml` will save the output of `r2pipe` to `path/to/output_dir/target_bin_cfg.json`. [^extractsource]
+The argument `--fpath` can also accept a directory path to recursively extract data from all binaries within that folder. As a result, `bin2ml` will save the output of `r2pipe` to `path/to/output_dir/target_bin_cfg.json`. [^extractsource]
 
 [^extractsource]: For more information refer to the implementation `FileToBeProcessed` in extract.rs.
 
 ## Multiple Modes
-Previously, we demonstrated how to extract output from a single Radare2 command (`agfj @@f`). You can also execute multiple extraction modes simultaneously, significantly speeding up the analysis process when multiple types of features are needed:
+Previously, we demonstrated how `bin2ml` extracts data from a single Radare2 command (`agfj`). You can also execute multiple extraction modes simultaneously, significantly speeding up the analysis process when multiple types of features are needed:
 ```bash
 bin2ml extract --fpath path/to/target_bin --output-dir path/to/output_dir --modes cfg decomp strings
 ```
