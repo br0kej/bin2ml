@@ -1,6 +1,7 @@
 # Supported Node Features
+## Graph Features
 
-The `bin2ml graph --feature-type` flag supports a number of different node features where features are extracted from the basic blocks and are typically simple counts.
+The `bin2ml generate graphs --feature-type` flag supports a number of different node features where features are extracted from the basic blocks and are typically simple counts.
 
 | `feature-type` | Description | Paper | Features | Architecture |
 | ----------- | ----------- |-----|---| --|
