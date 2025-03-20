@@ -36,6 +36,7 @@ pub enum ExtractionJobType {
     CFG,
     CallGraphs,
     FuncInfo,
+    FunctionVariables,
     Decompilation,
     PCodeFunc,
     PCodeBB,
@@ -315,6 +316,14 @@ pub struct Writes {
     pub addrs: Vec<i64>,
 }
 
+// Structs for afvj - Function Arguments, Registers, and Variables JSON output
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AFVJFuncDetails {
+    pub reg: Vec<Regvar>,
+    pub sp: Vec<Value>,
+    pub bp: Vec<Bpvar>,
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StringEntry {
     pub vaddr: i64,
@@ -358,6 +367,7 @@ impl ExtractionJob {
         fn extraction_job_matcher(mode: &str) -> Result<ExtractionJobType, Error> {
             match mode {
                 "finfo" => Ok(ExtractionJobType::FuncInfo),
+                "fvars" => Ok(ExtractionJobType::FunctionVariables),
                 "reg" => Ok(ExtractionJobType::RegisterBehaviour),
                 "cfg" => Ok(ExtractionJobType::CFG),
                 "func-xrefs" => Ok(ExtractionJobType::FunctionXrefs),
@@ -500,6 +510,9 @@ impl FileToBeProcessed {
                 ExtractionJobType::FuncInfo => {
                     self.extract_function_info(&mut r2p, job_type_suffix)
                 }
+                ExtractionJobType::FunctionVariables => {
+                    self.extract_function_variables(&mut r2p, job_type_suffix)
+                }
                 ExtractionJobType::Decompilation => {
                     self.extract_decompilation(&mut r2p, job_type_suffix)
                 }
@@ -532,6 +545,7 @@ impl FileToBeProcessed {
             ExtractionJobType::CFG => "cfg",
             ExtractionJobType::CallGraphs => "cg",
             ExtractionJobType::FuncInfo => "finfo",
+            ExtractionJobType::FunctionVariables => "fvars",
             ExtractionJobType::Decompilation => "decomp",
             ExtractionJobType::PCodeFunc => "pcode-func",
             ExtractionJobType::PCodeBB => "pcode-bb",
@@ -564,6 +578,7 @@ impl FileToBeProcessed {
                 self.extract_function_call_graphs(&mut r2p, job_type_suffix)
             }
             ExtractionJobType::FuncInfo => self.extract_function_info(&mut r2p, job_type_suffix),
+            ExtractionJobType::FunctionVariables => self.extract_function_variables(&mut r2p, job_type_suffix),
             ExtractionJobType::Decompilation => {
                 self.extract_decompilation(&mut r2p, job_type_suffix)
             }
@@ -640,6 +655,31 @@ impl FileToBeProcessed {
             }
         } else {
             info!("{} already exists. Skipping", f_name);
+        }
+    }
+
+    pub fn extract_function_variables(&self, r2p: &mut R2Pipe, job_type_suffix: String) {
+        let function_details = self.get_function_name_list(r2p);
+        if function_details.is_ok() {
+            let mut func_variables_vec: HashMap<String, AFVJFuncDetails> =
+                HashMap::new();
+            info!("Executing aeafj for each function");
+            for function in function_details.unwrap().iter() {
+                r2p.cmd(format!("s @ {}", &function.name).as_str())
+                    .expect("Command failed..");
+                let json = r2p.cmd("afvj").expect("Command failed..");
+                let json_obj: AFVJFuncDetails =
+                    serde_json::from_str(&json).expect("Unable to convert to JSON object!");
+                func_variables_vec.insert(function.name.clone(), json_obj);
+            }
+            info!("All functions processed");
+            info!("Writing extracted data to file");
+            self.write_to_json(&json!(func_variables_vec), job_type_suffix)
+        } else {
+            error!(
+                "Failed to extract function variable details - Error in r2 extraction for {:?}",
+                self.file_path
+            )
         }
     }
 

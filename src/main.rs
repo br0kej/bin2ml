@@ -284,7 +284,7 @@ enum Commands {
         /// The extraction modes (multiple can be specified)
         #[arg(short, long, value_name = "EXTRACT_MODE",
         value_parser = clap::builder::PossibleValuesParser::new([
-        "finfo", "reg", "cfg", "func-xrefs", "cg", "decomp",
+        "finfo", "fvars", "reg", "cfg", "func-xrefs", "cg", "decomp",
         "pcode-func", "pcode-bb", "localvar-xrefs", "strings", "bytes"
         ])
         .map(|s| s.parse::<String>().unwrap()),
