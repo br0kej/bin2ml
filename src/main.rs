@@ -40,7 +40,6 @@ pub mod utils;
 mod validate;
 
 use crate::dedup::{CGCorpus, EsilFuncStringCorpus};
-use crate::extract::ExtractionJobType;
 use crate::files::{AFIJFile, AGCJFile, FunctionMetadataTypes, TikNibFuncMetaFile};
 use crate::tokeniser::{train_byte_bpe_tokeniser, TokeniserType};
 use crate::utils::get_save_file_path;
