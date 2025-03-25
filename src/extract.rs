@@ -7,6 +7,7 @@ use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Error;
 use anyhow::Result;
+use anyhow::Context;
 use r2pipe::R2Pipe;
 use r2pipe::R2PipeSpawnOptions;
 
@@ -22,6 +23,7 @@ use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
+use regex::Regex;
 
 #[derive(PartialEq, Debug)]
 pub enum PathType {
@@ -1153,28 +1155,55 @@ impl FileToBeProcessed {
         .unwrap_or_else(|_| panic!("the world is ending: {:?}", output_filepath));
     }
 
+    fn sanitize_function_name(&self, original: &str) -> String {
+        // Replace non-valid characters with '_'
+        // Valid characters: letters, digits, '_', '-', and '.'
+        let re = Regex::new(r"[^\w.-]").unwrap();
+        re.replace_all(original, "_").into_owned()
+    }
+
     fn write_to_bin(
         &self, 
         function_name: &String, 
         func_bytes: &[u8],
         dirname_suffix: &String,
     ) -> Result<()> {
-        let mut fp_filename = self
-            .file_path
+        // Extract the file stem from self.file_path and add context if missing.
+        let file_stem = self.file_path
             .file_name()
-            .expect("Unable to get filename")
+            .ok_or_else(|| anyhow::anyhow!("Unable to get filename from {:?}", self.file_path))?
             .to_string_lossy()
             .to_string();
-        fp_filename = format!("{}_{}/{}.bin", fp_filename, dirname_suffix, function_name);
 
-        let mut output_filepath = PathBuf::new();
-        output_filepath.push(self.output_path.clone());
-        output_filepath.push(fp_filename);
+        // Construct the full output directory path.
+        let mut output_dir = self.output_path.clone();
+        // Build the directory name by combining the file stem with the given suffix.
+        let dir_name = format!("{}_{}", file_stem, dirname_suffix);
+        output_dir.push(&dir_name);
+        fs::create_dir_all(&output_dir)
+            .with_context(|| format!("Failed to create directory {:?}", output_dir))?;
+        
+        // Construct the full output file path.
+        let mut output_filepath = output_dir.clone();
+        // Sanitize the function name to create a valid filename.
+        let sanitized_function_name = self.sanitize_function_name(function_name);
+        let file_name = format!("{}.bin", sanitized_function_name);
+        output_filepath.push(file_name);
 
-        let prefix = output_filepath.parent().unwrap();
-        fs::create_dir_all(prefix).unwrap();
+        // Check if a file with same name the sanitized name already exists.
+        if output_filepath.exists() {
+            debug!(
+                "Duplicate function binary file detected for '{}' at {:?}. Skipping.",
+                function_name,
+                output_filepath
+            );
+            return Ok(());
+        }
 
-        fs::write(output_filepath, func_bytes).unwrap();
+        // Write the file and attach context on error.
+        fs::write(&output_dir, func_bytes)
+            .with_context(|| format!("Failed to write file {:?}", output_dir))?;
+
         Ok(())
     }
 
