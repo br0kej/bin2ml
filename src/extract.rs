@@ -45,6 +45,7 @@ pub enum ExtractionJobType {
     LocalVariableXrefs,
     GlobalStrings,
     FunctionBytes,
+    FunctionZignatures,
 }
 
 #[derive(Debug)]
@@ -344,6 +345,47 @@ pub struct FuncBytes {
     pub bytes: Vec<u8>,
 }
 
+// Structs related to r2 zignatures
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GraphEntry {
+    pub cc: u64,
+    pub nbbs: u64,
+    pub edges: u64,
+    pub ebbs: u64,
+    pub bbsum: u64,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VarEntry {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub type_field: String,
+    pub kind: char,
+    pub delta: i64,
+    pub isarg: bool,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HashEntry {
+    pub bbhash: String, // hexadecimal
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FunctionZignature {
+    pub name: String,
+    pub bytes: String, // hexadecimal function bytes
+    pub mask: String,  // hexadecimal
+    pub graph: GraphEntry,
+    pub addr: i64,
+    pub next: Option<String>,
+    pub types: String,
+    pub refs: Vec<String>,
+    pub xrefs: Vec<String>,
+    pub collisions: Vec<String>, // colliding function names
+    pub vars: Vec<VarEntry>,
+    pub hash: HashEntry,
+}
+
 impl ExtractionJob {
     pub fn new(
         input_path: &PathBuf,
@@ -380,6 +422,7 @@ impl ExtractionJob {
                 "localvar-xrefs" => Ok(ExtractionJobType::LocalVariableXrefs),
                 "strings" => Ok(ExtractionJobType::GlobalStrings),
                 "bytes" => Ok(ExtractionJobType::FunctionBytes),
+                "zignatures" => Ok(ExtractionJobType::FunctionZignatures),
                 _ => bail!("Incorrect command type - got {}", mode),
             }
         }
@@ -530,7 +573,12 @@ impl FileToBeProcessed {
                 ExtractionJobType::GlobalStrings => {
                     self.extract_global_strings(&mut r2p, job_type_suffix)
                 }
-                ExtractionJobType::FunctionBytes => self.extract_function_bytes(&mut r2p),
+                ExtractionJobType::FunctionZignatures => {
+                    self.extract_function_zignatures(&mut r2p, job_type_suffix)
+                }
+                ExtractionJobType::FunctionBytes => {
+                    self.extract_function_bytes(&mut r2p, job_type_suffix)
+                }
             }
         }
 
@@ -553,6 +601,7 @@ impl FileToBeProcessed {
             ExtractionJobType::PCodeBB => "pcode-bb",
             ExtractionJobType::LocalVariableXrefs => "localvar-xrefs",
             ExtractionJobType::GlobalStrings => "strings",
+            ExtractionJobType::FunctionZignatures => "zignatures",
             ExtractionJobType::FunctionBytes => "bytes",
         }
         .to_string()
@@ -592,7 +641,12 @@ impl FileToBeProcessed {
             ExtractionJobType::GlobalStrings => {
                 self.extract_global_strings(&mut r2p, job_type_suffix)
             }
-            ExtractionJobType::FunctionBytes => self.extract_function_bytes(&mut r2p),
+            ExtractionJobType::FunctionZignatures => {
+                self.extract_function_zignatures(&mut r2p, job_type_suffix)
+            },
+            ExtractionJobType::FunctionBytes => {
+                self.extract_function_bytes(&mut r2p, job_type_suffix)
+            }
         }
 
         r2p.close();
@@ -881,7 +935,19 @@ impl FileToBeProcessed {
         }
     }
 
-    pub fn extract_function_bytes(&self, r2p: &mut R2Pipe) {
+    pub fn extract_function_zignatures(&self, r2p: &mut R2Pipe, job_type_suffix: String) {
+        info!("Starting function zignatures extraction");
+        let _ = r2p.cmd("zg"); // generate zignatures
+        debug!("Finished generating function zignatures");
+        let json = r2p.cmd("zj").expect("zj command failed to execute");
+        let function_zignatures: Vec<FunctionZignature> =
+            serde_json::from_str(&json).expect("Unable to convert to JSON object!");
+        info!("Function zignatures extracted.");
+        info!("Writing extracted data to file");
+        self.write_to_json(&json!(function_zignatures), job_type_suffix)
+    }
+
+    pub fn extract_function_bytes(&self, r2p: &mut R2Pipe, job_type_suffix: String) {
         info!("Starting function bytes extraction");
         let function_details = self.get_function_name_list(r2p);
 
@@ -893,7 +959,7 @@ impl FileToBeProcessed {
                 );
                 let function_bytes = self.get_bytes_function(function.offset, function.size, r2p);
                 if let Ok(valid_bytes_obj) = function_bytes {
-                    Self::write_to_bin(self, &function.name, &valid_bytes_obj.bytes)
+                    Self::write_to_bin(self, &function.name, &valid_bytes_obj.bytes, &job_type_suffix)
                         .expect("Failed to write bytes to bin.");
                 };
             }
@@ -1087,15 +1153,19 @@ impl FileToBeProcessed {
         .unwrap_or_else(|_| panic!("the world is ending: {:?}", output_filepath));
     }
 
-    fn write_to_bin(&self, function_name: &String, func_bytes: &[u8]) -> Result<()> {
+    fn write_to_bin(
+        &self, 
+        function_name: &String, 
+        func_bytes: &[u8],
+        dirname_suffix: &String,
+    ) -> Result<()> {
         let mut fp_filename = self
             .file_path
             .file_name()
             .expect("Unable to get filename")
             .to_string_lossy()
             .to_string();
-
-        fp_filename = fp_filename + "/" + function_name + ".bin";
+        fp_filename = format!("{}_{}/{}.bin", fp_filename, dirname_suffix, function_name);
 
         let mut output_filepath = PathBuf::new();
         output_filepath.push(self.output_path.clone());
