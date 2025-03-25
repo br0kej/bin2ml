@@ -723,9 +723,8 @@ impl FileToBeProcessed {
                 HashMap::new();
             info!("Executing aeafj for each function");
             for function in function_details.unwrap().iter() {
-                r2p.cmd(format!("s @ {}", &function.name).as_str())
-                    .expect("Command failed..");
-                let json = r2p.cmd("afvj").expect("Command failed..");
+                let json = r2p.cmd(format!("afvj @ {}", &function.name).as_str())
+                    .expect("Command failed.");
                 let json_obj: AFVJFuncDetails =
                     serde_json::from_str(&json).expect("Unable to convert to JSON object!");
                 func_variables_vec.insert(function.name.clone(), json_obj);
@@ -747,45 +746,41 @@ impl FileToBeProcessed {
             .expect("Unable to get filename")
             .to_string_lossy()
             .to_string();
-        fp_filename = fp_filename + "_" + &job_type_suffix;
+        fp_filename = format!("{}_{}", fp_filename, job_type_suffix);
         let f_name = format!("{:?}/{}.json", &self.output_path, fp_filename);
 
         if !Path::new(&f_name).exists() {
             info!("{} not found. Continuing processing.", f_name);
             info!("Executing agfj @@f on {:?}", self.file_path);
 
-            let mut json = r2p
+            let json_raw = r2p
                 .cmd("agfj @@f")
                 .expect("Failed to extract control flow graph information.");
 
             info!("Starting JSON fixup for {:?}", self.file_path);
-            // Fix JSON object
-            json = json.replace("[]\n", ",");
-            json = json.replace("}]\n[{", "}],\n[{");
-            json.insert(0, '[');
-            json.push(']');
-            json = json.replace("}]\n,]", "}]\n]");
-            json = json.replace("\n,,[{", "\n,[{");
-            json = json.replace("\n,,[{", "\n,[{");
-            info!("JSON fixup finished for {:?}", self.file_path);
-
-            if json != "[,]" {
-                #[allow(clippy::expect_fun_call)]
-                // Kept in to ensure that the JSON decode error message is printed alongside the filename
-                let json: Value = serde_json::from_str(&json).expect(&format!(
-                    "Unable to parse json for {}: {}",
-                    fp_filename, json
-                ));
-
-                self.write_to_json(&json, job_type_suffix);
-            } else {
-                error!(
-                    "File empty after JSON fixup - Only contains [,] - {}",
-                    f_name
-                )
+            match self.fix_json_object(&json_raw) {
+                Ok(json) => {
+                    info!("JSON fixup finished for {:?}", self.file_path);
+                    // If the cleaned JSON is an empty array, log an error and skip.
+                    if json == serde_json::Value::Array(vec![]) {
+                        error!(
+                            "File empty after JSON fixup - Only contains empty JSON array - {}",
+                            f_name
+                        );
+                    } else {
+                        self.write_to_json(&json, job_type_suffix);
+                    }
+                }
+                Err(e) => {
+                    error!(
+                        "Unable to parse json for {}: {}: {}",
+                        fp_filename, json_raw, e
+                    );
+                    // Here, you can choose to return, skip the operation, or take other action.
+                }
             }
         } else {
-            info!("{} as already exists. Skipping", f_name)
+            info!("{} already exists. Skipping", f_name);
         }
     }
 
@@ -1129,6 +1124,28 @@ impl FileToBeProcessed {
     }
 
     // Helper Functions
+    fn fix_json_object(
+        &self, 
+        json_raw: &String
+    ) -> Result<serde_json::Value, serde_json::Error> {
+        let mut json_str = json_raw.replace("[]\n", ",");
+        json_str = json_str.replace("}]\n[{", "}],\n[{");
+        json_str.insert(0, '[');
+        json_str.push(']');
+        json_str = json_str.replace("}]\n,]", "}]\n]");
+        json_str = json_str.replace("\n,,[{", "\n,[{");
+        json_str = json_str.replace("\n,,[{", "\n,[{");
+
+        if json_str == "[,]" {
+            // No valid results were found, so return an empty JSON array.
+            return Ok(Value::Array(vec![]));
+        }
+
+        // Attempt to parse the JSON. Any parsing error will be returned.
+        let json: Value = serde_json::from_str(&json_str)?;
+        Ok(json)
+    }
+
     fn write_to_json(&self, json_obj: &Value, job_type_suffix: String) {
         let mut fp_filename = self
             .file_path
