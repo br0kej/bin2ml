@@ -1,6 +1,8 @@
 use crate::afij::AFIJFunctionInfo;
 use crate::agcj::AGCJFunctionCallGraph;
 
+use std::io;
+
 use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Error;
@@ -889,7 +891,7 @@ impl FileToBeProcessed {
                     "Function Name: {} Offset: {} Size: {}",
                     function.name, function.offset, function.size
                 );
-                let function_bytes = self.get_bytes_function(function.offset, r2p);
+                let function_bytes = self.get_bytes_function(function.offset, function.size, r2p);
                 if let Ok(valid_bytes_obj) = function_bytes {
                     Self::write_to_bin(self, &function.name, &valid_bytes_obj.bytes)
                         .expect("Failed to write bytes to bin.");
@@ -908,14 +910,17 @@ impl FileToBeProcessed {
     fn get_bytes_function(
         &self,
         function_addr: u64,
+        function_size: i128,
         r2p: &mut R2Pipe,
     ) -> Result<FuncBytes, r2pipe::Error> {
         Self::go_to_address(r2p, function_addr);
-
-        let function_bytes = r2p.cmd(format!("pcs @ {}", function_addr).as_str())?;
-        let function_bytes = function_bytes.replace('"', "");
-
-        let function_bytes = crate::utils::parse_hex_escapes(function_bytes);
+        r2p.cmd(format!("s {}", function_addr).as_str())?;
+        let function_bytes = r2p.cmd(format!("p8 {}", function_size).as_str())?;
+        let function_bytes = function_bytes.trim();
+        let function_bytes = hex::decode(function_bytes).map_err(|e| {
+            r2pipe::Error::Io(io::Error::new(io::ErrorKind::InvalidData, 
+                format!("Hex decode error: {}", e)))
+        })?;
 
         Ok(FuncBytes {
             bytes: function_bytes,
