@@ -40,7 +40,6 @@ pub mod utils;
 mod validate;
 
 use crate::dedup::{CGCorpus, EsilFuncStringCorpus};
-use crate::extract::ExtractionJobType;
 use crate::files::{AFIJFile, AGCJFile, FunctionMetadataTypes, TikNibFuncMetaFile};
 use crate::tokeniser::{train_byte_bpe_tokeniser, TokeniserType};
 use crate::utils::get_save_file_path;
@@ -271,19 +270,26 @@ enum Commands {
         subcommands: GenerateSubCommands,
     },
     /// Extract raw data from input binaries
+    /// Extract raw data from input binaries
     Extract {
         /// The path to the dir or binary to be processed
         #[arg(short, long, value_name = "DIR")]
         fpath: PathBuf,
 
         /// The path for the output directory
-        #[arg(short, long, value_name = "DIR")]
+        #[arg(short, long, value_name = "OUTPUT_DIR")]
         output_dir: PathBuf,
 
-        /// The extraction mode
-        #[arg(short, long, value_name = "EXTRACT_MODE", value_parser = clap::builder::PossibleValuesParser::new(["finfo", "reg", "cfg", "func-xrefs","cg", "decomp", "pcode-func", "pcode-bb", "localvar-xrefs", "strings", "bytes"])
-        .map(|s| s.parse::<String>().unwrap()),)]
-        mode: String,
+        /// The extraction modes (multiple can be specified)
+        #[arg(short, long, value_name = "EXTRACT_MODE",
+        value_parser = clap::builder::PossibleValuesParser::new([
+        "bininfo", "finfo", "fvars", "reg", "cfg", "func-xrefs", "cg", "decomp",
+        "pcode-func", "pcode-bb", "localvar-xrefs", "strings", "bytes", "zigs"
+        ])
+        .map(|s| s.parse::<String>().unwrap()),
+        num_args = 1..,
+        required = true)]
+        modes: Vec<String>,
 
         /// The number of threads Rayon can use when parallel processing
         #[arg(short, long, value_name = "NUM_THREADS", default_value = "2")]
@@ -1022,156 +1028,67 @@ fn main() {
         Commands::Extract {
             fpath,
             output_dir,
-            mode,
+            modes,
             num_threads,
             debug,
             extended_analysis,
             use_curl_pdb,
             with_annotations,
         } => {
-            info!("Creating extraction job");
+            info!("Creating extraction job with {} modes", modes.len());
             if !output_dir.exists() {
                 error!("Output directory does not exist - {:?}. Create the directory and re-run again. Exiting...", output_dir);
                 exit(1)
             }
+
+            // Create a single extraction job with all modes
             let job = ExtractionJob::new(
                 fpath,
                 output_dir,
-                mode,
+                modes,
                 debug,
                 extended_analysis,
                 use_curl_pdb,
                 with_annotations,
             )
-            .unwrap();
+            .unwrap_or_else(|e| {
+                error!("Failed to create extraction job: {}", e);
+                exit(1);
+            });
+
+            info!(
+                "Created extraction job with {} job types",
+                job.job_types.len()
+            );
 
             if job.input_path_type == PathType::Dir {
                 info!("Directory found - will parallel process");
 
-                info!("Creating thread pool with {} threads ", num_threads);
+                info!("Creating thread pool with {} threads", num_threads);
                 rayon::ThreadPoolBuilder::new()
                     .num_threads(*num_threads)
                     .build_global()
                     .unwrap();
 
-                if job.job_type == ExtractionJobType::CFG {
-                    info!("Extraction Job Type: CFG");
-                    info!("Starting Parallel generation.");
-                    #[allow(clippy::redundant_closure)]
-                    job.files_to_be_processed
-                        .par_iter()
-                        .progress()
-                        .for_each(|path| path.extract_func_cfgs());
-                } else if job.job_type == ExtractionJobType::RegisterBehaviour {
-                    info!("Extraction Job Type: Register Behaviour");
-                    info!("Starting Parallel generation.");
-                    #[allow(clippy::redundant_closure)]
-                    job.files_to_be_processed
-                        .par_iter()
-                        .progress()
-                        .for_each(|path| path.extract_register_behaviour());
-                } else if job.job_type == ExtractionJobType::FunctionXrefs {
-                    info!("Extraction Job Type: Function Xrefs");
-                    info!("Starting Parallel generation.");
-                    #[allow(clippy::redundant_closure)]
-                    job.files_to_be_processed
-                        .par_iter()
-                        .progress()
-                        .for_each(|path| path.extract_function_xrefs());
-                } else if job.job_type == ExtractionJobType::CallGraphs {
-                    info!("Extraction Job Type: Call Graphs");
-                    info!("Starting Parallel generation.");
-                    #[allow(clippy::redundant_closure)]
-                    job.files_to_be_processed
-                        .par_iter()
-                        .progress()
-                        .for_each(|path| path.extract_function_call_graphs());
-                } else if job.job_type == ExtractionJobType::FuncInfo {
-                    info!("Extraction Job Type: Function Info");
-                    info!("Starting Parallel generation.");
-                    #[allow(clippy::redundant_closure)]
-                    job.files_to_be_processed
-                        .par_iter()
-                        .progress()
-                        .for_each(|path| path.extract_function_info());
-                } else if job.job_type == ExtractionJobType::Decompilation {
-                    info!("Extraction Job Type: Decompilation");
-                    info!("Starting Parallel generation.");
-                    #[allow(clippy::redundant_closure)]
-                    job.files_to_be_processed
-                        .par_iter()
-                        .progress()
-                        .for_each(|path| path.extract_decompilation());
-                } else if job.job_type == ExtractionJobType::PCodeFunc {
-                    info!("Extraction Job Type: PCode Function");
-                    info!("Starting Parallel generation.");
-                    #[allow(clippy::redundant_closure)]
-                    job.files_to_be_processed
-                        .par_iter()
-                        .progress()
-                        .for_each(|path| path.extract_pcode_function());
-                } else if job.job_type == ExtractionJobType::PCodeBB {
-                    info!("Extraction Job Type: PCode Basic Block");
-                    info!("Starting Parallel generation.");
-                    #[allow(clippy::redundant_closure)]
-                    job.files_to_be_processed
-                        .par_iter()
-                        .progress()
-                        .for_each(|path| path.extract_pcode_basic_block());
-                } else if job.job_type == ExtractionJobType::LocalVariableXrefs {
-                    info!("Extraction Job Type: Local Variable Xrefs");
-                    info!("Starting Parallel generation.");
-                    #[allow(clippy::redundant_closure)]
-                    job.files_to_be_processed
-                        .par_iter()
-                        .progress()
-                        .for_each(|path| path.extract_local_variable_xrefs());
-                } else if job.job_type == ExtractionJobType::GlobalStrings {
-                    job.files_to_be_processed
-                        .par_iter()
-                        .progress()
-                        .for_each(|path| path.extract_global_strings());
-                } else if job.job_type == ExtractionJobType::FunctionBytes {
-                    job.files_to_be_processed
-                        .par_iter()
-                        .progress()
-                        .for_each(|path| path.extract_function_bytes());
-                };
+                // Process all files in parallel, each file processes all modes with a single r2pipe
+                job.files_to_be_processed
+                    .par_iter()
+                    .progress()
+                    .for_each(|path| path.process_all_modes());
             } else if job.input_path_type == PathType::File {
                 info!("Single file found");
-                if job.job_type == ExtractionJobType::CFG {
-                    info!("Extraction Job Type: CFG");
-                    job.files_to_be_processed[0].extract_func_cfgs();
-                } else if job.job_type == ExtractionJobType::RegisterBehaviour {
-                    info!("Extraction Job Type: Register Behaviour");
-                    job.files_to_be_processed[0].extract_register_behaviour()
-                } else if job.job_type == ExtractionJobType::FunctionXrefs {
-                    info!("Extraction Job type: Function Xrefs");
-                    job.files_to_be_processed[0].extract_function_xrefs()
-                } else if job.job_type == ExtractionJobType::CallGraphs {
-                    info!("Extraction Job type: Function Call Graphs");
-                    job.files_to_be_processed[0].extract_function_call_graphs()
-                } else if job.job_type == ExtractionJobType::FuncInfo {
-                    info!("Extraction Job type: Function Info");
-                    job.files_to_be_processed[0].extract_function_info()
-                } else if job.job_type == ExtractionJobType::Decompilation {
-                    info!("Extraction Job type: Decompilation");
-                    job.files_to_be_processed[0].extract_decompilation()
-                } else if job.job_type == ExtractionJobType::PCodeFunc {
-                    job.files_to_be_processed[0].extract_pcode_function()
-                } else if job.job_type == ExtractionJobType::PCodeBB {
-                    job.files_to_be_processed[0].extract_pcode_basic_block()
-                } else if job.job_type == ExtractionJobType::LocalVariableXrefs {
-                    job.files_to_be_processed[0].extract_local_variable_xrefs()
-                } else if job.job_type == ExtractionJobType::GlobalStrings {
-                    job.files_to_be_processed[0].extract_global_strings()
-                } else if job.job_type == ExtractionJobType::FunctionBytes {
-                    job.files_to_be_processed[0].extract_function_bytes()
-                } else {
-                    error!("Unsupported ExtractionJobType of {:?}", job.job_type)
-                }
-                info!("Extraction complete for {:?}", fpath)
+
+                // Process single file with all modes using a single r2pipe instance
+                job.files_to_be_processed[0].process_all_modes();
+
+                info!(
+                    "Extraction complete for {:?} with {} modes",
+                    fpath,
+                    modes.len()
+                );
             }
+
+            info!("All extractions completed");
         }
 
         #[cfg(feature = "inference")]

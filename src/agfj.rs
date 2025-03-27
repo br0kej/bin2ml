@@ -69,7 +69,7 @@ impl AGFJFunc {
         reg_norm: bool,
     ) -> Option<(String, String)> {
         let mut esil_function = Vec::<String>::new();
-        if self.blocks.len() >= (*min_blocks).into() && self.blocks[0].offset != 1 {
+        if self.blocks.len() >= <u16 as Into<usize>>::into(*min_blocks) && self.blocks[0].offset != 1 {
             for bb in &self.blocks {
                 let esil: Vec<String> = bb.get_esil_bb(reg_norm);
                 for ins in esil.iter() {
@@ -93,7 +93,7 @@ impl AGFJFunc {
         reg_norm: bool,
     ) -> Option<(String, String)> {
         let mut disasm_function = Vec::<String>::new();
-        if self.blocks.len() >= (*min_blocks).into() && self.blocks[0].offset != 1 {
+        if self.blocks.len() >= <u16 as Into<usize>>::into(*min_blocks) && self.blocks[0].offset != 1 {
             for bb in &self.blocks {
                 let disasm: Vec<String> = bb.get_disasm_bb(reg_norm);
                 for ins in disasm.iter() {
@@ -117,7 +117,7 @@ impl AGFJFunc {
         reg_norm: bool,
     ) -> Option<(String, String)> {
         let mut psuedo_function = Vec::<String>::new();
-        if self.blocks.len() >= (*min_blocks).into() && self.blocks[0].offset != 1 {
+        if self.blocks.len() >= <u16 as Into<usize>>::into(*min_blocks) && self.blocks[0].offset != 1 {
             for bb in &self.blocks {
                 let psuedo: Vec<String> = bb.get_psuedo_bb(reg_norm);
                 for ins in psuedo.iter() {
@@ -135,7 +135,7 @@ impl AGFJFunc {
         }
     }
     pub fn create_bb_edge_list(&mut self, min_blocks: &u16) {
-        if self.blocks.len() > (*min_blocks).into() && self.blocks[0].offset != 1 {
+        if self.blocks.len() > <u16 as Into<usize>>::into(*min_blocks) && self.blocks[0].offset != 1 {
             let bb_start_addrs: Vec<i64> = self.blocks.iter().map(|x| x.offset).collect::<Vec<_>>();
             let mut edge_list = Vec::<(u32, u32, u32)>::new();
 
@@ -162,7 +162,7 @@ impl AGFJFunc {
     ) -> Option<Vec<String>> {
         let mut function_instructions = Vec::<Vec<String>>::new();
 
-        if self.blocks.len() >= (*min_blocks).into() {
+        if self.blocks.len() >= <u16 as Into<usize>>::into(*min_blocks) {
             for bb in &self.blocks {
                 if esil {
                     let bb_ins = bb.get_esil_bb(reg_norm);
@@ -257,7 +257,7 @@ impl AGFJFunc {
         reg_norm: bool,
         pairs: bool,
     ) -> Option<Vec<Vec<String>>> {
-        if self.blocks.len() > (*min_blocks).into() && self.blocks[0].offset != 1 {
+        if self.blocks.len() > <u16 as Into<usize>>::into(*min_blocks) && self.blocks[0].offset != 1 {
             self.create_graph_struct_members(min_blocks);
             let disasm_walks = self.dfs_cfg(10, esil, reg_norm, pairs);
             Some(disasm_walks)
@@ -288,7 +288,7 @@ impl AGFJFunc {
         check_or_create_dir(&full_output_path);
 
         // offset != 1 has been added to skip functions with invalid instructions
-        if self.blocks.len() >= (*min_blocks).into() && self.blocks[0].offset != 1 {
+        if self.blocks.len() >= <u16 as Into<usize>>::into(*min_blocks) && self.blocks[0].offset != 1 {
             let bb_start_addrs: Vec<i64> = self.blocks.iter().map(|x| x.offset).collect::<Vec<_>>();
             let mut edge_list = Vec::<(u32, u32, u32)>::new();
 
@@ -393,7 +393,7 @@ impl AGFJFunc {
 
         if !Path::new(&fname_string).is_file() {
             // offset != 1 has been added to skip functions with invalid instructions
-            if self.blocks.len() >= (*min_blocks).into() && self.blocks[0].offset != 1 {
+            if self.blocks.len() >= <u16 as Into<usize>>::into(*min_blocks) && self.blocks[0].offset != 1 {
                 let mut edge_list = Vec::<(u32, u32, u32)>::new();
 
                 let mut feature_vecs: StringOrF64 = match feature_type {
