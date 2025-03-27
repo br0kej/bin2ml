@@ -1,6 +1,6 @@
 [package]
 name = "bin2ml"
-version = "0.4.0"
+version = "0.4.2"
 edition = "2021"
 
 [dependencies]
@@ -27,6 +27,7 @@ env_logger = "0.10.0"
 thiserror = "1.0.47"
 enum-as-inner = "0.6.0"
 ordered-float = { version = "4.2.0", features = ["serde"] }
+hex = { version = "0.4", features = ["alloc"] }
 
 [dependencies.petgraph]
 version = "0.6.2"
