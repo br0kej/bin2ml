@@ -23,10 +23,12 @@ use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
+use glob::glob;
 use regex::Regex;
 
 #[derive(PartialEq, Debug)]
 pub enum PathType {
+    Pattern,
     File,
     Dir,
     Unk,
@@ -472,6 +474,12 @@ impl ExtractionJob {
         with_annotations: &bool,
     ) -> Result<ExtractionJob, Error> {
         fn get_path_type(bin_path: &PathBuf) -> PathType {
+            // Handle pattern first since it would raise NotFound error 
+            let path_str = bin_path.to_string_lossy();
+            if path_str.contains('*') || path_str.contains('?') || path_str.contains('[') {
+                return PathType::Pattern;
+            }
+
             let fpath_md = fs::metadata(bin_path).unwrap();
             if fpath_md.is_file() {
                 PathType::File
@@ -568,6 +576,30 @@ impl ExtractionJob {
                 files_to_be_processed,
                 output_path: output_path.to_owned(),
             })
+        } else if p_type == PathType::Pattern {
+            // For a match pattern get the list of matching file paths
+            let pattern = input_path.to_string_lossy();
+            let files = ExtractionJob::get_file_paths_pattern(&pattern);
+
+            // Create FileToBeProcessed objects for each file with all job types
+            let files_to_be_processed = files
+                .into_iter()
+                .map(|f| FileToBeProcessed {
+                    file_path: PathBuf::from(f),
+                    output_path: output_path.to_owned(),
+                    job_types: extraction_job_types.clone(),
+                    r2p_config: r2_handle_config,
+                    with_annotations: *with_annotations,
+                })
+                .collect();
+
+            Ok(ExtractionJob {
+                input_path: input_path.to_owned(),
+                input_path_type: PathType::Dir, // For using parallel processing
+                job_types,
+                files_to_be_processed,
+                output_path: output_path.to_owned(),
+            })
         } else {
             bail!("Failed to create ExtractionJob")
         }
@@ -588,6 +620,24 @@ impl ExtractionJob {
             }
         }
         str_vec
+    }
+
+    fn get_file_paths_pattern(pattern: &str) -> Vec<String> {
+        let mut paths = Vec::new();
+        // glob returns an iterator over Result<PathBuf, GlobError>
+        for entry in glob(pattern).expect("Failed to read glob pattern") {
+            if let Ok(path) = entry {
+                if path.is_file() {
+                    // Exclude JSON files
+                    if let Some(fname) = path.file_name() {
+                        if !fname.to_string_lossy().ends_with(".json") {
+                            paths.push(path.to_string_lossy().to_string());
+                        }
+                    }
+                }
+            }
+        }
+        paths
     }
 }
 
