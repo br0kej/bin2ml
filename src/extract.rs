@@ -424,7 +424,7 @@ impl ExtractionJob {
                 "localvar-xrefs" => Ok(ExtractionJobType::LocalVariableXrefs),
                 "strings" => Ok(ExtractionJobType::GlobalStrings),
                 "bytes" => Ok(ExtractionJobType::FunctionBytes),
-                "zignatures" => Ok(ExtractionJobType::FunctionZignatures),
+                "zigs" => Ok(ExtractionJobType::FunctionZignatures),
                 _ => bail!("Incorrect command type - got {}", mode),
             }
         }
@@ -603,7 +603,7 @@ impl FileToBeProcessed {
             ExtractionJobType::PCodeBB => "pcode-bb",
             ExtractionJobType::LocalVariableXrefs => "localvar-xrefs",
             ExtractionJobType::GlobalStrings => "strings",
-            ExtractionJobType::FunctionZignatures => "zignatures",
+            ExtractionJobType::FunctionZignatures => "zigs",
             ExtractionJobType::FunctionBytes => "bytes",
         }
         .to_string()
