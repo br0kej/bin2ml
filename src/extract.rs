@@ -1289,8 +1289,11 @@ impl FileToBeProcessed {
         // Build the directory name by combining the file stem with the given suffix.
         let dir_name = format!("{}_{}", file_stem, dirname_suffix);
         output_dir.push(&dir_name);
-        fs::create_dir_all(&output_dir)
-            .with_context(|| format!("Failed to create directory {:?}", output_dir))?;
+
+        if !output_dir.is_dir() {
+            fs::create_dir_all(&output_dir)
+                .with_context(|| format!("Failed to create directory {:?}", output_dir))?;
+        }
         
         // Construct the full output file path.
         let mut output_filepath = output_dir.clone();
@@ -1309,9 +1312,11 @@ impl FileToBeProcessed {
             return Ok(());
         }
 
+        debug!("Attempting to write function bytes to {:?}", output_filepath);
+
         // Write the file and attach context on error.
-        fs::write(&output_dir, func_bytes)
-            .with_context(|| format!("Failed to write file {:?}", output_dir))?;
+        fs::write(&output_filepath, func_bytes)
+            .with_context(|| format!("Failed to write file {:?}", output_filepath))?;
 
         Ok(())
     }
