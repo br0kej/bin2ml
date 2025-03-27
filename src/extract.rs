@@ -33,7 +33,6 @@ pub enum PathType {
 }
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ExtractionJobType {
-    // bininfo is not implemented in anyway
     BinInfo, // Extract high level information from the binary (r2 ij)
     RegisterBehaviour,
     FunctionXrefs,
@@ -347,7 +346,7 @@ pub struct FuncBytes {
     pub bytes: Vec<u8>,
 }
 
-// Structs related to r2 zignatures
+// Structs for zj - Function signatures (called "zignatures" in r2)
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GraphEntry {
     pub cc: u64,
@@ -388,6 +387,80 @@ pub struct FunctionZignature {
     pub hash: HashEntry,
 }
 
+// Strcuts for ij - Information about the binary file
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ChecksumsEntry { // Output of itj
+    md5: Option<String>,
+    sha1: Option<String>,
+    sha256: Option<String>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CoreEntry {
+    #[serde(rename = "type")]
+    pub type_field: String,
+    pub file: String,
+    pub fd: i32,
+    pub size: u64,
+    pub humansz: String,
+    pub iorw: bool,
+    pub mode: String,
+    pub block: u64,
+    pub format: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BinEntry {
+    pub arch: String,
+    pub baddr: u64,
+    pub binsz: u64,
+    pub bintype: String,
+    pub bits: u16,
+    pub canary: bool,
+    pub injprot: bool,
+    pub retguard: bool,
+    pub class: String,
+    #[serde(rename = "cmp.csum")]
+    pub cmp_csum: String,
+    pub compiled: String,
+    pub compiler: String,
+    pub crypto: bool,
+    pub dbg_file: String,
+    pub endian: String,
+    pub havecode: bool,
+    #[serde(rename = "hdr.csum")]
+    pub hdr_csum: String,
+    pub guid: String,
+    pub intrp: String,
+    pub laddr: u64,
+    pub lang: String,
+    pub linenum: bool,
+    pub lsyms: bool,
+    pub machine: String,
+    pub nx: bool,
+    pub os: String,
+    pub overlay: bool,
+    pub cc: String,
+    pub pic: bool,
+    pub relocs: bool,
+    pub rpath: String,
+    pub signed: bool,
+    pub sanitize: bool,
+    #[serde(rename = "static")]
+    pub static_field: bool,
+    pub stripped: bool,
+    pub subsys: String,
+    pub va: bool,
+    pub checksums: ChecksumsEntry, // Always empty. Populating manually with itj
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BinaryInfo {
+    pub core: CoreEntry,
+    pub bin: BinEntry,
+}
+
+
 impl ExtractionJob {
     pub fn new(
         input_path: &PathBuf,
@@ -412,6 +485,7 @@ impl ExtractionJob {
         // This function is used to validate modes and convert them to job types
         fn extraction_job_matcher(mode: &str) -> Result<ExtractionJobType, Error> {
             match mode {
+                "bininfo" => Ok(ExtractionJobType::BinInfo),
                 "finfo" => Ok(ExtractionJobType::FuncInfo),
                 "fvars" => Ok(ExtractionJobType::FunctionVariables),
                 "reg" => Ok(ExtractionJobType::RegisterBehaviour),
@@ -542,7 +616,7 @@ impl FileToBeProcessed {
 
             match job_type {
                 ExtractionJobType::BinInfo => {
-                    error!("BinInfo extraction is not implemented");
+                    self.extract_binary_info(&mut r2p, job_type_suffix)
                 }
                 ExtractionJobType::RegisterBehaviour => {
                     self.extract_register_behaviour(&mut r2p, job_type_suffix)
@@ -617,8 +691,7 @@ impl FileToBeProcessed {
 
         match job_type {
             ExtractionJobType::BinInfo => {
-                // BinInfo is not implemented as mentioned in the enum comment
-                error!("BinInfo extraction is not implemented");
+                self.extract_binary_info(&mut r2p, job_type_suffix)
             }
             ExtractionJobType::RegisterBehaviour => {
                 self.extract_register_behaviour(&mut r2p, job_type_suffix)
@@ -653,6 +726,25 @@ impl FileToBeProcessed {
 
         r2p.close();
         info!("r2p closed");
+    }
+
+    pub fn extract_binary_info(&self, r2p: &mut R2Pipe, job_type_suffix: String) {
+        info!("Starting binary information extraction");
+        let bininfo_json = r2p.cmd("ij")
+            .expect("ij command failed to execute.");
+        let mut bininfo: BinaryInfo = serde_json::from_str(&bininfo_json)
+            .expect(&format!("Unable to convert ij string to JSON object: `{}`", bininfo_json));
+
+        let checksums_json = r2p.cmd("itj")
+            .expect("itj command failed to execute.");
+        let checksums: ChecksumsEntry = serde_json::from_str(&checksums_json)
+            .expect(&format!("Unable to convert itj string to JSON object: `{}`", checksums_json));
+
+        bininfo.bin.checksums = checksums;
+
+        info!("Binary information extracted.");
+        info!("Writing extracted data to file");
+        self.write_to_json(&json!(bininfo), job_type_suffix)
     }
 
     pub fn extract_register_behaviour(&self, r2p: &mut R2Pipe, job_type_suffix: String) {
