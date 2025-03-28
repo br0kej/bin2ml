@@ -821,31 +821,19 @@ impl FileToBeProcessed {
 
     pub fn extract_function_info(&self, r2p: &mut R2Pipe, job_type_suffix: String) {
         info!("Starting function metdata extraction");
-        let mut fp_filename = self
-            .file_path
-            .file_name()
-            .expect("Unable to get filename")
-            .to_string_lossy()
-            .to_string();
+        let function_details: Result<Vec<AFIJFunctionInfo>, r2pipe::Error> =
+            self.get_function_name_list(r2p);
 
-        fp_filename = fp_filename + "_" + &job_type_suffix;
-        let f_name = format!("{:?}/{}.json", self.output_path, fp_filename);
-        if !Path::new(&f_name).exists() {
-            let function_details: Result<Vec<AFIJFunctionInfo>, r2pipe::Error> =
-                self.get_function_name_list(r2p);
-
-            if function_details.is_err() {
-                error!("Unable to extract function info for {:?}", self.file_path);
-            } else {
-                info!("Writing extracted data to file");
-                self.write_to_json(&json!(function_details.unwrap()), job_type_suffix)
-            }
+        if function_details.is_err() {
+            error!("Unable to extract function info for {:?}", self.file_path);
         } else {
-            info!("{} already exists. Skipping", f_name);
+            info!("Writing extracted data to file");
+            self.write_to_json(&json!(function_details.unwrap()), job_type_suffix)
         }
     }
 
     pub fn extract_function_variables(&self, r2p: &mut R2Pipe, job_type_suffix: String) {
+        info!("Starting function variables extraction");
         let function_details = self.get_function_name_list(r2p);
         if function_details.is_ok() {
             let mut func_variables_vec: HashMap<String, AFVJFuncDetails> =
@@ -870,45 +858,32 @@ impl FileToBeProcessed {
     }
 
     pub fn extract_func_cfgs(&self, r2p: &mut R2Pipe, job_type_suffix: String) {
-        let mut fp_filename = Path::new(&self.file_path)
-            .file_name()
-            .expect("Unable to get filename")
-            .to_string_lossy()
-            .to_string();
-        fp_filename = format!("{}_{}", fp_filename, job_type_suffix);
-        let f_name = format!("{:?}/{}.json", &self.output_path, fp_filename);
+        info!("Executing agfj @@f on {:?}", self.file_path);
 
-        if !Path::new(&f_name).exists() {
-            info!("{} not found. Continuing processing.", f_name);
-            info!("Executing agfj @@f on {:?}", self.file_path);
+        let json_raw = r2p
+            .cmd("agfj @@f")
+            .expect("Failed to extract control flow graph information.");
 
-            let json_raw = r2p
-                .cmd("agfj @@f")
-                .expect("Failed to extract control flow graph information.");
-
-            info!("Starting JSON fixup for {:?}", self.file_path);
-            match self.fix_json_object(&json_raw) {
-                Ok(json) => {
-                    info!("JSON fixup finished for {:?}", self.file_path);
-                    // If the cleaned JSON is an empty array, log an error and skip.
-                    if json == serde_json::Value::Array(vec![]) {
-                        error!(
-                            "File empty after JSON fixup - Only contains empty JSON array - {}",
-                            f_name
-                        );
-                    } else {
-                        self.write_to_json(&json, job_type_suffix);
-                    }
-                }
-                Err(e) => {
+        info!("Starting JSON fixup for {:?}", self.file_path);
+        match self.fix_json_object(&json_raw) {
+            Ok(json) => {
+                info!("JSON fixup finished for {:?}", self.file_path);
+                // If the cleaned JSON is an empty array, log an error and skip.
+                if json == serde_json::Value::Array(vec![]) {
                     error!(
-                        "Unable to parse json for {}: {}: {}",
-                        fp_filename, json_raw, e
+                        "File empty after JSON fixup - Only contains empty JSON array - {:?}",
+                        self.file_path
                     );
+                } else {
+                    self.write_to_json(&json, job_type_suffix);
                 }
             }
-        } else {
-            info!("{} already exists. Skipping", f_name);
+            Err(e) => {
+                error!(
+                    "Unable to parse json for {:?}: {}: {}",
+                    self.file_path, json_raw, e
+                );
+            }
         }
     }
 
