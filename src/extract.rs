@@ -650,7 +650,9 @@ impl FileToBeProcessed {
             .to_string_lossy()
             .to_string();
 
-        fp_filename = if self.with_annotations {
+        fp_filename = if job_type_suffix == "bytes" {
+            fp_filename + "_" + &job_type_suffix
+        } else if self.with_annotations {
             fp_filename + "_" + &job_type_suffix + "_annotations" + ".json"
         } else {
             fp_filename + "_" + &job_type_suffix + ".json"
@@ -682,7 +684,7 @@ impl FileToBeProcessed {
         }
 
         // Set up a single r2pipe instance
-        let mut r2p = self.setup_r2_pipe();
+        let mut maybe_r2p: Option<R2Pipe> = None;
 
         // Process each job type with the same r2pipe instance
         for job_type in &self.job_types {
@@ -690,11 +692,17 @@ impl FileToBeProcessed {
 
             let job_type_suffix = self.get_job_type_suffix(job_type);
             let output_path = self.get_output_filepath(&job_type_suffix);
-
             if Path::new(&output_path).exists() {
                 warn!("Skipping {:?} job: already processed at {:?}.", job_type_suffix, output_path);
                 continue;
             }
+
+            // Lazily initialize r2p if not already done.
+            let mut r2p = maybe_r2p.get_or_insert_with(|| {
+                let mut pipe = self.setup_r2_pipe();
+                self.analyse_r2_pipe(&mut pipe);
+                pipe
+            });
 
             match job_type {
                 ExtractionJobType::BinInfo => {
@@ -741,8 +749,10 @@ impl FileToBeProcessed {
         }
 
         // Close the r2pipe instance once after processing all job types
-        r2p.close();
-        info!("r2p closed after processing all job types");
+        if let Some(mut r2p) = maybe_r2p {
+            r2p.close();
+            info!("r2p closed after processing all job types");
+        }
     }
 
     pub fn get_job_type_suffix(&self, job_type: &ExtractionJobType) -> String {
@@ -1399,6 +1409,10 @@ impl FileToBeProcessed {
             }
         }
 
+        r2p
+    }
+
+    fn analyse_r2_pipe(&self, r2p: &mut R2Pipe) {
         if self.r2p_config.extended_analysis {
             debug!(
                 "Executing 'aaa' r2 command for {}",
@@ -1416,6 +1430,5 @@ impl FileToBeProcessed {
                 self.file_path.display()
             );
         };
-        r2p
     }
 }
