@@ -642,6 +642,32 @@ impl ExtractionJob {
 }
 
 impl FileToBeProcessed {
+    pub fn get_output_filename(&self, job_type_suffix: &str) -> String {
+        let mut fp_filename = self
+            .file_path
+            .file_name()
+            .expect("Unable to get filename")
+            .to_string_lossy()
+            .to_string();
+
+        fp_filename = if self.with_annotations {
+            fp_filename + "_" + &job_type_suffix + "_annotations" + ".json"
+        } else {
+            fp_filename + "_" + &job_type_suffix + ".json"
+        };
+        fp_filename
+    }
+
+    pub fn get_output_filepath(&self, job_type_suffix: &str) -> PathBuf {
+        let fp_filename = self.get_output_filename(job_type_suffix);
+
+        let mut output_filepath = PathBuf::new();
+        output_filepath.push(self.output_path.clone());
+        output_filepath.push(fp_filename);
+
+        output_filepath.clone()
+    }
+
     pub fn process_all_modes(&self) {
         info!(
             "Starting extraction for {} job types on {:?}",
@@ -663,6 +689,12 @@ impl FileToBeProcessed {
             info!("Processing job type: {:?}", job_type);
 
             let job_type_suffix = self.get_job_type_suffix(job_type);
+            let output_path = self.get_output_filepath(&job_type_suffix);
+
+            if Path::new(&output_path).exists() {
+                warn!("Skipping {:?} job: already processed at {:?}.", job_type_suffix, output_path);
+                continue;
+            }
 
             match job_type {
                 ExtractionJobType::BinInfo => {
