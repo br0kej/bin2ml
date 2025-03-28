@@ -650,7 +650,7 @@ impl FileToBeProcessed {
             .to_string_lossy()
             .to_string();
 
-        fp_filename = if job_type_suffix == "bytes" {
+        fp_filename = if job_type_suffix == "bytes" || job_type_suffix == "bytes.__part" {
             fp_filename + "_" + &job_type_suffix
         } else if self.with_annotations {
             fp_filename + "_" + &job_type_suffix + "_annotations" + ".json"
@@ -696,6 +696,9 @@ impl FileToBeProcessed {
                 warn!("Skipping {:?} job: already processed at {:?}.", job_type_suffix, output_path);
                 continue;
             }
+            // Keep track of incomplete extraction
+            let tmp_job_type_suffix = format!("{}.__part", job_type_suffix);
+            let tmp_output_path = self.get_output_filepath(&tmp_job_type_suffix);
 
             // Lazily initialize r2p if not already done.
             let mut r2p = maybe_r2p.get_or_insert_with(|| {
@@ -706,46 +709,51 @@ impl FileToBeProcessed {
 
             match job_type {
                 ExtractionJobType::BinInfo => {
-                    self.extract_binary_info(&mut r2p, job_type_suffix)
+                    self.extract_binary_info(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::RegisterBehaviour => {
-                    self.extract_register_behaviour(&mut r2p, job_type_suffix)
+                    self.extract_register_behaviour(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::FunctionXrefs => {
-                    self.extract_function_xrefs(&mut r2p, job_type_suffix)
+                    self.extract_function_xrefs(&mut r2p, tmp_job_type_suffix)
                 }
-                ExtractionJobType::CFG => self.extract_func_cfgs(&mut r2p, job_type_suffix),
+                ExtractionJobType::CFG => self.extract_func_cfgs(&mut r2p, tmp_job_type_suffix),
                 ExtractionJobType::CallGraphs => {
-                    self.extract_function_call_graphs(&mut r2p, job_type_suffix)
+                    self.extract_function_call_graphs(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::FuncInfo => {
-                    self.extract_function_info(&mut r2p, job_type_suffix)
+                    self.extract_function_info(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::FunctionVariables => {
-                    self.extract_function_variables(&mut r2p, job_type_suffix)
+                    self.extract_function_variables(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::Decompilation => {
-                    self.extract_decompilation(&mut r2p, job_type_suffix)
+                    self.extract_decompilation(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::PCodeFunc => {
-                    self.extract_pcode_function(&mut r2p, job_type_suffix)
+                    self.extract_pcode_function(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::PCodeBB => {
-                    self.extract_pcode_basic_block(&mut r2p, job_type_suffix)
+                    self.extract_pcode_basic_block(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::LocalVariableXrefs => {
-                    self.extract_local_variable_xrefs(&mut r2p, job_type_suffix)
+                    self.extract_local_variable_xrefs(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::GlobalStrings => {
-                    self.extract_global_strings(&mut r2p, job_type_suffix)
+                    self.extract_global_strings(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::FunctionZignatures => {
-                    self.extract_function_zignatures(&mut r2p, job_type_suffix)
+                    self.extract_function_zignatures(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::FunctionBytes => {
-                    self.extract_function_bytes(&mut r2p, job_type_suffix)
+                    self.extract_function_bytes(&mut r2p, tmp_job_type_suffix)
                 }
             }
+
+            std::fs::rename(&tmp_output_path, &output_path)
+                .expect(
+                    &format!("Failed to rename temporary path {:?}", 
+                    tmp_output_path));
         }
 
         // Close the r2pipe instance once after processing all job types
