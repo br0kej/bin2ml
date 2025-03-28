@@ -1404,15 +1404,17 @@ impl FileToBeProcessed {
                 .expect("Failed to spawn new R2Pipe"),
         };
 
-        let info = r2p.cmdj("ij");
-        if info.is_ok() {
-            let info = info.unwrap();
-            if info["bin"]["bintype"].as_str().unwrap() == "pe" {
-                debug!("PE file found. Handling symbol download!");
-                let ret = self.handle_symbols_pdb(&mut r2p);
+        if self.r2p_config.use_curl_pdb {
+            let info = r2p.cmdj("ij");
+            if info.is_ok() {
+                let info = info.unwrap();
+                if info["bin"]["bintype"].as_str().unwrap() == "pe" {
+                    debug!("PE file found. Handling symbol download!");
+                    let ret = self.handle_symbols_pdb(&mut r2p);
 
-                if ret.is_err() {
-                    error!("Unable to get PDB info")
+                    if ret.is_err() {
+                        error!("Unable to get PDB info")
+                    }
                 }
             }
         }
