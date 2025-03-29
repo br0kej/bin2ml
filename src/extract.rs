@@ -691,8 +691,8 @@ impl FileToBeProcessed {
             let output_path = self.get_output_filepath(&job_type_suffix);
             if Path::new(&output_path).exists() {
                 warn!(
-                    "Skipping {:?} job: already processed at {:?}.",
-                    job_type_suffix, output_path
+                    "Skipping {:?} job for {:?}: already processed at {:?}.",
+                    job_type_suffix, self.file_path, output_path
                 );
                 continue;
             }
