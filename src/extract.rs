@@ -5,9 +5,9 @@ use std::io;
 
 use anyhow::anyhow;
 use anyhow::bail;
+use anyhow::Context;
 use anyhow::Error;
 use anyhow::Result;
-use anyhow::Context;
 use r2pipe::R2Pipe;
 use r2pipe::R2PipeSpawnOptions;
 
@@ -19,12 +19,12 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::env;
 
+use glob::glob;
+use regex::Regex;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
-use glob::glob;
-use regex::Regex;
 
 #[derive(PartialEq, Debug)]
 pub enum PathType {
@@ -391,7 +391,8 @@ pub struct FunctionZignature {
 
 // Strcuts for ij - Information about the binary file
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ChecksumsEntry { // Output of itj
+pub struct ChecksumsEntry {
+    // Output of itj
     md5: Option<String>,
     sha1: Option<String>,
     sha256: Option<String>,
@@ -462,7 +463,6 @@ pub struct BinaryInfo {
     pub bin: BinEntry,
 }
 
-
 impl ExtractionJob {
     pub fn new(
         input_path: &PathBuf,
@@ -474,7 +474,7 @@ impl ExtractionJob {
         with_annotations: &bool,
     ) -> Result<ExtractionJob, Error> {
         fn get_path_type(bin_path: &PathBuf) -> PathType {
-            // Handle pattern first since it would raise NotFound error 
+            // Handle pattern first since it would raise NotFound error
             let path_str = bin_path.to_string_lossy();
             if path_str.contains('*') || path_str.contains('?') || path_str.contains('[') {
                 return PathType::Pattern;
@@ -693,7 +693,10 @@ impl FileToBeProcessed {
             let job_type_suffix = self.get_job_type_suffix(job_type);
             let output_path = self.get_output_filepath(&job_type_suffix);
             if Path::new(&output_path).exists() {
-                warn!("Skipping {:?} job: already processed at {:?}.", job_type_suffix, output_path);
+                warn!(
+                    "Skipping {:?} job: already processed at {:?}.",
+                    job_type_suffix, output_path
+                );
                 continue;
             }
             // Keep track of incomplete extraction
@@ -750,10 +753,10 @@ impl FileToBeProcessed {
                 }
             }
 
-            std::fs::rename(&tmp_output_path, &output_path)
-                .expect(
-                    &format!("Failed to rename temporary path {:?}", 
-                    tmp_output_path));
+            std::fs::rename(&tmp_output_path, &output_path).expect(&format!(
+                "Failed to rename temporary path {:?}",
+                tmp_output_path
+            ));
         }
 
         // Close the r2pipe instance once after processing all job types
@@ -785,15 +788,17 @@ impl FileToBeProcessed {
 
     pub fn extract_binary_info(&self, r2p: &mut R2Pipe, job_type_suffix: String) {
         info!("Starting binary information extraction");
-        let bininfo_json = r2p.cmd("ij")
-            .expect("ij command failed to execute.");
-        let mut bininfo: BinaryInfo = serde_json::from_str(&bininfo_json)
-            .expect(&format!("Unable to convert ij string to JSON object: `{}`", bininfo_json));
+        let bininfo_json = r2p.cmd("ij").expect("ij command failed to execute.");
+        let mut bininfo: BinaryInfo = serde_json::from_str(&bininfo_json).expect(&format!(
+            "Unable to convert ij string to JSON object: `{}`",
+            bininfo_json
+        ));
 
-        let checksums_json = r2p.cmd("itj")
-            .expect("itj command failed to execute.");
-        let checksums: ChecksumsEntry = serde_json::from_str(&checksums_json)
-            .expect(&format!("Unable to convert itj string to JSON object: `{}`", checksums_json));
+        let checksums_json = r2p.cmd("itj").expect("itj command failed to execute.");
+        let checksums: ChecksumsEntry = serde_json::from_str(&checksums_json).expect(&format!(
+            "Unable to convert itj string to JSON object: `{}`",
+            checksums_json
+        ));
 
         bininfo.bin.checksums = checksums;
 
@@ -854,11 +859,11 @@ impl FileToBeProcessed {
         info!("Starting function variables extraction");
         let function_details = self.get_function_name_list(r2p);
         if function_details.is_ok() {
-            let mut func_variables_vec: HashMap<String, AFVJFuncDetails> =
-                HashMap::new();
+            let mut func_variables_vec: HashMap<String, AFVJFuncDetails> = HashMap::new();
             info!("Executing aeafj for each function");
             for function in function_details.unwrap().iter() {
-                let json = r2p.cmd(format!("afvj @ {}", &function.name).as_str())
+                let json = r2p
+                    .cmd(format!("afvj @ {}", &function.name).as_str())
                     .expect("Command failed.");
                 let json_obj: AFVJFuncDetails =
                     serde_json::from_str(&json).expect("Unable to convert to JSON object!");
@@ -1077,8 +1082,13 @@ impl FileToBeProcessed {
                 );
                 let function_bytes = self.get_bytes_function(function.offset, function.size, r2p);
                 if let Ok(valid_bytes_obj) = function_bytes {
-                    Self::write_to_bin(self, &function.name, &valid_bytes_obj.bytes, &job_type_suffix)
-                        .expect("Failed to write bytes to bin.");
+                    Self::write_to_bin(
+                        self,
+                        &function.name,
+                        &valid_bytes_obj.bytes,
+                        &job_type_suffix,
+                    )
+                    .expect("Failed to write bytes to bin.");
                 };
             }
             info!("Function bytes successfully extracted");
@@ -1102,8 +1112,10 @@ impl FileToBeProcessed {
         let function_bytes = r2p.cmd(format!("p8 {}", function_size).as_str())?;
         let function_bytes = function_bytes.trim();
         let function_bytes = hex::decode(function_bytes).map_err(|e| {
-            r2pipe::Error::Io(io::Error::new(io::ErrorKind::InvalidData, 
-                format!("Hex decode error: {}", e)))
+            r2pipe::Error::Io(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Hex decode error: {}", e),
+            ))
         })?;
 
         Ok(FuncBytes {
@@ -1245,10 +1257,7 @@ impl FileToBeProcessed {
     }
 
     // Helper Functions
-    fn fix_json_object(
-        &self, 
-        json_raw: &String
-    ) -> Result<serde_json::Value, serde_json::Error> {
+    fn fix_json_object(&self, json_raw: &String) -> Result<serde_json::Value, serde_json::Error> {
         let mut json_str = json_raw.replace("[]\n", ",");
         json_str = json_str.replace("}]\n[{", "}],\n[{");
         json_str.insert(0, '[');
@@ -1301,13 +1310,14 @@ impl FileToBeProcessed {
     }
 
     fn write_to_bin(
-        &self, 
-        function_name: &String, 
+        &self,
+        function_name: &String,
         func_bytes: &[u8],
         dirname_suffix: &String,
     ) -> Result<()> {
         // Extract the file stem from self.file_path and add context if missing.
-        let file_stem = self.file_path
+        let file_stem = self
+            .file_path
             .file_name()
             .ok_or_else(|| anyhow::anyhow!("Unable to get filename from {:?}", self.file_path))?
             .to_string_lossy()
@@ -1323,7 +1333,7 @@ impl FileToBeProcessed {
             fs::create_dir_all(&output_dir)
                 .with_context(|| format!("Failed to create directory {:?}", output_dir))?;
         }
-        
+
         // Construct the full output file path.
         let mut output_filepath = output_dir.clone();
         // Sanitize the function name to create a valid filename.
@@ -1335,13 +1345,15 @@ impl FileToBeProcessed {
         if output_filepath.exists() {
             debug!(
                 "Duplicate function binary file detected for '{}' at {:?}. Skipping.",
-                function_name,
-                output_filepath
+                function_name, output_filepath
             );
             return Ok(());
         }
 
-        debug!("Attempting to write function bytes to {:?}", output_filepath);
+        debug!(
+            "Attempting to write function bytes to {:?}",
+            output_filepath
+        );
 
         // Write the file and attach context on error.
         fs::write(&output_filepath, func_bytes)
