@@ -23,10 +23,12 @@ use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
+use glob::glob;
 use regex::Regex;
 
 #[derive(PartialEq, Debug)]
 pub enum PathType {
+    Pattern,
     File,
     Dir,
     Unk,
@@ -472,6 +474,12 @@ impl ExtractionJob {
         with_annotations: &bool,
     ) -> Result<ExtractionJob, Error> {
         fn get_path_type(bin_path: &PathBuf) -> PathType {
+            // Handle pattern first since it would raise NotFound error 
+            let path_str = bin_path.to_string_lossy();
+            if path_str.contains('*') || path_str.contains('?') || path_str.contains('[') {
+                return PathType::Pattern;
+            }
+
             let fpath_md = fs::metadata(bin_path).unwrap();
             if fpath_md.is_file() {
                 PathType::File
@@ -568,6 +576,30 @@ impl ExtractionJob {
                 files_to_be_processed,
                 output_path: output_path.to_owned(),
             })
+        } else if p_type == PathType::Pattern {
+            // For a match pattern get the list of matching file paths
+            let pattern = input_path.to_string_lossy();
+            let files = ExtractionJob::get_file_paths_pattern(&pattern);
+
+            // Create FileToBeProcessed objects for each file with all job types
+            let files_to_be_processed = files
+                .into_iter()
+                .map(|f| FileToBeProcessed {
+                    file_path: PathBuf::from(f),
+                    output_path: output_path.to_owned(),
+                    job_types: extraction_job_types.clone(),
+                    r2p_config: r2_handle_config,
+                    with_annotations: *with_annotations,
+                })
+                .collect();
+
+            Ok(ExtractionJob {
+                input_path: input_path.to_owned(),
+                input_path_type: PathType::Dir, // For using parallel processing
+                job_types,
+                files_to_be_processed,
+                output_path: output_path.to_owned(),
+            })
         } else {
             bail!("Failed to create ExtractionJob")
         }
@@ -588,6 +620,24 @@ impl ExtractionJob {
             }
         }
         str_vec
+    }
+
+    fn get_file_paths_pattern(pattern: &str) -> Vec<String> {
+        let mut paths = Vec::new();
+        // glob returns an iterator over Result<PathBuf, GlobError>
+        for entry in glob(pattern).expect("Failed to read glob pattern") {
+            if let Ok(path) = entry {
+                if path.is_file() {
+                    // Exclude JSON files
+                    if let Some(fname) = path.file_name() {
+                        if !fname.to_string_lossy().ends_with(".json") {
+                            paths.push(path.to_string_lossy().to_string());
+                        }
+                    }
+                }
+            }
+        }
+        paths
     }
 }
 
@@ -681,51 +731,6 @@ impl FileToBeProcessed {
             ExtractionJobType::FunctionBytes => "bytes",
         }
         .to_string()
-    }
-
-    pub fn data_extracter_single(&self, job_type: &ExtractionJobType) {
-        info!("Starting extraction for {:?}", job_type);
-        let mut r2p = self.setup_r2_pipe();
-
-        let job_type_suffix = self.get_job_type_suffix(job_type);
-
-        match job_type {
-            ExtractionJobType::BinInfo => {
-                self.extract_binary_info(&mut r2p, job_type_suffix)
-            }
-            ExtractionJobType::RegisterBehaviour => {
-                self.extract_register_behaviour(&mut r2p, job_type_suffix)
-            }
-            ExtractionJobType::FunctionXrefs => {
-                self.extract_function_xrefs(&mut r2p, job_type_suffix)
-            }
-            ExtractionJobType::CFG => self.extract_func_cfgs(&mut r2p, job_type_suffix),
-            ExtractionJobType::CallGraphs => {
-                self.extract_function_call_graphs(&mut r2p, job_type_suffix)
-            }
-            ExtractionJobType::FuncInfo => self.extract_function_info(&mut r2p, job_type_suffix),
-            ExtractionJobType::FunctionVariables => self.extract_function_variables(&mut r2p, job_type_suffix),
-            ExtractionJobType::Decompilation => {
-                self.extract_decompilation(&mut r2p, job_type_suffix)
-            }
-            ExtractionJobType::PCodeFunc => self.extract_pcode_function(&mut r2p, job_type_suffix),
-            ExtractionJobType::PCodeBB => self.extract_pcode_basic_block(&mut r2p, job_type_suffix),
-            ExtractionJobType::LocalVariableXrefs => {
-                self.extract_local_variable_xrefs(&mut r2p, job_type_suffix)
-            }
-            ExtractionJobType::GlobalStrings => {
-                self.extract_global_strings(&mut r2p, job_type_suffix)
-            }
-            ExtractionJobType::FunctionZignatures => {
-                self.extract_function_zignatures(&mut r2p, job_type_suffix)
-            },
-            ExtractionJobType::FunctionBytes => {
-                self.extract_function_bytes(&mut r2p, job_type_suffix)
-            }
-        }
-
-        r2p.close();
-        info!("r2p closed");
     }
 
     pub fn extract_binary_info(&self, r2p: &mut R2Pipe, job_type_suffix: String) {
@@ -868,7 +873,6 @@ impl FileToBeProcessed {
                         "Unable to parse json for {}: {}: {}",
                         fp_filename, json_raw, e
                     );
-                    // Here, you can choose to return, skip the operation, or take other action.
                 }
             }
         } else {

@@ -16,6 +16,7 @@ use rayon::prelude::IntoParallelRefIterator;
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use walkdir::WalkDir;
+use glob::glob;
 
 pub mod afij;
 pub mod agcj;
@@ -449,7 +450,10 @@ fn main() {
                     warn!("The 'with_features' toggle is set but is not support for CFG generation. Will ignore.")
                 };
 
-                if !path.exists() {
+                let path_str = path.to_string_lossy();
+
+                if !(path_str.contains('*') || path_str.contains('?') || path_str.contains('[')) 
+                    && !path.exists() {
                     error!("{:?} does not exist!", path);
                     exit(1)
                 }
@@ -487,7 +491,22 @@ fn main() {
                                 feature_vec_type
                             );
 
-                            if Path::new(path).is_file() {
+                            if path_str.contains('*') || path_str.contains('?') || path_str.contains('[') {
+                                info!("Matching pattern found. Will parallel process.");
+                                for entry in glob(&path_str).expect("Failed to read glob pattern") {
+                                    if let Ok(path) = entry {
+                                        if path.is_file() && path.to_string_lossy().ends_with(".json"){
+                                            validate_input(&path, "cfg");
+                                            agfj_graph_statistical_features(
+                                                &path,
+                                                &min_blocks.unwrap(),
+                                                output_path,
+                                                feature_vec_type,
+                                            )
+                                        }
+                                    }
+                                }
+                            } else if Path::new(path).is_file() {
                                 validate_input(path, "cfg");
                                 info!("Single file found");
                                 agfj_graph_statistical_features(
