@@ -625,18 +625,15 @@ impl ExtractionJob {
     fn get_file_paths_pattern(pattern: &str) -> Vec<String> {
         let mut paths = Vec::new();
         // glob returns an iterator over Result<PathBuf, GlobError>
-        for entry in glob(pattern).expect("Failed to read glob pattern") {
-            if let Ok(path) = entry {
-                if path.is_file() {
-                    // Exclude JSON files
-                    if let Some(fname) = path.file_name() {
-                        if !fname.to_string_lossy().ends_with(".json") {
-                            paths.push(path.to_string_lossy().to_string());
-                        }
-                    }
-                }
+        for entry in glob(pattern)
+            .expect("Failed to read glob pattern")
+            .flatten()
+        {
+            if !entry.to_string_lossy().ends_with(".json") {
+                paths.push(entry.to_string_lossy().to_string());
             }
         }
+
         paths
     }
 }
@@ -651,11 +648,11 @@ impl FileToBeProcessed {
             .to_string();
 
         fp_filename = if job_type_suffix == "bytes" || job_type_suffix == "bytes.__part" {
-            fp_filename + "_" + &job_type_suffix
+            fp_filename + "_" + job_type_suffix
         } else if self.with_annotations {
-            fp_filename + "_" + &job_type_suffix + "_annotations" + ".json"
+            fp_filename + "_" + job_type_suffix + "_annotations" + ".json"
         } else {
-            fp_filename + "_" + &job_type_suffix + ".json"
+            fp_filename + "_" + job_type_suffix + ".json"
         };
         fp_filename
     }
@@ -704,52 +701,48 @@ impl FileToBeProcessed {
             let tmp_output_path = self.get_output_filepath(&tmp_job_type_suffix);
 
             // Lazily initialize r2p if not already done.
-            let mut r2p = maybe_r2p.get_or_insert_with(|| {
+            let r2p = maybe_r2p.get_or_insert_with(|| {
                 let mut pipe = self.setup_r2_pipe();
                 self.analyse_r2_pipe(&mut pipe);
                 pipe
             });
 
             match job_type {
-                ExtractionJobType::BinInfo => {
-                    self.extract_binary_info(&mut r2p, tmp_job_type_suffix)
-                }
+                ExtractionJobType::BinInfo => self.extract_binary_info(r2p, tmp_job_type_suffix),
                 ExtractionJobType::RegisterBehaviour => {
-                    self.extract_register_behaviour(&mut r2p, tmp_job_type_suffix)
+                    self.extract_register_behaviour(r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::FunctionXrefs => {
-                    self.extract_function_xrefs(&mut r2p, tmp_job_type_suffix)
+                    self.extract_function_xrefs(r2p, tmp_job_type_suffix)
                 }
-                ExtractionJobType::CFG => self.extract_func_cfgs(&mut r2p, tmp_job_type_suffix),
+                ExtractionJobType::CFG => self.extract_func_cfgs(r2p, tmp_job_type_suffix),
                 ExtractionJobType::CallGraphs => {
-                    self.extract_function_call_graphs(&mut r2p, tmp_job_type_suffix)
+                    self.extract_function_call_graphs(r2p, tmp_job_type_suffix)
                 }
-                ExtractionJobType::FuncInfo => {
-                    self.extract_function_info(&mut r2p, tmp_job_type_suffix)
-                }
+                ExtractionJobType::FuncInfo => self.extract_function_info(r2p, tmp_job_type_suffix),
                 ExtractionJobType::FunctionVariables => {
-                    self.extract_function_variables(&mut r2p, tmp_job_type_suffix)
+                    self.extract_function_variables(r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::Decompilation => {
-                    self.extract_decompilation(&mut r2p, tmp_job_type_suffix)
+                    self.extract_decompilation(r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::PCodeFunc => {
-                    self.extract_pcode_function(&mut r2p, tmp_job_type_suffix)
+                    self.extract_pcode_function(r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::PCodeBB => {
-                    self.extract_pcode_basic_block(&mut r2p, tmp_job_type_suffix)
+                    self.extract_pcode_basic_block(r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::LocalVariableXrefs => {
-                    self.extract_local_variable_xrefs(&mut r2p, tmp_job_type_suffix)
+                    self.extract_local_variable_xrefs(r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::GlobalStrings => {
-                    self.extract_global_strings(&mut r2p, tmp_job_type_suffix)
+                    self.extract_global_strings(r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::FunctionZignatures => {
-                    self.extract_function_zignatures(&mut r2p, tmp_job_type_suffix)
+                    self.extract_function_zignatures(r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::FunctionBytes => {
-                    self.extract_function_bytes(&mut r2p, tmp_job_type_suffix)
+                    self.extract_function_bytes(r2p, tmp_job_type_suffix)
                 }
             }
 
@@ -1257,7 +1250,7 @@ impl FileToBeProcessed {
     }
 
     // Helper Functions
-    fn fix_json_object(&self, json_raw: &String) -> Result<serde_json::Value, serde_json::Error> {
+    fn fix_json_object(&self, json_raw: &str) -> Result<serde_json::Value, serde_json::Error> {
         let mut json_str = json_raw.replace("[]\n", ",");
         json_str = json_str.replace("}]\n[{", "}],\n[{");
         json_str.insert(0, '[');

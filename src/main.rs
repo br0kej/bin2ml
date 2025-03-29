@@ -453,7 +453,7 @@ fn main() {
                 let path_str = path.to_string_lossy();
 
                 if !(path_str.contains('*') || path_str.contains('?') || path_str.contains('['))
-                    && !path.exists()
+                    || path.exists()
                 {
                     error!("{:?} does not exist!", path);
                     exit(1)
@@ -497,20 +497,18 @@ fn main() {
                                 || path_str.contains('[')
                             {
                                 info!("Matching pattern found. Will parallel process.");
-                                for entry in glob(&path_str).expect("Failed to read glob pattern") {
-                                    if let Ok(path) = entry {
-                                        if path.is_file()
-                                            && path.to_string_lossy().ends_with(".json")
-                                        {
-                                            validate_input(&path, "cfg");
-                                            agfj_graph_statistical_features(
-                                                &path,
-                                                &min_blocks.unwrap(),
-                                                output_path,
-                                                feature_vec_type,
-                                            )
-                                        }
-                                    }
+                                for entry in glob(&path_str)
+                                    .expect("Failed to read glob pattern")
+                                    .flatten()
+                                {
+                                    let entry_path = entry.as_path();
+                                    validate_input(entry_path, "cfg");
+                                    agfj_graph_statistical_features(
+                                        entry_path,
+                                        &min_blocks.unwrap(),
+                                        output_path,
+                                        feature_vec_type,
+                                    )
                                 }
                             } else if Path::new(path).is_file() {
                                 validate_input(path, "cfg");
