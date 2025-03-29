@@ -302,7 +302,7 @@ enum Commands {
         #[arg(long, default_value = "false")]
         extended_analysis: bool,
 
-        #[arg(long, default_value = "true")]
+        #[arg(long, default_value = "false")]
         use_curl_pdb: bool,
 
         #[arg(long, default_value = "false")]
