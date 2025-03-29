@@ -642,6 +642,34 @@ impl ExtractionJob {
 }
 
 impl FileToBeProcessed {
+    pub fn get_output_filename(&self, job_type_suffix: &str) -> String {
+        let mut fp_filename = self
+            .file_path
+            .file_name()
+            .expect("Unable to get filename")
+            .to_string_lossy()
+            .to_string();
+
+        fp_filename = if job_type_suffix == "bytes" || job_type_suffix == "bytes.__part" {
+            fp_filename + "_" + &job_type_suffix
+        } else if self.with_annotations {
+            fp_filename + "_" + &job_type_suffix + "_annotations" + ".json"
+        } else {
+            fp_filename + "_" + &job_type_suffix + ".json"
+        };
+        fp_filename
+    }
+
+    pub fn get_output_filepath(&self, job_type_suffix: &str) -> PathBuf {
+        let fp_filename = self.get_output_filename(job_type_suffix);
+
+        let mut output_filepath = PathBuf::new();
+        output_filepath.push(self.output_path.clone());
+        output_filepath.push(fp_filename);
+
+        output_filepath.clone()
+    }
+
     pub fn process_all_modes(&self) {
         info!(
             "Starting extraction for {} job types on {:?}",
@@ -656,61 +684,83 @@ impl FileToBeProcessed {
         }
 
         // Set up a single r2pipe instance
-        let mut r2p = self.setup_r2_pipe();
+        let mut maybe_r2p: Option<R2Pipe> = None;
 
         // Process each job type with the same r2pipe instance
         for job_type in &self.job_types {
             info!("Processing job type: {:?}", job_type);
 
             let job_type_suffix = self.get_job_type_suffix(job_type);
+            let output_path = self.get_output_filepath(&job_type_suffix);
+            if Path::new(&output_path).exists() {
+                warn!("Skipping {:?} job: already processed at {:?}.", job_type_suffix, output_path);
+                continue;
+            }
+            // Keep track of incomplete extraction
+            let tmp_job_type_suffix = format!("{}.__part", job_type_suffix);
+            let tmp_output_path = self.get_output_filepath(&tmp_job_type_suffix);
+
+            // Lazily initialize r2p if not already done.
+            let mut r2p = maybe_r2p.get_or_insert_with(|| {
+                let mut pipe = self.setup_r2_pipe();
+                self.analyse_r2_pipe(&mut pipe);
+                pipe
+            });
 
             match job_type {
                 ExtractionJobType::BinInfo => {
-                    self.extract_binary_info(&mut r2p, job_type_suffix)
+                    self.extract_binary_info(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::RegisterBehaviour => {
-                    self.extract_register_behaviour(&mut r2p, job_type_suffix)
+                    self.extract_register_behaviour(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::FunctionXrefs => {
-                    self.extract_function_xrefs(&mut r2p, job_type_suffix)
+                    self.extract_function_xrefs(&mut r2p, tmp_job_type_suffix)
                 }
-                ExtractionJobType::CFG => self.extract_func_cfgs(&mut r2p, job_type_suffix),
+                ExtractionJobType::CFG => self.extract_func_cfgs(&mut r2p, tmp_job_type_suffix),
                 ExtractionJobType::CallGraphs => {
-                    self.extract_function_call_graphs(&mut r2p, job_type_suffix)
+                    self.extract_function_call_graphs(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::FuncInfo => {
-                    self.extract_function_info(&mut r2p, job_type_suffix)
+                    self.extract_function_info(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::FunctionVariables => {
-                    self.extract_function_variables(&mut r2p, job_type_suffix)
+                    self.extract_function_variables(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::Decompilation => {
-                    self.extract_decompilation(&mut r2p, job_type_suffix)
+                    self.extract_decompilation(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::PCodeFunc => {
-                    self.extract_pcode_function(&mut r2p, job_type_suffix)
+                    self.extract_pcode_function(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::PCodeBB => {
-                    self.extract_pcode_basic_block(&mut r2p, job_type_suffix)
+                    self.extract_pcode_basic_block(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::LocalVariableXrefs => {
-                    self.extract_local_variable_xrefs(&mut r2p, job_type_suffix)
+                    self.extract_local_variable_xrefs(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::GlobalStrings => {
-                    self.extract_global_strings(&mut r2p, job_type_suffix)
+                    self.extract_global_strings(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::FunctionZignatures => {
-                    self.extract_function_zignatures(&mut r2p, job_type_suffix)
+                    self.extract_function_zignatures(&mut r2p, tmp_job_type_suffix)
                 }
                 ExtractionJobType::FunctionBytes => {
-                    self.extract_function_bytes(&mut r2p, job_type_suffix)
+                    self.extract_function_bytes(&mut r2p, tmp_job_type_suffix)
                 }
             }
+
+            std::fs::rename(&tmp_output_path, &output_path)
+                .expect(
+                    &format!("Failed to rename temporary path {:?}", 
+                    tmp_output_path));
         }
 
         // Close the r2pipe instance once after processing all job types
-        r2p.close();
-        info!("r2p closed after processing all job types");
+        if let Some(mut r2p) = maybe_r2p {
+            r2p.close();
+            info!("r2p closed after processing all job types");
+        }
     }
 
     pub fn get_job_type_suffix(&self, job_type: &ExtractionJobType) -> String {
@@ -789,31 +839,19 @@ impl FileToBeProcessed {
 
     pub fn extract_function_info(&self, r2p: &mut R2Pipe, job_type_suffix: String) {
         info!("Starting function metdata extraction");
-        let mut fp_filename = self
-            .file_path
-            .file_name()
-            .expect("Unable to get filename")
-            .to_string_lossy()
-            .to_string();
+        let function_details: Result<Vec<AFIJFunctionInfo>, r2pipe::Error> =
+            self.get_function_name_list(r2p);
 
-        fp_filename = fp_filename + "_" + &job_type_suffix;
-        let f_name = format!("{:?}/{}.json", self.output_path, fp_filename);
-        if !Path::new(&f_name).exists() {
-            let function_details: Result<Vec<AFIJFunctionInfo>, r2pipe::Error> =
-                self.get_function_name_list(r2p);
-
-            if function_details.is_err() {
-                error!("Unable to extract function info for {:?}", self.file_path);
-            } else {
-                info!("Writing extracted data to file");
-                self.write_to_json(&json!(function_details.unwrap()), job_type_suffix)
-            }
+        if function_details.is_err() {
+            error!("Unable to extract function info for {:?}", self.file_path);
         } else {
-            info!("{} already exists. Skipping", f_name);
+            info!("Writing extracted data to file");
+            self.write_to_json(&json!(function_details.unwrap()), job_type_suffix)
         }
     }
 
     pub fn extract_function_variables(&self, r2p: &mut R2Pipe, job_type_suffix: String) {
+        info!("Starting function variables extraction");
         let function_details = self.get_function_name_list(r2p);
         if function_details.is_ok() {
             let mut func_variables_vec: HashMap<String, AFVJFuncDetails> =
@@ -838,45 +876,32 @@ impl FileToBeProcessed {
     }
 
     pub fn extract_func_cfgs(&self, r2p: &mut R2Pipe, job_type_suffix: String) {
-        let mut fp_filename = Path::new(&self.file_path)
-            .file_name()
-            .expect("Unable to get filename")
-            .to_string_lossy()
-            .to_string();
-        fp_filename = format!("{}_{}", fp_filename, job_type_suffix);
-        let f_name = format!("{:?}/{}.json", &self.output_path, fp_filename);
+        info!("Executing agfj @@f on {:?}", self.file_path);
 
-        if !Path::new(&f_name).exists() {
-            info!("{} not found. Continuing processing.", f_name);
-            info!("Executing agfj @@f on {:?}", self.file_path);
+        let json_raw = r2p
+            .cmd("agfj @@f")
+            .expect("Failed to extract control flow graph information.");
 
-            let json_raw = r2p
-                .cmd("agfj @@f")
-                .expect("Failed to extract control flow graph information.");
-
-            info!("Starting JSON fixup for {:?}", self.file_path);
-            match self.fix_json_object(&json_raw) {
-                Ok(json) => {
-                    info!("JSON fixup finished for {:?}", self.file_path);
-                    // If the cleaned JSON is an empty array, log an error and skip.
-                    if json == serde_json::Value::Array(vec![]) {
-                        error!(
-                            "File empty after JSON fixup - Only contains empty JSON array - {}",
-                            f_name
-                        );
-                    } else {
-                        self.write_to_json(&json, job_type_suffix);
-                    }
-                }
-                Err(e) => {
+        info!("Starting JSON fixup for {:?}", self.file_path);
+        match self.fix_json_object(&json_raw) {
+            Ok(json) => {
+                info!("JSON fixup finished for {:?}", self.file_path);
+                // If the cleaned JSON is an empty array, log an error and skip.
+                if json == serde_json::Value::Array(vec![]) {
                     error!(
-                        "Unable to parse json for {}: {}: {}",
-                        fp_filename, json_raw, e
+                        "File empty after JSON fixup - Only contains empty JSON array - {:?}",
+                        self.file_path
                     );
+                } else {
+                    self.write_to_json(&json, job_type_suffix);
                 }
             }
-        } else {
-            info!("{} already exists. Skipping", f_name);
+            Err(e) => {
+                error!(
+                    "Unable to parse json for {:?}: {}: {}",
+                    self.file_path, json_raw, e
+                );
+            }
         }
     }
 
@@ -1392,6 +1417,10 @@ impl FileToBeProcessed {
             }
         }
 
+        r2p
+    }
+
+    fn analyse_r2_pipe(&self, r2p: &mut R2Pipe) {
         if self.r2p_config.extended_analysis {
             debug!(
                 "Executing 'aaa' r2 command for {}",
@@ -1409,6 +1438,5 @@ impl FileToBeProcessed {
                 self.file_path.display()
             );
         };
-        r2p
     }
 }
