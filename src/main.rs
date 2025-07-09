@@ -59,7 +59,7 @@ use inference::inference;
 #[cfg(feature = "inference")]
 use processors::agfj_graph_embedded_feats;
 use processors::agfj_graph_statistical_features;
-use utils::get_json_paths_from_dir;
+use utils::{get_json_paths_from_dir, validate_func_filename};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -303,6 +303,15 @@ enum Commands {
 
         #[arg(long, default_value = "false")]
         use_curl_pdb: bool,
+
+        /// Name function data files using symbol, address, or custom template
+        #[arg(
+            long,
+            value_name = "TEMPLATE",
+            default_value = "symbol",
+            value_parser = validate_func_filename
+        )]
+        func_filename: String,
 
         #[arg(long)]
         timeout: Option<u64>,
@@ -1055,6 +1064,7 @@ fn main() {
             debug,
             extended_analysis,
             use_curl_pdb,
+            func_filename,
             timeout,
             with_annotations,
         } => {
@@ -1072,6 +1082,7 @@ fn main() {
                 debug,
                 extended_analysis,
                 use_curl_pdb,
+                func_filename,
                 timeout,
                 with_annotations,
             )
