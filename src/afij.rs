@@ -8,7 +8,7 @@ use serde_json::Value;
 pub struct AFIJFunctionInfo {
     pub offset: u64,
     pub name: String,
-    pub size: i128,
+    pub size: u64,
     #[serde(rename = "is-pure")]
     pub is_pure: String,
     pub realsz: u64,
@@ -23,21 +23,21 @@ pub struct AFIJFunctionInfo {
     pub nbbs: u64,
     #[serde(rename = "is-lineal")]
     pub is_lineal: bool,
-    pub ninstrs: i64,
-    pub edges: i64,
+    pub ninstrs: u64,
+    pub edges: u64,
     pub ebbs: u64,
     pub signature: String,
     pub minbound: u64,
-    pub maxbound: i128,
+    pub maxbound: u64,
     pub callrefs: Option<Vec<Callref>>,
     // TODO: Need to fix this and change to string instead of i64 to get round large random numbers
     pub datarefs: Option<Vec<Dataref>>,
     pub codexrefs: Option<Vec<Codexref>>,
-    pub dataxrefs: Option<Vec<i64>>,
-    pub indegree: Option<i64>,
-    pub outdegree: Option<i64>,
-    pub nlocals: Option<i64>,
-    pub nargs: Option<i64>,
+    pub dataxrefs: Option<Vec<i64>>, // TODO: Check this data type
+    pub indegree: Option<u64>,
+    pub outdegree: Option<u64>,
+    pub nlocals: Option<u64>,
+    pub nargs: Option<u64>,
     pub bpvars: Option<Vec<Bpvar>>,
     // Cannot find a good example of an spvars yet
     pub spvars: Option<Vec<Value>>,
@@ -103,12 +103,12 @@ pub struct Regvar {
 #[serde(rename_all = "camelCase")]
 pub struct AFIJFeatureSubset {
     pub name: String,
-    pub ninstrs: i64,
-    pub edges: i64,
-    pub indegree: i64,
-    pub outdegree: i64,
-    pub nlocals: i64,
-    pub nargs: i64,
+    pub ninstrs: u64,
+    pub edges: u64,
+    pub indegree: u64,
+    pub outdegree: u64,
+    pub nlocals: u64,
+    pub nargs: u64,
     pub signature: String,
 }
 
@@ -130,12 +130,12 @@ impl From<&AFIJFunctionInfo> for AFIJFeatureSubset {
 #[derive(Default, Debug, Clone, PartialEq, Hash, Serialize, Deserialize)]
 pub struct AFIJFeatureSubsetExtended {
     pub name: String,
-    pub ninstrs: i64,
-    pub edges: i64,
-    pub indegree: i64,
-    pub outdegree: i64,
-    pub nlocals: i64,
-    pub nargs: i64,
+    pub ninstrs: u64,
+    pub edges: u64,
+    pub indegree: u64,
+    pub outdegree: u64,
+    pub nlocals: u64,
+    pub nargs: u64,
     pub nbbs: u64,
     pub avg_ins_bb: OrderedFloat<f32>,
 }

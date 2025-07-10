@@ -59,7 +59,7 @@ use inference::inference;
 #[cfg(feature = "inference")]
 use processors::agfj_graph_embedded_feats;
 use processors::agfj_graph_statistical_features;
-use utils::get_json_paths_from_dir;
+use utils::{get_json_paths_from_dir, validate_func_filename};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -304,11 +304,24 @@ enum Commands {
         #[arg(long, default_value = "false")]
         use_curl_pdb: bool,
 
+        /// Name function data files using symbol, address, or custom template
+        #[arg(
+            long,
+            value_name = "TEMPLATE",
+            default_value = "symbol",
+            value_parser = validate_func_filename
+        )]
+        func_filename: String,
+
         #[arg(long)]
         timeout: Option<u64>,
 
         #[arg(long, default_value = "false")]
         with_annotations: bool,
+
+        /// Toggle to retry previously aborted jobs due to extraction failures
+        #[arg(long, default_value = "false")]
+        retry_aborted: bool,
     },
     /// Generate single embeddings on the fly
     ///
@@ -1055,8 +1068,10 @@ fn main() {
             debug,
             extended_analysis,
             use_curl_pdb,
+            func_filename,
             timeout,
             with_annotations,
+            retry_aborted,
         } => {
             info!("Creating extraction job with {} modes", modes.len());
             if !output_dir.exists() {
@@ -1072,8 +1087,10 @@ fn main() {
                 debug,
                 extended_analysis,
                 use_curl_pdb,
+                func_filename,
                 timeout,
                 with_annotations,
+                retry_aborted,
             )
             .unwrap_or_else(|e| {
                 error!("Failed to create extraction job: {}", e);
