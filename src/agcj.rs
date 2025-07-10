@@ -3,7 +3,7 @@ use crate::networkx::{
     CallGraphFuncNameNode, CallGraphFuncWithMetadata, CallGraphTikNibFeatures,
     CallGraphTikNibFinfoFeatures, NetworkxDiGraph,
 };
-use crate::utils::{check_or_create_dir, get_save_file_path};
+use crate::utils::{check_or_create_dir, get_save_file_path, sanitize_filename};
 use itertools::Itertools;
 use petgraph::prelude::Graph;
 use serde::{Deserialize, Serialize};
@@ -14,14 +14,14 @@ use std::path::{Path, PathBuf};
 #[serde(rename_all = "camelCase")]
 pub struct AGCJFunctionCallGraph {
     pub name: String,
-    pub size: i64,
+    pub size: u64,
     pub imports: Option<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AGCJParsedObjects {
     pub edge_property: String,
-    pub edges: Vec<Vec<i32>>,
+    pub edges: Vec<Vec<u32>>,
     pub node_holes: Vec<String>,
     pub nodes: Vec<String>,
 }
@@ -45,10 +45,7 @@ impl AGCJFunctionCallGraph {
 
         let mut function_name = self.name.clone();
 
-        // This is a pretty dirty fix and may break things
-        if function_name.chars().count() > 100 {
-            function_name = self.name[..75].to_string();
-        }
+        function_name = sanitize_filename(&function_name);
 
         let filename = format!("{}-{}.json", function_name, type_suffix);
 
@@ -82,11 +79,7 @@ impl AGCJFunctionCallGraph {
         check_or_create_dir(&full_output_path);
 
         let mut function_name = self.name.clone();
-
-        // This is a pretty dirty fix and may break things
-        if function_name.chars().count() > 100 {
-            function_name = self.name[..75].to_string();
-        }
+        function_name = sanitize_filename(&function_name);
 
         let filename = format!(
             "{}/{}-{}.json",
@@ -121,11 +114,7 @@ impl AGCJFunctionCallGraph {
         check_or_create_dir(&full_output_path);
 
         let mut function_name = self.name.clone();
-
-        // This is a pretty dirty fix and may break things
-        if function_name.chars().count() > 100 {
-            function_name = self.name[..75].to_string();
-        }
+        function_name = sanitize_filename(&function_name);
 
         let filename = format!(
             "{}/{}-{}.json",
@@ -159,11 +148,7 @@ impl AGCJFunctionCallGraph {
         check_or_create_dir(&full_output_path);
         debug!("Built Path: {:?}", full_output_path);
         let mut function_name = self.name.clone();
-
-        // This is a pretty dirty fix and may break things
-        if function_name.chars().count() > 100 {
-            function_name = self.name[..75].to_string();
-        }
+        function_name = sanitize_filename(&function_name);
 
         let filename = format!("{}-{}.json", function_name, type_suffix);
         // Normalise string for windows

@@ -19,7 +19,8 @@ tokenizers = "0.13.2"
 rust_search = "2.1.0"
 tch = {version = "0.10.3", optional = true}
 mimalloc = { version = "*", default-features = false }
-indicatif = { version = "0.17.3", features = ["rayon"]}
+indicatif = { version = "0.17.11", features = ["rayon"]}
+indicatif-log-bridge = "0.2.3"
 itertools = "0.10.5"
 prettytable = "0.10.0"
 serde-aux = "4.2.0"
