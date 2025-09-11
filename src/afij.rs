@@ -28,7 +28,9 @@ pub struct AFIJFunctionInfo {
     pub edges: u64,
     pub ebbs: u64,
     pub signature: String,
+    #[serde(alias = "minaddr")]
     pub minbound: u64,
+    #[serde(alias = "maxaddr")]
     pub maxbound: u64,
     pub callrefs: Option<Vec<Callref>>,
     // TODO: Need to fix this and change to string instead of i64 to get round large random numbers
