@@ -6,6 +6,7 @@ use serde_json::Value;
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AFIJFunctionInfo {
+    #[serde(alias = "addr")]
     pub offset: u64,
     pub name: String,
     pub size: u64,
