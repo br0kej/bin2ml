@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 r2pipe = "0.6.0"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.60"
+serde_json = { version = "1.0.60", features = ["raw_value"] }
 clap = { version = "4.0.29", features = ["derive"] }
 goblin = { version = "0.6.0", optional = true }
 walkdir = "2"

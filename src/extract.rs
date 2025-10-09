@@ -16,7 +16,8 @@ use serde_json;
 
 use glob::glob;
 use md5;
-use serde_json::{json, Deserializer, Value};
+use serde::ser::{SerializeSeq, Serializer};
+use serde_json::{json, value::RawValue, Deserializer, Value};
 use sha1;
 use sha1::Digest as Sha1Digest;
 use sha2::Digest as Sha2Digest;
@@ -25,7 +26,7 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::{BufReader, BufWriter, Read};
 use std::path::PathBuf;
 use std::string::String;
 use std::sync::LazyLock;
@@ -1218,36 +1219,12 @@ impl FileToBeProcessed {
     pub fn extract_func_cfgs(&self, r2p: &mut R2Pipe, output_path: &PathBuf) -> Result<()> {
         info!("Executing agfj @@f on {:?}", self.file_path);
 
-        let json_raw = r2p.cmd("agfj @@f").with_context(|| {
-            format!(
-                "Failed to extract control flow graph information from {:?}.",
-                self.file_path
-            )
-        })?;
+        let json_raw = r2p
+            .cmd("agfj @@f")
+            .with_context(|| format!("Failed to extract CFGs from {:?}.", self.file_path))?;
 
-        info!("Starting JSON fixup for {:?}", self.file_path);
-        match self.fix_json_object(&json_raw) {
-            Ok(json) => {
-                info!("JSON fixup finished for {:?}", self.file_path);
-                // If the cleaned JSON is an empty array, log an error and skip.
-                if json == serde_json::Value::Array(vec![]) {
-                    return Err(anyhow::anyhow!(
-                        "File empty after JSON fixup - Only contains empty JSON array - {:?}",
-                        self.file_path
-                    ));
-                } else {
-                    self.write_to_json(&json, output_path)?;
-                }
-            }
-            Err(e) => {
-                return Err(anyhow::anyhow!(
-                    "Unable to parse json for {:?}: {}: {}",
-                    self.file_path,
-                    json_raw,
-                    e
-                ));
-            }
-        }
+        self.stream_write_to_json(&json_raw, output_path)
+            .with_context(|| format!("Failed to write CFGs to {:?}.", self.file_path))?;
         Ok(())
     }
 
@@ -1521,27 +1498,60 @@ impl FileToBeProcessed {
     }
 
     // Helper Functions
-    fn fix_json_object(&self, json_raw: &str) -> Result<serde_json::Value, serde_json::Error> {
-        // Collect all JSON objects into a vector.
-        let stream = Deserializer::from_str(json_raw).into_iter::<Value>();
-        let json_objects: Result<Vec<Value>, _> = stream
-            .filter_map(|result| {
-                match result {
-                    Ok(Value::Array(ref arr)) if arr.is_empty() => None, // skip empty arrays
-                    other => Some(other),
-                }
-            })
-            .collect();
-        // Map the collected vector into a JSON array.
-        json_objects.map(Value::Array)
-    }
 
+    /// Write a JSON object to a file
     fn write_to_json(&self, json_obj: &Value, output_filepath: &PathBuf) -> Result<()> {
+        info!("Writing JSON to {:?}", output_filepath);
         let file = File::create(&output_filepath)
             .with_context(|| format!("Unable to create file {:?}", output_filepath))?;
         serde_json::to_writer(&file, &json_obj)
             .with_context(|| format!("Failed to write JSON to {:?}", output_filepath))?;
+        info!("JSON written to {:?}", output_filepath);
+        Ok(())
+    }
 
+    /// Stream-parse a concatenated JSON string (e.g. from `agfj @@f`)
+    /// and write the combined results into a single JSON array on disk.
+    /// Unlike `write_to_json`, this never builds a full in-memory Vec<Value>.
+    fn stream_write_to_json(&self, json_raw: &str, output_filepath: &PathBuf) -> Result<()> {
+        info!("Stream writing JSON to {:?}", output_filepath);
+        // Stream the concatenated JSON values
+        let iter = Deserializer::from_str(json_raw).into_iter::<Box<RawValue>>();
+
+        // Stream the final JSON array to disk
+        let file = File::create(output_filepath)
+            .with_context(|| format!("Unable to create file {:?}", output_filepath))?;
+        let mut writer = BufWriter::new(file);
+        let mut ser = serde_json::Serializer::new(&mut writer);
+        let mut seq = ser.serialize_seq(None)?; // unknown length
+
+        for item in iter {
+            match item {
+                Ok(raw) => {
+                    // Skip exactly "[]"
+                    if raw.get().trim() != "[]" {
+                        // RawValue writes the raw JSON without re-encoding
+                        debug!("Serializing JSON chunk");
+                        seq.serialize_element(&raw)?;
+                    } else {
+                        debug!("Skipping empty array");
+                    }
+                }
+                Err(e) => {
+                    // Only tolerate a *trailing* truncation
+                    if e.is_eof() {
+                        warn!("Trailing truncation detected. Stopping stream");
+                        break;
+                    } else {
+                        error!("Malformed JSON chunk: {e}");
+                        return Err(e).context("Malformed JSON chunk");
+                    }
+                }
+            }
+        }
+
+        seq.end()?;
+        info!("JSON stream written to {:?}", output_filepath);
         Ok(())
     }
 
