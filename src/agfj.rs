@@ -813,7 +813,10 @@ mod tests {
         assert!(!file.functions.as_ref().unwrap()[0][0].blocks[0]
             .ops
             .is_empty());
-        assert_eq!(file.functions.as_ref().unwrap()[0][0].blocks[0].fail, get_default_addr());
+        assert_eq!(
+            file.functions.as_ref().unwrap()[0][0].blocks[0].fail,
+            get_default_addr()
+        );
 
         assert!(file.functions.as_ref().unwrap()[0][0].blocks[0]
             .switchop

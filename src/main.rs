@@ -71,7 +71,10 @@ static MULTI_PROGRESS: std::sync::OnceLock<Arc<MultiProgress>> = std::sync::Once
 
 /// Get the global multi-progress instance
 fn get_multi_progress() -> Arc<MultiProgress> {
-    MULTI_PROGRESS.get().expect("Multi-progress not initialized").clone()
+    MULTI_PROGRESS
+        .get()
+        .expect("Multi-progress not initialized")
+        .clone()
 }
 
 /// Create a progress bar that works with the log bridge
@@ -434,28 +437,31 @@ enum DedupSubCommands {
 
 fn main() {
     let cli = Cli::parse();
-    
+
     // Set up the multi-progress for coordinating progress bars
     let multi = MultiProgress::new();
     let multi_arc = Arc::new(multi);
-    
+
     // Store the multi-progress instance globally
-    MULTI_PROGRESS.set(multi_arc.clone()).expect("Failed to set global multi-progress");
-    
+    MULTI_PROGRESS
+        .set(multi_arc.clone())
+        .expect("Failed to set global multi-progress");
+
     // Build the logger with the specified log level
     let logger = env_logger::Builder::from_env(
         Env::default()
             .filter_or("LOG_LEVEL", &cli.log_level)
-            .write_style_or("LOG_STYLE", "always")
-    ).build();
-    
+            .write_style_or("LOG_STYLE", "always"),
+    )
+    .build();
+
     let level = logger.filter();
-    
+
     // Set up the log bridge to prevent log messages from breaking progress bars
     LogWrapper::new(multi_arc.as_ref().clone(), logger)
         .try_init()
         .expect("Failed to initialize log wrapper");
-    
+
     log::set_max_level(level);
     match &cli.command {
         #[cfg(feature = "goblin")]
@@ -783,8 +789,9 @@ fn main() {
                             .collect::<Vec<_>>();
 
                         let pb = create_progress_bar(combined_cgs_metadata.len() as u64);
-                        combined_cgs_metadata.par_iter().for_each(
-                            |(filepath, metapath)| {
+                        combined_cgs_metadata
+                            .par_iter()
+                            .for_each(|(filepath, metapath)| {
                                 let suffix = format!("{}-meta", graph_type.to_owned());
                                 let full_output_path = get_save_file_path(
                                     &PathBuf::from(filepath),
@@ -871,8 +878,7 @@ fn main() {
                                     )
                                 }
                                 pb.inc(1);
-                            },
-                        );
+                            });
                         pb.finish();
                     }
                 }
@@ -1162,12 +1168,10 @@ fn main() {
 
                 let pb = create_progress_bar(job.files_to_be_processed.len() as u64);
                 // Process all files in parallel, each file processes all modes with a single r2pipe
-                job.files_to_be_processed
-                    .par_iter()
-                    .for_each(|path| {
-                        path.process_all_modes();
-                        pb.inc(1);
-                    });
+                job.files_to_be_processed.par_iter().for_each(|path| {
+                    path.process_all_modes();
+                    pb.inc(1);
+                });
                 pb.finish();
             } else if job.input_path_type == PathType::File {
                 info!("Single file found");
