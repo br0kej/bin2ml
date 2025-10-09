@@ -695,7 +695,7 @@ impl ExtractionJob {
 
     fn get_output_extension(job_type: &ExtractionJobType) -> Option<&str> {
         match job_type {
-            ExtractionJobType::FunctionBytes => None, // Output is a directory
+            // Add here if output is not a JSON file (e.g. txt file or directory)
             _ => Some("json"),
         }
     }
@@ -792,7 +792,7 @@ impl FunctionToBeProcessed {
 
     fn get_bytes(&self, r2p: &mut R2Pipe) -> Result<FuncBytes, Error> {
         FileToBeProcessed::go_to_address(r2p, self.addr)?;
-        let mut function_bytes = r2p.cmd(format!("p8 {}", self.size).as_str())?;
+        let mut function_bytes = r2p.cmd("p8f")?;
         function_bytes = function_bytes.trim().to_string();
         let decoded_bytes = hex::decode(&function_bytes).context("Failed to decode hex bytes")?;
 
@@ -1389,23 +1389,19 @@ impl FileToBeProcessed {
         Ok(())
     }
 
-    pub fn extract_function_bytes(&self, r2p: &mut R2Pipe, output_dirpath: &PathBuf) -> Result<()> {
+    pub fn extract_function_bytes(&self, r2p: &mut R2Pipe, output_path: &PathBuf) -> Result<()> {
         info!("Starting function bytes extraction");
-        let function_details = self.get_function_name_list(r2p)?;
 
-        if !output_dirpath.is_dir() {
-            std::fs::create_dir_all(&output_dirpath)
-                .with_context(|| format!("Failed to create directory {:?}", output_dirpath))?;
-        }
+        let json_raw = r2p.cmd("p8fmj @@f").with_context(|| {
+            format!(
+                "Failed to extract function bytes from {:?}.",
+                self.file_path
+            )
+        })?;
 
-        for function_info in function_details {
-            let function = FunctionToBeProcessed::from(function_info);
-            debug!(
-                "Function Name: {} Address: {} Size: {}",
-                function.name, function.addr, function.size
-            );
-            function.write_to_bin(r2p, &output_dirpath, &self.func_filename_template)?;
-        }
+        self.stream_write_to_json(&json_raw, output_path)
+            .with_context(|| format!("Failed to write function bytes to {:?}.", self.file_path))?;
+
         info!("Function bytes successfully extracted");
         Ok(())
     }
