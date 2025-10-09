@@ -164,6 +164,16 @@ pub fn parse_hex_escapes(s: String) -> Vec<u8> {
     bytes
 }
 
+
+/// Function to return a default address value
+///
+/// This function returns a default address of u64::MAX
+/// This means that the address is not set as it is an impossible address to 
+/// reach, unless the binary is millions of terabytes.
+pub fn get_default_addr() -> u64 {
+    u64::MAX
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
