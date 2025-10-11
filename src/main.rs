@@ -309,7 +309,7 @@ enum Commands {
         #[arg(short, long, value_name = "EXTRACT_MODE",
         value_parser = clap::builder::PossibleValuesParser::new([
         "bininfo", "finfo", "fvars", "reg", "cfg", "func-xrefs", "cg", "decomp",
-        "pcode-func", "pcode-bb", "localvar-xrefs", "strings", "bytes", "zigs"
+        "pcode-func", "pcode-bb", "localvar-xrefs", "strings", "bytes", "bytes-masked", "zigs"
         ])
         .map(|s| s.parse::<String>().unwrap()),
         num_args = 1..,
@@ -330,6 +330,7 @@ enum Commands {
         use_curl_pdb: bool,
 
         /// Name function data files using symbol, address, or custom template
+        /// e.g. '{address}-{symbol}.{ext}'
         #[arg(
             long,
             value_name = "TEMPLATE",
