@@ -1,5 +1,6 @@
 use crate::afij::AFIJFunctionInfo;
 use crate::agcj::AGCJFunctionCallGraph;
+use crate::agfj::AGFJFunc;
 use crate::utils::sanitize_filename;
 
 use anyhow::anyhow;
@@ -46,6 +47,7 @@ pub enum ExtractionJobType {
     RegisterBehaviour,
     FunctionXrefs,
     CFG,
+    FunctionCFG, // Like CFG, but in a separate file for each function
     CallGraphs,
     FuncInfo,
     FunctionVariables,
@@ -66,6 +68,7 @@ static JOB_TYPE_TO_SUFFIX: LazyLock<HashMap<ExtractionJobType, &'static str>> =
             (ExtractionJobType::RegisterBehaviour, "reg"),
             (ExtractionJobType::FunctionXrefs, "func-xrefs"),
             (ExtractionJobType::CFG, "cfg"),
+            (ExtractionJobType::FunctionCFG, "func-cfg"),
             (ExtractionJobType::CallGraphs, "cg"),
             (ExtractionJobType::FuncInfo, "finfo"),
             (ExtractionJobType::FunctionVariables, "fvars"),
@@ -337,6 +340,17 @@ impl From<AFLJFuncDetails> for FunctionToBeProcessed {
             addr: func_details.offset,
             size: func_details.size,
             ninstrs: func_details.ninstrs,
+        }
+    }
+}
+
+impl From<AGFJFunc> for FunctionToBeProcessed {
+    fn from(func: AGFJFunc) -> Self {
+        FunctionToBeProcessed {
+            name: func.name,
+            addr: func.offset,
+            size: func.size,
+            ninstrs: func.ninstr,
         }
     }
 }
@@ -698,8 +712,9 @@ impl ExtractionJob {
 
     fn get_output_extension(job_type: &ExtractionJobType) -> Option<&str> {
         match job_type {
-            // Add here if output is not a JSON file (e.g. txt file or directory)
-            ExtractionJobType::FunctionBytes => None, // Output is a directory
+            // Add here if output is not a JSON file (e.g. None for a directory)
+            ExtractionJobType::FunctionBytes => None,
+            ExtractionJobType::FunctionCFG => None,
             _ => Some("json"),
         }
     }
@@ -738,6 +753,8 @@ impl ExtractionJob {
 }
 
 impl FunctionToBeProcessed {
+    /// Write function bytes to a binary file with suffix .bin
+    /// If apply_mask is true, write function masked bytes to a binary file with suffix .masked.bin
     fn write_to_bin(
         &self,
         r2p: &mut R2Pipe,
@@ -745,11 +762,14 @@ impl FunctionToBeProcessed {
         filename_template: &str,
         apply_mask: bool,
     ) -> Result<()> {
-        let func_bytes = self.get_bytes(r2p, apply_mask).context("Failed to get function bytes")?;
+        let func_bytes = self
+            .get_bytes(r2p, apply_mask)
+            .context("Failed to get function bytes")?;
         let bytes_filepath = self.get_output_filepath(output_dirpath, filename_template, "bin");
-        let masked_bytes_filepath = self.get_output_filepath(output_dirpath, filename_template, "masked.bin");
-        
-        info!("Writing function bytes to file: {:?}", bytes_filepath);
+        let masked_bytes_filepath =
+            self.get_output_filepath(output_dirpath, filename_template, "masked.bin");
+
+        debug!("Writing function bytes to file: {:?}", bytes_filepath);
         std::fs::write(&bytes_filepath, func_bytes.bytes).with_context(|| {
             format!(
                 "Failed to write function bytes to file: {:?}",
@@ -758,14 +778,55 @@ impl FunctionToBeProcessed {
         })?;
 
         if apply_mask {
-            let bytes_mask = func_bytes.mask.context("Failed to get function masked bytes")?;
-            info!("Writing function masked bytes to file: {:?}", masked_bytes_filepath);
+            let bytes_mask = func_bytes
+                .mask
+                .context("Failed to get function masked bytes")?;
+            debug!(
+                "Writing function masked bytes to file: {:?}",
+                masked_bytes_filepath
+            );
             std::fs::write(&masked_bytes_filepath, bytes_mask).with_context(|| {
                 format!(
                     "Failed to write function masked bytes to file: {:?}",
                     masked_bytes_filepath
                 )
             })?;
+        }
+        Ok(())
+    }
+
+    fn write_to_json(
+        &self,
+        json_obj: &Value,
+        output_dirpath: &PathBuf,
+        filename_template: &str,
+    ) -> Result<()> {
+        let output_filepath = self.get_output_filepath(output_dirpath, filename_template, "json");
+        debug!("Writing JSON to {:?}", output_filepath);
+        let file = File::create(&output_filepath)
+            .with_context(|| format!("Unable to create file {:?}", output_filepath))?;
+        serde_json::to_writer(file, json_obj)
+            .with_context(|| format!("Unable to write JSON to {:?}", output_filepath))?;
+        Ok(())
+    }
+
+    fn write_cfg_to_json(
+        &self,
+        r2p: &mut R2Pipe,
+        output_dirpath: &PathBuf,
+        filename_template: &str,
+    ) -> Result<()> {
+        let cfg = self
+            .get_cfg(r2p)
+            .context(format!("Failed to get CFG @ {}", self.addr))?;
+        // Make sure self.addr and cfg_json.addr are the same
+        if self.addr != cfg.offset {
+            // If they aren't, write the CFG to a JSON file with the other function's details
+            warn!("Function address mismatch: {} != {}", self.addr, cfg.offset);
+            let other_function = FunctionToBeProcessed::from(cfg.clone());
+            other_function.write_to_json(&json!(cfg), output_dirpath, filename_template)?;
+        } else {
+            self.write_to_json(&json!(cfg), output_dirpath, filename_template)?;
         }
         Ok(())
     }
@@ -814,7 +875,8 @@ impl FunctionToBeProcessed {
         let mut function_bytes_and_mask = r2p.cmd("p8fm")?;
         function_bytes_and_mask = function_bytes_and_mask.trim().to_string();
         let parts: Vec<&str> = function_bytes_and_mask.split(":").collect();
-        let function_bytes = hex::decode(parts[0]).context("Failed to decode hex function bytes")?;
+        let function_bytes =
+            hex::decode(parts[0]).context("Failed to decode hex function bytes")?;
         let mut masked_bytes: Option<Vec<u8>> = None;
 
         if apply_mask {
@@ -826,7 +888,10 @@ impl FunctionToBeProcessed {
             masked_bytes = Some(masked_bytes_tmp);
         }
 
-        Ok(FuncBytes { bytes: function_bytes, mask: masked_bytes })
+        Ok(FuncBytes {
+            bytes: function_bytes,
+            mask: masked_bytes,
+        })
     }
 
     fn get_basic_block_info(&self, r2p: &mut R2Pipe) -> Result<BasicBlockInfo, Error> {
@@ -934,6 +999,29 @@ impl FunctionToBeProcessed {
             Ok(parsed_obj)
         }
     }
+
+    fn get_cfg(&self, r2p: &mut R2Pipe) -> Result<AGFJFunc, Error> {
+        FileToBeProcessed::go_to_address(r2p, self.addr)?;
+        debug!("Getting CFG for function @ {}", self.addr);
+        // let json_str = r2p.cmd("agfj").context("Command agfj failed")?;
+        let json = r2p.cmdj("agfj").context("Command agfj failed")?;
+        // let cfg: AGFJFunc = serde_json::from_str(&json_str)
+        //     .with_context(|| format!("Unable to convert {:?} to AGFJFunc struct!", json_str))?;
+
+        // AGFJ returns an array of JSON objects, it should only ever be length 1
+        let cfg: Vec<AGFJFunc> = serde_json::from_value(json.clone())
+            .with_context(|| format!("Unable to convert {:?} to AGFJFunc struct!", json))?;
+        if cfg.len() == 0 {
+            return Err(anyhow!("No CFG found for function @ {}", self.addr));
+        } else if cfg.len() > 1 {
+            warn!(
+                "Multiple CFGs found for function @ {}; ignoring all but the first",
+                self.addr
+            );
+        }
+        let func_cfg = cfg[0].clone();
+        Ok(func_cfg)
+    }
 }
 
 impl FileToBeProcessed {
@@ -993,7 +1081,8 @@ impl FileToBeProcessed {
                 self.extract_register_behaviour(r2p, &tmp_output_path)
             }
             ExtractionJobType::FunctionXrefs => self.extract_function_xrefs(r2p, &tmp_output_path),
-            ExtractionJobType::CFG => self.extract_func_cfgs(r2p, &tmp_output_path),
+            ExtractionJobType::CFG => self.extract_func_cfgs(r2p, &tmp_output_path, false),
+            ExtractionJobType::FunctionCFG => self.extract_func_cfgs(r2p, &tmp_output_path, true),
             ExtractionJobType::CallGraphs => {
                 self.extract_function_call_graphs(r2p, &tmp_output_path)
             }
@@ -1011,8 +1100,12 @@ impl FileToBeProcessed {
             ExtractionJobType::FunctionZignatures => {
                 self.extract_function_zignatures(r2p, &tmp_output_path)
             }
-            ExtractionJobType::FunctionBytes => self.extract_function_bytes(r2p, &tmp_output_path, false),
-            ExtractionJobType::FunctionBytesMasked => self.extract_function_bytes(r2p, &tmp_output_path, true),
+            ExtractionJobType::FunctionBytes => {
+                self.extract_function_bytes(r2p, &tmp_output_path, false)
+            }
+            ExtractionJobType::FunctionBytesMasked => {
+                self.extract_function_bytes(r2p, &tmp_output_path, true)
+            }
         }?;
 
         // Apply final output file name when extraction is done
@@ -1245,15 +1338,68 @@ impl FileToBeProcessed {
         Ok(())
     }
 
-    pub fn extract_func_cfgs(&self, r2p: &mut R2Pipe, output_path: &PathBuf) -> Result<()> {
-        info!("Executing agfj @@f on {:?}", self.file_path);
+    pub fn extract_func_cfgs(
+        &self,
+        r2p: &mut R2Pipe,
+        output_path: &PathBuf,
+        split_by_function: bool,
+    ) -> Result<()> {
+        if !split_by_function {
+            // All CFGs stored in a single JSON file (potentially very large)
+            info!("Executing agfj @@f on {:?}", self.file_path);
 
-        let json_raw = r2p
-            .cmd("agfj @@f")
-            .with_context(|| format!("Failed to extract CFGs from {:?}.", self.file_path))?;
+            let json_raw = r2p
+                .cmd("agfj @@f")
+                .with_context(|| format!("Failed to extract CFGs from {:?}.", self.file_path))?;
 
-        self.stream_write_to_json(&json_raw, output_path)
-            .with_context(|| format!("Failed to write CFGs to {:?}.", self.file_path))?;
+            self.stream_write_to_json(&json_raw, output_path)
+                .with_context(|| format!("Failed to write CFGs to {:?}.", self.file_path))?;
+        } else {
+            // CFGs stored in a separate JSON file for each function
+            info!("Extracting CFGs for each function of {:?}", self.file_path);
+
+            // The output path is a directory, create it if it doesn't exist
+            let output_dirpath = output_path.clone();
+            if !output_dirpath.is_dir() {
+                std::fs::create_dir_all(&output_dirpath)
+                    .with_context(|| format!("Failed to create directory {:?}", output_dirpath))?;
+            }
+
+            // Extract the CFGs for each function
+            for function in self.get_function_name_list(r2p)? {
+                let function = FunctionToBeProcessed::from(function);
+                debug!(
+                    "Extracting CFG for function {:?} @ {:?}",
+                    function.name, function.addr
+                );
+                match function.write_cfg_to_json(r2p, &output_dirpath, &self.func_filename_template)
+                {
+                    Ok(()) => {
+                        debug!(
+                            "Successfully extracted CFG for function {:?} @ {:?}",
+                            function.name, function.addr
+                        );
+                    }
+                    Err(e) => {
+                        let error_path = function.get_output_filepath(
+                            &output_dirpath,
+                            &self.func_filename_template,
+                            "error.log",
+                        );
+                        error!(
+                            "Failed to extract CFG for function {:?} @ {:?}: {}",
+                            function.name, function.addr, e
+                        );
+                        if let Err(write_err) = std::fs::write(&error_path, e.to_string()) {
+                            error!("Failed to write error to {:?}: {}", error_path, write_err);
+                        } else {
+                            info!("Error stored at {:?}", error_path);
+                        }
+                        continue;
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
@@ -1418,9 +1564,14 @@ impl FileToBeProcessed {
         Ok(())
     }
 
-    pub fn extract_function_bytes(&self, r2p: &mut R2Pipe, output_dirpath: &PathBuf, apply_mask: bool) -> Result<()> {
+    pub fn extract_function_bytes(
+        &self,
+        r2p: &mut R2Pipe,
+        output_dirpath: &PathBuf,
+        apply_mask: bool,
+    ) -> Result<()> {
         info!("Starting function bytes extraction");
-        
+
         let function_details = self.get_function_name_list(r2p)?;
 
         if !output_dirpath.is_dir() {
@@ -1434,7 +1585,12 @@ impl FileToBeProcessed {
                 "Function Name: {} Address: {} Size: {}",
                 function.name, function.addr, function.size
             );
-            function.write_to_bin(r2p, &output_dirpath, &self.func_filename_template, apply_mask)?;
+            function.write_to_bin(
+                r2p,
+                &output_dirpath,
+                &self.func_filename_template,
+                apply_mask,
+            )?;
         }
 
         info!("Function bytes successfully extracted");

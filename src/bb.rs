@@ -105,7 +105,7 @@ pub struct Op {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ACFJBlock {
     #[serde(default = "get_default_addr", alias = "addr")]
     pub offset: u64,

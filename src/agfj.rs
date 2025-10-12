@@ -35,15 +35,15 @@ struct EdgePair {
     wt: u16,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AGFJFunc {
     pub name: String,
-    nargs: u64,
-    ninstr: u64,
-    nlocals: u64,
     #[serde(alias = "addr")]
-    offset: u64,
-    size: Option<u64>,
+    pub offset: u64,
+    pub size: u64,
+    pub ninstr: u64,
+    nargs: u64,
+    nlocals: u64,
     stack: u64,
     r#type: String,
     pub blocks: Vec<ACFJBlock>,
@@ -794,7 +794,7 @@ mod tests {
         assert_eq!(file.functions.as_ref().unwrap()[0][0].ninstr, 78);
         assert_eq!(file.functions.as_ref().unwrap()[0][0].nargs, 2);
         assert_eq!(file.functions.as_ref().unwrap()[0][0].nlocals, 0);
-        assert_eq!(file.functions.as_ref().unwrap()[0][0].size, Some(334));
+        assert_eq!(file.functions.as_ref().unwrap()[0][0].size, 334);
         assert_eq!(file.functions.as_ref().unwrap()[0][0].stack, 56);
         assert!(!file.functions.as_ref().unwrap()[0][0].blocks.is_empty());
 
