@@ -698,8 +698,9 @@ impl ExtractionJob {
 
     fn get_output_extension(job_type: &ExtractionJobType) -> Option<&str> {
         match job_type {
-            // Add here if output is not a JSON file (e.g. txt file or directory)
-            ExtractionJobType::FunctionBytes => None, // Output is a directory
+            // Add here if output is not a JSON file (None if a directory)
+            ExtractionJobType::FunctionBytes => None,
+            ExtractionJobType::FunctionBytesMasked => None,
             _ => Some("json"),
         }
     }
