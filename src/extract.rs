@@ -746,10 +746,13 @@ impl FunctionToBeProcessed {
         filename_template: &str,
         apply_mask: bool,
     ) -> Result<()> {
-        let func_bytes = self.get_bytes(r2p, apply_mask).context("Failed to get function bytes")?;
+        let func_bytes = self
+            .get_bytes(r2p, apply_mask)
+            .context(format!("Failed to get function bytes for {:?} @ {:?}", self.name, self.addr))?;
         let bytes_filepath = self.get_output_filepath(output_dirpath, filename_template, "bin");
-        let masked_bytes_filepath = self.get_output_filepath(output_dirpath, filename_template, "masked.bin");
-        
+        let masked_bytes_filepath =
+            self.get_output_filepath(output_dirpath, filename_template, "masked.bin");
+
         info!("Writing function bytes to file: {:?}", bytes_filepath);
         std::fs::write(&bytes_filepath, func_bytes.bytes).with_context(|| {
             format!(
@@ -759,8 +762,13 @@ impl FunctionToBeProcessed {
         })?;
 
         if apply_mask {
-            let bytes_mask = func_bytes.mask.context("Failed to get function masked bytes")?;
-            info!("Writing function masked bytes to file: {:?}", masked_bytes_filepath);
+            let bytes_mask = func_bytes
+                .mask
+                .context(format!("Failed to get function masked bytes for {:?} @ {:?}", self.name, self.addr))?;
+            info!(
+                "Writing function masked bytes to file: {:?}",
+                masked_bytes_filepath
+            );
             std::fs::write(&masked_bytes_filepath, bytes_mask).with_context(|| {
                 format!(
                     "Failed to write function masked bytes to file: {:?}",
@@ -815,11 +823,30 @@ impl FunctionToBeProcessed {
         let mut function_bytes_and_mask = r2p.cmd("p8fm")?;
         function_bytes_and_mask = function_bytes_and_mask.trim().to_string();
         let parts: Vec<&str> = function_bytes_and_mask.split(":").collect();
-        let function_bytes = hex::decode(parts[0]).context("Failed to decode hex function bytes")?;
+
+        if parts.len() < 2 {
+            return Err(anyhow::anyhow!(
+                "Invalid p8fm output format: expected 'bytes:mask' but got '{}'",
+                function_bytes_and_mask
+            ));
+        }
+
+        let function_bytes =
+            hex::decode(parts[0]).context("Failed to decode hex function bytes")?;
         let mut masked_bytes: Option<Vec<u8>> = None;
 
         if apply_mask {
             let bytes_mask = hex::decode(parts[1]).context("Failed to decode hex bytes mask")?;
+
+            // Ensure function_bytes and bytes_mask have the same length
+            if function_bytes.len() != bytes_mask.len() {
+                return Err(anyhow::anyhow!(
+                    "Function bytes length ({}) and mask length ({}) do not match",
+                    function_bytes.len(),
+                    bytes_mask.len()
+                ));
+            }
+
             let mut masked_bytes_tmp = vec![0; function_bytes.len()];
             for i in 0..function_bytes.len() {
                 masked_bytes_tmp[i] = function_bytes[i] & bytes_mask[i];
@@ -827,7 +854,10 @@ impl FunctionToBeProcessed {
             masked_bytes = Some(masked_bytes_tmp);
         }
 
-        Ok(FuncBytes { bytes: function_bytes, mask: masked_bytes })
+        Ok(FuncBytes {
+            bytes: function_bytes,
+            mask: masked_bytes,
+        })
     }
 
     fn get_basic_block_info(&self, r2p: &mut R2Pipe) -> Result<BasicBlockInfo, Error> {
@@ -1012,8 +1042,12 @@ impl FileToBeProcessed {
             ExtractionJobType::FunctionZignatures => {
                 self.extract_function_zignatures(r2p, &tmp_output_path)
             }
-            ExtractionJobType::FunctionBytes => self.extract_function_bytes(r2p, &tmp_output_path, false),
-            ExtractionJobType::FunctionBytesMasked => self.extract_function_bytes(r2p, &tmp_output_path, true),
+            ExtractionJobType::FunctionBytes => {
+                self.extract_function_bytes(r2p, &tmp_output_path, false)
+            }
+            ExtractionJobType::FunctionBytesMasked => {
+                self.extract_function_bytes(r2p, &tmp_output_path, true)
+            }
         }?;
 
         // Apply final output file name when extraction is done
@@ -1419,9 +1453,14 @@ impl FileToBeProcessed {
         Ok(())
     }
 
-    pub fn extract_function_bytes(&self, r2p: &mut R2Pipe, output_dirpath: &PathBuf, apply_mask: bool) -> Result<()> {
+    pub fn extract_function_bytes(
+        &self,
+        r2p: &mut R2Pipe,
+        output_dirpath: &PathBuf,
+        apply_mask: bool,
+    ) -> Result<()> {
         info!("Starting function bytes extraction");
-        
+
         let function_details = self.get_function_name_list(r2p)?;
 
         if !output_dirpath.is_dir() {
