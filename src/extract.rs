@@ -1434,7 +1434,36 @@ impl FileToBeProcessed {
                 "Function Name: {} Address: {} Size: {}",
                 function.name, function.addr, function.size
             );
-            function.write_to_bin(r2p, &output_dirpath, &self.func_filename_template, apply_mask)?;
+            match function.write_to_bin(
+                r2p,
+                &output_dirpath,
+                &self.func_filename_template,
+                apply_mask,
+            ) {
+                Ok(()) => {
+                    debug!(
+                        "Successfully extracted bytes for function {:?} @ {:?}",
+                        function.name, function.addr
+                    );
+                }
+                Err(e) => {
+                    let error_path = function.get_output_filepath(
+                        output_dirpath,
+                        &self.func_filename_template,
+                        "error.log",
+                    );
+                    error!(
+                        "Failed to extract bytes for function {:?} @ {:?}: {}",
+                        function.name, function.addr, e
+                    );
+                    if let Err(write_err) = std::fs::write(&error_path, e.to_string()) {
+                        error!("Failed to write error to {:?}: {}", error_path, write_err);
+                    } else {
+                        info!("Error stored at {:?}", error_path);
+                    }
+                    continue;
+                }
+            }
         }
 
         info!("Function bytes successfully extracted");
