@@ -1152,13 +1152,13 @@ impl FileToBeProcessed {
             let error_path = output_path.with_extension("error.log");
 
             if output_path.exists() {
-                debug!(
+                info!(
                     "Skipping {:?} job for {:?}: already processed at {:?}.",
                     job_type_suffix, self.file_path, output_path
                 );
                 continue;
             } else if error_path.exists() && !self.retry_aborted {
-                debug!(
+                info!(
                     "Skipping {:?} job for {:?}: already processed and failed. Error log at {:?}.",
                     job_type_suffix, self.file_path, error_path
                 );
