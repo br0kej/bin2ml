@@ -712,8 +712,9 @@ impl ExtractionJob {
 
     fn get_output_extension(job_type: &ExtractionJobType) -> Option<&str> {
         match job_type {
-            // Add here if output is not a JSON file (e.g. None for a directory)
+            // Add here if output is not a JSON file (None if a directory)
             ExtractionJobType::FunctionBytes => None,
+            ExtractionJobType::FunctionBytesMasked => None,
             ExtractionJobType::FunctionCFG => None,
             _ => Some("json"),
         }
@@ -1585,12 +1586,7 @@ impl FileToBeProcessed {
                 "Function Name: {} Address: {} Size: {}",
                 function.name, function.addr, function.size
             );
-            function.write_to_bin(
-                r2p,
-                &output_dirpath,
-                &self.func_filename_template,
-                apply_mask,
-            )?;
+            function.write_to_bin(r2p, &output_dirpath, &self.func_filename_template, apply_mask)?;
         }
 
         info!("Function bytes successfully extracted");
