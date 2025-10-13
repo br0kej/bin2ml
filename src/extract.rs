@@ -771,7 +771,7 @@ impl FunctionToBeProcessed {
     ) -> Result<()> {
         let func_bytes = self
             .get_bytes(r2p, apply_mask)
-            .context("Failed to get function bytes")?;
+            .context(format!("Failed to get function bytes for {:?} @ {:?}", self.name, self.addr))?;
         let bytes_filepath = self.get_output_filepath(output_dirpath, filename_template, "bin");
         let masked_bytes_filepath =
             self.get_output_filepath(output_dirpath, filename_template, "masked.bin");
@@ -787,7 +787,7 @@ impl FunctionToBeProcessed {
         if apply_mask {
             let bytes_mask = func_bytes
                 .mask
-                .context("Failed to get function masked bytes")?;
+                .context(format!("Failed to get function masked bytes for {:?} @ {:?}", self.name, self.addr))?;
             debug!(
                 "Writing function masked bytes to file: {:?}",
                 masked_bytes_filepath
@@ -882,12 +882,30 @@ impl FunctionToBeProcessed {
         let mut function_bytes_and_mask = r2p.cmd("p8fm")?;
         function_bytes_and_mask = function_bytes_and_mask.trim().to_string();
         let parts: Vec<&str> = function_bytes_and_mask.split(":").collect();
+
+        if parts.len() < 2 {
+            return Err(anyhow::anyhow!(
+                "Invalid p8fm output format: expected 'bytes:mask' but got '{}'",
+                function_bytes_and_mask
+            ));
+        }
+
         let function_bytes =
             hex::decode(parts[0]).context("Failed to decode hex function bytes")?;
         let mut masked_bytes: Option<Vec<u8>> = None;
 
         if apply_mask {
             let bytes_mask = hex::decode(parts[1]).context("Failed to decode hex bytes mask")?;
+
+            // Ensure function_bytes and bytes_mask have the same length
+            if function_bytes.len() != bytes_mask.len() {
+                return Err(anyhow::anyhow!(
+                    "Function bytes length ({}) and mask length ({}) do not match",
+                    function_bytes.len(),
+                    bytes_mask.len()
+                ));
+            }
+
             let mut masked_bytes_tmp = vec![0; function_bytes.len()];
             for i in 0..function_bytes.len() {
                 masked_bytes_tmp[i] = function_bytes[i] & bytes_mask[i];
