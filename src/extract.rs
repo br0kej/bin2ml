@@ -119,11 +119,13 @@ pub struct ExtractionJob {
     pub output_path: PathBuf,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct R2PipeConfig {
     pub debug: bool,
-    pub extended_analysis: bool,
+    pub analysis_mode: String,
     pub use_curl_pdb: bool,
+    pub apply_relocations: bool,
+    pub disable_pseudo_asm: bool,
     pub timeout: Option<u64>,
 }
 
@@ -585,8 +587,10 @@ impl ExtractionJob {
         output_path: &PathBuf,
         modes: &Vec<String>,
         debug: &bool,
-        extended_analysis: &bool,
+        analysis_mode: &str,
         use_curl_pdb: &bool,
+        apply_relocations: &bool,
+        disable_pseudo_asm: &bool,
         func_filename_template: &str,
         timeout: &Option<u64>,
         with_annotations: &bool,
@@ -610,7 +614,9 @@ impl ExtractionJob {
 
         let r2_handle_config = R2PipeConfig {
             debug: *debug,
-            extended_analysis: *extended_analysis,
+            analysis_mode: analysis_mode.to_string(),
+            apply_relocations: *apply_relocations,
+            disable_pseudo_asm: *disable_pseudo_asm,
             use_curl_pdb: *use_curl_pdb,
             timeout: *timeout,
         };
@@ -657,7 +663,7 @@ impl ExtractionJob {
                         file_path: PathBuf::from(f),
                         output_path: output_path.to_owned(),
                         job_types: extraction_job_types.clone(),
-                        r2p_config: r2_handle_config,
+                        r2p_config: r2_handle_config.clone(),
                         with_annotations: *with_annotations,
                         retry_aborted: *retry_aborted,
                         func_filename_template: func_filename_template.to_string(),
@@ -1798,36 +1804,62 @@ impl FileToBeProcessed {
             env::set_var("R2_CURL", "1");
         }
 
-        let opts = if self.r2p_config.debug {
+        let mut args = vec![];
+
+        // Set debug level and verbosity
+        if self.r2p_config.debug {
             debug!("Creating r2 handle with debugging");
-            R2PipeSpawnOptions {
-                exepath: "radare2".to_owned(),
-                args: vec!["-e bin.cache=true", "-e log.level=0", "-e asm.pseudo=true"],
-            }
+            args.push("-e log.level=0");
         } else {
             debug!("Creating r2 handle without debugging");
-            R2PipeSpawnOptions {
-                exepath: "radare2".to_owned(),
-                args: vec![
-                    "-e bin.cache=true",
-                    "-e log.level=1",
-                    "-2",
-                    "-e asm.pseudo=true",
-                ],
-            }
+            args.extend(["-e log.level=1", "-2"]);
+        }
+
+        // Choose between cache or relocations (default is cache)
+        if self.r2p_config.apply_relocations {
+            args.push("-e bin.relocs.apply=true");
+        } else {
+            args.push("-e bin.cache=true");
+        }
+
+        // Set pseudo-disassembly (default is true)
+        if self.r2p_config.disable_pseudo_asm {
+            args.push("-e asm.pseudo=false");
+        } else {
+            args.push("-e asm.pseudo=true");
+        }
+
+        // Set timeout if any
+        if let Some(timeout) = self.r2p_config.timeout {
+            // Convert timeout from seconds to milliseconds
+            let timeout_ms = timeout * 1000;
+            let owned_arg_str = format!("-e anal.timeout={timeout_ms}");
+
+            // Leak the owned String to get a &'static str so the compiler doesn't complain
+            let arg_str: &'static str = Box::leak(owned_arg_str.into_boxed_str());
+            args.push(arg_str);
+        }
+
+        let opts = R2PipeSpawnOptions {
+            exepath: "radare2".to_owned(),
+            args,
         };
 
-        debug!("Attempting to create r2pipe using {:?}", self.file_path);
+        debug!(
+            "Attempting to create r2pipe to analyze {:?} ...",
+            self.file_path
+        );
+        debug!(
+            "->  {:?} {:?} {:?}",
+            opts.exepath,
+            opts.args.join(" "),
+            self.file_path
+        );
         let mut r2p = match R2Pipe::in_session() {
             Some(_) => R2Pipe::open().expect("Unable to open R2Pipe"),
             None => R2Pipe::spawn(self.file_path.to_str().unwrap(), Some(opts))
                 .expect("Failed to spawn new R2Pipe"),
         };
-
-        if let Some(timeout) = self.r2p_config.timeout {
-            r2p.cmd(format!("e anal.timeout={}", timeout).as_str())
-                .expect("Failed to set timeout");
-        }
 
         if self.r2p_config.use_curl_pdb {
             let info = r2p.cmdj("ij");
@@ -1848,22 +1880,18 @@ impl FileToBeProcessed {
     }
 
     fn analyse_r2_pipe(&self, r2p: &mut R2Pipe) {
-        if self.r2p_config.extended_analysis {
-            debug!(
-                "Executing 'aaa' r2 command for {}",
-                self.file_path.display()
-            );
-            r2p.cmd("aaa")
-                .expect("Unable to complete standard analysis!");
-            debug!("'aaa' r2 command complete for {}", self.file_path.display());
-        } else {
-            debug!("Executing 'aa' r2 command for {}", self.file_path.display());
-            r2p.cmd("aa")
-                .expect("Unable to complete standard analysis!");
-            debug!(
-                "'aa' r2 command complete for {:?}",
-                self.file_path.display()
-            );
-        };
+        let analysis_mode = self.r2p_config.analysis_mode.as_str();
+        debug!(
+            "Executing '{}' r2 command for {}",
+            analysis_mode,
+            self.file_path.display()
+        );
+        r2p.cmd(analysis_mode)
+            .expect(&format!("Unable to complete analysis! ({analysis_mode})"));
+        debug!(
+            "'{}' r2 command complete for {}",
+            analysis_mode,
+            self.file_path.display()
+        );
     }
 }

@@ -327,8 +327,19 @@ enum Commands {
         extended_analysis: bool,
 
         #[arg(long, default_value = "false")]
+        experimental_analysis: bool,
+
+        #[arg(long, default_value = "false")]
         use_curl_pdb: bool,
 
+        /// Toggle to apply relocations instead of caching (slower but more accurate)
+        #[arg(long, default_value = "false")]
+        apply_relocations: bool, // Open r2 with bin.relocs.apply=true
+        // Otherwise defaults to bin.cache=true
+        /// Toggle to disable pseudo-disassembly (faster but more variable in cross-platform scenarios)
+        #[arg(long, default_value = "false")]
+        disable_pseudo_asm: bool, // Open r2 with asm.pseudo=false
+        // Otherwise defaults to asm.pseudo=true
         /// Name function data files using symbol, address, or custom template
         /// e.g. '{address}-{symbol}.{ext}'
         #[arg(
@@ -339,6 +350,7 @@ enum Commands {
         )]
         func_filename: String,
 
+        /// Timeout for Radare2 analysis in seconds
         #[arg(long)]
         timeout: Option<u64>,
 
@@ -1123,7 +1135,10 @@ fn main() {
             num_threads,
             debug,
             extended_analysis,
+            experimental_analysis,
             use_curl_pdb,
+            apply_relocations,
+            disable_pseudo_asm,
             func_filename,
             timeout,
             with_annotations,
@@ -1135,14 +1150,30 @@ fn main() {
                 exit(1)
             }
 
+            let analysis_mode;
+            // Make sure that extended analysis and experimental analysis are not both true
+            if *extended_analysis && *experimental_analysis {
+                error!("Extended analysis and experimental analysis cannot be both true");
+                exit(1)
+            } else if *extended_analysis {
+                analysis_mode = "aaa";
+            } else if *experimental_analysis {
+                analysis_mode = "aaaa";
+            } else {
+                // Neither are true, so use the default analysis mode
+                analysis_mode = "aa";
+            }
+
             // Create a single extraction job with all modes
             let job = ExtractionJob::new(
                 fpath,
                 output_dir,
                 modes,
                 debug,
-                extended_analysis,
+                analysis_mode,
                 use_curl_pdb,
+                apply_relocations,
+                disable_pseudo_asm,
                 func_filename,
                 timeout,
                 with_annotations,
