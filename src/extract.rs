@@ -1487,12 +1487,13 @@ impl FileToBeProcessed {
         info!("Starting function bytes extraction");
 
         let function_details = self.get_function_name_list(r2p)?;
-
+        let functions_count = function_details.len();
         if !output_dirpath.is_dir() {
             std::fs::create_dir_all(&output_dirpath)
                 .with_context(|| format!("Failed to create directory {:?}", output_dirpath))?;
         }
 
+        let mut success_count: u32 = 0;
         for function_info in function_details {
             let function = FunctionToBeProcessed::from(function_info);
             debug!(
@@ -1510,6 +1511,7 @@ impl FileToBeProcessed {
                         "Successfully extracted bytes for function {:?} @ {:?}",
                         function.name, function.addr
                     );
+                    success_count += 1;
                 }
                 Err(e) => {
                     let error_path = function.get_output_filepath(
@@ -1531,8 +1533,13 @@ impl FileToBeProcessed {
             }
         }
 
-        info!("Function bytes successfully extracted");
-        Ok(())
+        let file_name = self.get_file_name()?;
+        if success_count > 0 {
+            info!("Bytes extracted for {}/{} functions in {:?}", success_count, functions_count, file_name);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Failed to extract bytes for any function in {:?}", file_name))
+        }
     }
 
     fn get_checksums(&self) -> Result<ChecksumsEntry, Error> {
