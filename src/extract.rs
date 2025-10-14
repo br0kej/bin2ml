@@ -771,7 +771,7 @@ impl FunctionToBeProcessed {
     ) -> Result<()> {
         let func_bytes = self
             .get_bytes(r2p, apply_mask)
-            .context(format!("Failed to get function bytes for {:?} @ {:?}", self.name, self.addr))?;
+            .map_err(|e| anyhow::anyhow!("Failed to get bytes: {}", e))?;
         let bytes_filepath = self.get_output_filepath(output_dirpath, filename_template, "bin");
         let masked_bytes_filepath =
             self.get_output_filepath(output_dirpath, filename_template, "masked.bin");
@@ -787,8 +787,8 @@ impl FunctionToBeProcessed {
         if apply_mask {
             let bytes_mask = func_bytes
                 .mask
-                .context(format!("Failed to get function masked bytes for {:?} @ {:?}", self.name, self.addr))?;
-            debug!(
+                .context("Masked bytes missing from get_bytes output")?;
+            info!(
                 "Writing function masked bytes to file: {:?}",
                 masked_bytes_filepath
             );
@@ -878,39 +878,64 @@ impl FunctionToBeProcessed {
     }
 
     fn get_bytes(&self, r2p: &mut R2Pipe, apply_mask: bool) -> Result<FuncBytes, Error> {
-        FileToBeProcessed::go_to_address(r2p, self.addr)?;
-        let mut function_bytes_and_mask = r2p.cmd("p8fm")?;
-        function_bytes_and_mask = function_bytes_and_mask.trim().to_string();
-        let parts: Vec<&str> = function_bytes_and_mask.split(":").collect();
-
-        if parts.len() < 2 {
-            return Err(anyhow::anyhow!(
-                "Invalid p8fm output format: expected 'bytes:mask' but got '{}'",
-                function_bytes_and_mask
-            ));
-        }
-
-        let function_bytes =
-            hex::decode(parts[0]).context("Failed to decode hex function bytes")?;
+        let cmd_str;
+        let function_bytes;
+        let function_mask;
+        let function_bytes_and_mask;
         let mut masked_bytes: Option<Vec<u8>> = None;
 
         if apply_mask {
-            let bytes_mask = hex::decode(parts[1]).context("Failed to decode hex bytes mask")?;
+            cmd_str = format!("p8fm @ {}", self.addr);
+            function_bytes_and_mask = r2p
+                .cmd(cmd_str.as_str())
+                .with_context(|| format!("Failed to execute `{}`", cmd_str))?
+                .trim()
+                .to_string();
+            let parts: Vec<&str> = function_bytes_and_mask.split(":").collect();
+
+            if parts.len() < 2 {
+                return Err(anyhow::anyhow!(
+                    "Invalid output format: expected 'bytes:mask'.\n\
+                    Output from `{}`: '{}'",
+                    cmd_str,
+                    function_bytes_and_mask
+                ));
+            }
+            function_bytes = hex::decode(parts[0])
+                .with_context(|| format!("Failed to decode hex function bytes: '{}'", parts[0]))?;
+            function_mask = hex::decode(parts[1])
+                .with_context(|| format!("Failed to decode hex function mask: '{}'", parts[1]))?;
 
             // Ensure function_bytes and bytes_mask have the same length
-            if function_bytes.len() != bytes_mask.len() {
+            if function_bytes.len() != function_mask.len() {
                 return Err(anyhow::anyhow!(
-                    "Function bytes length ({}) and mask length ({}) do not match",
+                    "Function bytes length ({}) and mask length ({}) do not match.\n\
+                    Output from `{}`: '{}'",
                     function_bytes.len(),
-                    bytes_mask.len()
+                    function_mask.len(),
+                    cmd_str,
+                    function_bytes_and_mask
                 ));
             }
 
             let mut masked_bytes_tmp = vec![0; function_bytes.len()];
             for i in 0..function_bytes.len() {
-                masked_bytes_tmp[i] = function_bytes[i] & bytes_mask[i];
+                masked_bytes_tmp[i] = function_bytes[i] & function_mask[i];
             }
             masked_bytes = Some(masked_bytes_tmp);
+        } else {
+            cmd_str = format!("p8f @ {}", self.addr);
+            let function_bytes_str = r2p
+                .cmd(cmd_str.as_str())
+                .with_context(|| format!("Failed to execute `{}`", cmd_str))?
+                .trim()
+                .to_string();
+            function_bytes = hex::decode(function_bytes_str.clone()).with_context(|| {
+                format!(
+                    "Failed to decode hex function bytes: '{}'",
+                    function_bytes_str
+                )
+            })?;
         }
 
         Ok(FuncBytes {
@@ -1598,12 +1623,13 @@ impl FileToBeProcessed {
         info!("Starting function bytes extraction");
 
         let function_details = self.get_function_name_list(r2p)?;
-
+        let functions_count = function_details.len();
         if !output_dirpath.is_dir() {
             std::fs::create_dir_all(&output_dirpath)
                 .with_context(|| format!("Failed to create directory {:?}", output_dirpath))?;
         }
 
+        let mut success_count: u32 = 0;
         for function_info in function_details {
             let function = FunctionToBeProcessed::from(function_info);
             debug!(
@@ -1621,6 +1647,7 @@ impl FileToBeProcessed {
                         "Successfully extracted bytes for function {:?} @ {:?}",
                         function.name, function.addr
                     );
+                    success_count += 1;
                 }
                 Err(e) => {
                     let error_path = function.get_output_filepath(
@@ -1635,15 +1662,20 @@ impl FileToBeProcessed {
                     if let Err(write_err) = std::fs::write(&error_path, e.to_string()) {
                         error!("Failed to write error to {:?}: {}", error_path, write_err);
                     } else {
-                        info!("Error stored at {:?}", error_path);
+                        info!("Error stored in {:?}", error_path);
                     }
                     continue;
                 }
             }
         }
 
-        info!("Function bytes successfully extracted");
-        Ok(())
+        let file_name = self.get_file_name()?;
+        if success_count > 0 {
+            info!("Bytes extracted for {}/{} functions in {:?}", success_count, functions_count, file_name);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Failed to extract bytes for any function in {:?}", file_name))
+        }
     }
 
     fn get_checksums(&self) -> Result<ChecksumsEntry, Error> {
