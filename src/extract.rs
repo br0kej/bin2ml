@@ -1671,10 +1671,16 @@ impl FileToBeProcessed {
 
         let file_name = self.get_file_name()?;
         if success_count > 0 {
-            info!("Bytes extracted for {}/{} functions in {:?}", success_count, functions_count, file_name);
+            info!(
+                "Bytes extracted for {}/{} functions in {:?}",
+                success_count, functions_count, file_name
+            );
             Ok(())
         } else {
-            Err(anyhow::anyhow!("Failed to extract bytes for any function in {:?}", file_name))
+            Err(anyhow::anyhow!(
+                "Failed to extract bytes for any function in {:?}",
+                file_name
+            ))
         }
     }
 
