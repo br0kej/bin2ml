@@ -41,12 +41,13 @@ pub struct AGFJFunc {
     nargs: u64,
     ninstr: u64,
     nlocals: u64,
+    #[serde(alias = "addr")]
     offset: u64,
     size: Option<u64>,
     stack: u64,
     r#type: String,
     pub blocks: Vec<ACFJBlock>,
-    addr_idx: Option<Vec<i64>>,
+    addr_idx: Option<Vec<u64>>,
     pub edge_list: Option<Vec<(u32, u32, u32)>>,
     graph: Option<Graph<String, u32>>,
 }
@@ -143,7 +144,7 @@ impl AGFJFunc {
     pub fn create_bb_edge_list(&mut self, min_blocks: &u16) {
         if self.blocks.len() > <u16 as Into<usize>>::into(*min_blocks) && self.blocks[0].offset != 1
         {
-            let bb_start_addrs: Vec<i64> = self.blocks.iter().map(|x| x.offset).collect::<Vec<_>>();
+            let bb_start_addrs: Vec<u64> = self.blocks.iter().map(|x| x.offset).collect::<Vec<_>>();
             let mut edge_list = Vec::<(u32, u32, u32)>::new();
 
             for bb in &self.blocks {
@@ -423,7 +424,7 @@ impl AGFJFunc {
                     }
                 };
 
-                let bb_start_addrs: Vec<i64> =
+                let bb_start_addrs: Vec<u64> =
                     self.blocks.iter().map(|x| x.offset).collect::<Vec<_>>();
 
                 match feature_type {
@@ -606,7 +607,7 @@ impl AGFJFunc {
     }
 
     // Convert string memory address to hex / string
-    fn str_to_hex_node_idxs(graph: &mut Graph<String, u32>, addr_idxs: &[i64]) {
+    fn str_to_hex_node_idxs(graph: &mut Graph<String, u32>, addr_idxs: &[u64]) {
         for idx in graph.node_indices() {
             let i_idx = idx.index();
             let hex = addr_idxs[i_idx];
@@ -732,6 +733,7 @@ impl From<(&String, Vec<TikNibFeaturesBB>)> for TikNibFunc {
 #[cfg(test)]
 mod tests {
     use crate::bb::FeatureType;
+    use crate::utils::get_default_addr;
     use std::path::PathBuf;
 
     use crate::AGFJFile;
@@ -811,7 +813,10 @@ mod tests {
         assert!(!file.functions.as_ref().unwrap()[0][0].blocks[0]
             .ops
             .is_empty());
-        assert_eq!(file.functions.as_ref().unwrap()[0][0].blocks[0].fail, -1);
+        assert_eq!(
+            file.functions.as_ref().unwrap()[0][0].blocks[0].fail,
+            get_default_addr()
+        );
 
         assert!(file.functions.as_ref().unwrap()[0][0].blocks[0]
             .switchop

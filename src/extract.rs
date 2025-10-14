@@ -1,7 +1,6 @@
 use crate::afij::AFIJFunctionInfo;
 use crate::agcj::AGCJFunctionCallGraph;
-
-use std::io;
+use crate::utils::sanitize_filename;
 
 use anyhow::anyhow;
 use anyhow::bail;
@@ -17,8 +16,8 @@ use serde_json;
 
 use glob::glob;
 use md5;
-use regex::Regex;
-use serde_json::{json, Deserializer, Value};
+use serde::ser::{SerializeSeq, Serializer};
+use serde_json::{json, value::RawValue, Deserializer, Value};
 use sha1;
 use sha1::Digest as Sha1Digest;
 use sha2::Digest as Sha2Digest;
@@ -27,9 +26,10 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::fs::File;
-use std::io::{BufReader, Read};
-use std::path::{Path, PathBuf};
+use std::io::{BufReader, BufWriter, Read};
+use std::path::PathBuf;
 use std::string::String;
+use std::sync::LazyLock;
 use walkdir::WalkDir;
 
 #[derive(PartialEq, Debug)]
@@ -39,7 +39,8 @@ pub enum PathType {
     Dir,
     Unk,
 }
-#[derive(Debug, PartialEq, Clone, Copy)]
+
+#[derive(Debug, PartialEq, Clone, Copy, Hash, Eq)]
 pub enum ExtractionJobType {
     BinInfo, // Extract high level information from the binary (r2 ij)
     RegisterBehaviour,
@@ -54,8 +55,38 @@ pub enum ExtractionJobType {
     LocalVariableXrefs,
     GlobalStrings,
     FunctionBytes,
+    FunctionBytesMasked,
     FunctionZignatures,
 }
+
+static JOB_TYPE_TO_SUFFIX: LazyLock<HashMap<ExtractionJobType, &'static str>> =
+    LazyLock::new(|| {
+        HashMap::from([
+            (ExtractionJobType::BinInfo, "bininfo"),
+            (ExtractionJobType::RegisterBehaviour, "reg"),
+            (ExtractionJobType::FunctionXrefs, "func-xrefs"),
+            (ExtractionJobType::CFG, "cfg"),
+            (ExtractionJobType::CallGraphs, "cg"),
+            (ExtractionJobType::FuncInfo, "finfo"),
+            (ExtractionJobType::FunctionVariables, "fvars"),
+            (ExtractionJobType::Decompilation, "decomp"),
+            (ExtractionJobType::PCodeFunc, "pcode-func"),
+            (ExtractionJobType::PCodeBB, "pcode-bb"),
+            (ExtractionJobType::LocalVariableXrefs, "localvar-xrefs"),
+            (ExtractionJobType::GlobalStrings, "strings"),
+            (ExtractionJobType::FunctionBytes, "bytes"),
+            (ExtractionJobType::FunctionBytesMasked, "bytes-masked"),
+            (ExtractionJobType::FunctionZignatures, "zigs"),
+        ])
+    });
+
+static SUFFIX_TO_JOB_TYPE: LazyLock<HashMap<&'static str, ExtractionJobType>> =
+    LazyLock::new(|| {
+        JOB_TYPE_TO_SUFFIX
+            .iter()
+            .map(|(job_type, suffix)| (*suffix, *job_type))
+            .collect()
+    });
 
 #[derive(Debug)]
 pub struct FileToBeProcessed {
@@ -64,6 +95,16 @@ pub struct FileToBeProcessed {
     pub job_types: Vec<ExtractionJobType>,
     pub r2p_config: R2PipeConfig,
     pub with_annotations: bool,
+    pub retry_aborted: bool,
+    pub func_filename_template: String,
+}
+
+#[derive(Debug)]
+pub struct FunctionToBeProcessed {
+    pub name: String,
+    pub addr: u64,
+    pub size: u64,
+    pub ninstrs: u64,
 }
 
 #[derive(Debug)]
@@ -233,9 +274,27 @@ impl std::fmt::Display for AFLJFuncDetails {
     }
 }
 
-impl From<(String, String, Vec<ExtractionJobType>, R2PipeConfig, bool)> for FileToBeProcessed {
+impl
+    From<(
+        String,
+        String,
+        Vec<ExtractionJobType>,
+        R2PipeConfig,
+        bool,
+        bool,
+        String,
+    )> for FileToBeProcessed
+{
     fn from(
-        orig: (String, String, Vec<ExtractionJobType>, R2PipeConfig, bool),
+        orig: (
+            String,
+            String,
+            Vec<ExtractionJobType>,
+            R2PipeConfig,
+            bool,
+            bool,
+            String,
+        ),
     ) -> FileToBeProcessed {
         FileToBeProcessed {
             file_path: PathBuf::from(orig.0),
@@ -243,6 +302,41 @@ impl From<(String, String, Vec<ExtractionJobType>, R2PipeConfig, bool)> for File
             job_types: orig.2,
             r2p_config: orig.3,
             with_annotations: orig.4,
+            retry_aborted: orig.5,
+            func_filename_template: orig.6,
+        }
+    }
+}
+
+impl From<(String, u64, u64, u64)> for FunctionToBeProcessed {
+    fn from(orig: (String, u64, u64, u64)) -> Self {
+        FunctionToBeProcessed {
+            name: orig.0,
+            addr: orig.1,
+            size: orig.2,
+            ninstrs: orig.3,
+        }
+    }
+}
+
+impl From<AFIJFunctionInfo> for FunctionToBeProcessed {
+    fn from(func_info: AFIJFunctionInfo) -> Self {
+        FunctionToBeProcessed {
+            name: func_info.name,
+            addr: func_info.offset,
+            size: func_info.size,
+            ninstrs: func_info.ninstrs as u64,
+        }
+    }
+}
+
+impl From<AFLJFuncDetails> for FunctionToBeProcessed {
+    fn from(func_details: AFLJFuncDetails) -> Self {
+        FunctionToBeProcessed {
+            name: func_details.name,
+            addr: func_details.offset,
+            size: func_details.size,
+            ninstrs: func_details.ninstrs,
         }
     }
 }
@@ -353,6 +447,7 @@ pub struct StringEntry {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FuncBytes {
     pub bytes: Vec<u8>,
+    pub mask: Option<Vec<u8>>,
 }
 
 // Structs for zj - Function signatures (called "zignatures" in r2)
@@ -478,52 +573,16 @@ impl ExtractionJob {
         debug: &bool,
         extended_analysis: &bool,
         use_curl_pdb: &bool,
+        func_filename_template: &str,
         timeout: &Option<u64>,
         with_annotations: &bool,
+        retry_aborted: &bool,
     ) -> Result<ExtractionJob, Error> {
-        fn get_path_type(bin_path: &PathBuf) -> PathType {
-            // Handle pattern first since it would raise NotFound error
-            let path_str = bin_path.to_string_lossy();
-            if path_str.contains('*') || path_str.contains('?') || path_str.contains('[') {
-                return PathType::Pattern;
-            }
-
-            let fpath_md = fs::metadata(bin_path).unwrap();
-            if fpath_md.is_file() {
-                PathType::File
-            } else if fpath_md.is_dir() {
-                PathType::Dir
-            } else {
-                PathType::Unk
-            }
-        }
-
-        // This function is used to validate modes and convert them to job types
-        fn extraction_job_matcher(mode: &str) -> Result<ExtractionJobType, Error> {
-            match mode {
-                "bininfo" => Ok(ExtractionJobType::BinInfo),
-                "finfo" => Ok(ExtractionJobType::FuncInfo),
-                "fvars" => Ok(ExtractionJobType::FunctionVariables),
-                "reg" => Ok(ExtractionJobType::RegisterBehaviour),
-                "cfg" => Ok(ExtractionJobType::CFG),
-                "func-xrefs" => Ok(ExtractionJobType::FunctionXrefs),
-                "cg" => Ok(ExtractionJobType::CallGraphs),
-                "decomp" => Ok(ExtractionJobType::Decompilation),
-                "pcode-func" => Ok(ExtractionJobType::PCodeFunc),
-                "pcode-bb" => Ok(ExtractionJobType::PCodeBB),
-                "localvar-xrefs" => Ok(ExtractionJobType::LocalVariableXrefs),
-                "strings" => Ok(ExtractionJobType::GlobalStrings),
-                "bytes" => Ok(ExtractionJobType::FunctionBytes),
-                "zigs" => Ok(ExtractionJobType::FunctionZignatures),
-                _ => bail!("Incorrect command type - got {}", mode),
-            }
-        }
-
         let mut job_types = vec![];
         let mut extraction_job_types = vec![];
 
         for mode in modes {
-            let job_type = extraction_job_matcher(mode)?;
+            let job_type = Self::extraction_job_matcher(mode)?;
             job_types.push((job_type, mode.clone()));
             extraction_job_types.push(job_type); // Store just the job type
 
@@ -542,78 +601,111 @@ impl ExtractionJob {
             timeout: *timeout,
         };
 
-        let p_type = get_path_type(input_path);
+        let p_type = Self::get_path_type(input_path);
 
-        if p_type == PathType::File {
-            // For a single file, create one FileToBeProcessed object
-            // but track all the job types
-            let file = FileToBeProcessed {
-                file_path: input_path.to_owned(),
-                output_path: output_path.to_owned(),
-                job_types: extraction_job_types, // Use the vector of just ExtractionJobType
-                r2p_config: r2_handle_config,
-                with_annotations: *with_annotations,
-            };
-
-            Ok(ExtractionJob {
-                input_path: input_path.to_owned(),
-                input_path_type: p_type,
-                job_types,
-                files_to_be_processed: vec![file],
-                output_path: output_path.to_owned(),
-            })
-        } else if p_type == PathType::Dir {
-            // For a directory, get all file paths
-            let files = ExtractionJob::get_file_paths_dir(input_path);
-
-            // Create FileToBeProcessed objects for each file with all job types
-            let files_to_be_processed = files
-                .into_iter()
-                .map(|f| FileToBeProcessed {
-                    file_path: PathBuf::from(f),
+        match p_type {
+            PathType::File => {
+                // For a single file, create one FileToBeProcessed object
+                // but track all the job types
+                let file = FileToBeProcessed {
+                    file_path: input_path.to_owned(),
                     output_path: output_path.to_owned(),
-                    job_types: extraction_job_types.clone(),
+                    job_types: extraction_job_types, // Use the vector of just ExtractionJobType
                     r2p_config: r2_handle_config,
                     with_annotations: *with_annotations,
-                })
-                .collect();
+                    retry_aborted: *retry_aborted,
+                    func_filename_template: func_filename_template.to_string(),
+                };
 
-            Ok(ExtractionJob {
-                input_path: input_path.to_owned(),
-                input_path_type: p_type,
-                job_types,
-                files_to_be_processed,
-                output_path: output_path.to_owned(),
-            })
-        } else if p_type == PathType::Pattern {
-            // For a match pattern get the list of matching file paths
-            let pattern = input_path.to_string_lossy();
-            let files = ExtractionJob::get_file_paths_pattern(&pattern);
-
-            // Create FileToBeProcessed objects for each file with all job types
-            let files_to_be_processed = files
-                .into_iter()
-                .map(|f| FileToBeProcessed {
-                    file_path: PathBuf::from(f),
+                Ok(ExtractionJob {
+                    input_path: input_path.to_owned(),
+                    input_path_type: p_type,
+                    job_types,
+                    files_to_be_processed: vec![file],
                     output_path: output_path.to_owned(),
-                    job_types: extraction_job_types.clone(),
-                    r2p_config: r2_handle_config,
-                    with_annotations: *with_annotations,
                 })
-                .collect();
+            }
+            PathType::Dir | PathType::Pattern => {
+                // Get file paths based on path type
+                let files = match p_type {
+                    PathType::Dir => ExtractionJob::get_file_paths_dir(input_path),
+                    PathType::Pattern => {
+                        let pattern = input_path.to_string_lossy();
+                        ExtractionJob::get_file_paths_pattern(&pattern)
+                    }
+                    _ => unreachable!(),
+                };
 
-            Ok(ExtractionJob {
-                input_path: input_path.to_owned(),
-                input_path_type: PathType::Dir, // For using parallel processing
-                job_types,
-                files_to_be_processed,
-                output_path: output_path.to_owned(),
-            })
-        } else {
-            bail!("Failed to create ExtractionJob")
+                // Create FileToBeProcessed objects for each file with all job types
+                let files_to_be_processed = files
+                    .into_iter()
+                    .map(|f| FileToBeProcessed {
+                        file_path: PathBuf::from(f),
+                        output_path: output_path.to_owned(),
+                        job_types: extraction_job_types.clone(),
+                        r2p_config: r2_handle_config,
+                        with_annotations: *with_annotations,
+                        retry_aborted: *retry_aborted,
+                        func_filename_template: func_filename_template.to_string(),
+                    })
+                    .collect();
+
+                Ok(ExtractionJob {
+                    input_path: input_path.to_owned(),
+                    input_path_type: PathType::Dir, // For using parallel processing
+                    job_types,
+                    files_to_be_processed,
+                    output_path: output_path.to_owned(),
+                })
+            }
+            PathType::Unk => bail!("Failed to create ExtractionJob"),
         }
     }
 
+    /// Get the type of the input path (file, directory, or pattern)
+    fn get_path_type(bin_path: &PathBuf) -> PathType {
+        // Handle pattern first since it would raise NotFound error
+        let path_str = bin_path.to_string_lossy();
+        if path_str.contains('*') || path_str.contains('?') || path_str.contains('[') {
+            return PathType::Pattern;
+        }
+
+        let fpath_md = fs::metadata(bin_path).unwrap();
+        if fpath_md.is_file() {
+            PathType::File
+        } else if fpath_md.is_dir() {
+            PathType::Dir
+        } else {
+            PathType::Unk
+        }
+    }
+
+    /// Validate extraction modes and convert them to job types
+    fn extraction_job_matcher(mode: &str) -> Result<ExtractionJobType, Error> {
+        SUFFIX_TO_JOB_TYPE
+            .get(mode)
+            .copied()
+            .ok_or_else(|| anyhow!("Incorrect command type - got {}", mode))
+    }
+
+    fn get_job_type_suffix(job_type: &ExtractionJobType) -> String {
+        JOB_TYPE_TO_SUFFIX
+            .get(job_type)
+            .copied()
+            .expect("Incorrect command type")
+            .to_string()
+    }
+
+    fn get_output_extension(job_type: &ExtractionJobType) -> Option<&str> {
+        match job_type {
+            // Add here if output is not a JSON file (None if a directory)
+            ExtractionJobType::FunctionBytes => None,
+            ExtractionJobType::FunctionBytesMasked => None,
+            _ => Some("json"),
+        }
+    }
+
+    /// Get all file paths in the input_path directory
     fn get_file_paths_dir(input_path: &PathBuf) -> Vec<String> {
         let mut str_vec: Vec<String> = Vec::new();
         for file in WalkDir::new(input_path)
@@ -631,9 +723,9 @@ impl ExtractionJob {
         str_vec
     }
 
+    /// Get all file paths that match the pattern
     fn get_file_paths_pattern(pattern: &str) -> Vec<String> {
         let mut paths = Vec::new();
-        // glob returns an iterator over Result<PathBuf, GlobError>
         for entry in glob(pattern)
             .expect("Failed to read glob pattern")
             .flatten()
@@ -642,83 +734,348 @@ impl ExtractionJob {
                 paths.push(entry.to_string_lossy().to_string());
             }
         }
-
         paths
     }
 }
 
-impl FileToBeProcessed {
-    pub fn get_output_filename(&self, job_type_suffix: &str) -> String {
-        let mut fp_filename = self
-            .file_path
-            .file_name()
-            .expect("Unable to get filename")
-            .to_string_lossy()
-            .to_string();
+impl FunctionToBeProcessed {
+    fn write_to_bin(
+        &self,
+        r2p: &mut R2Pipe,
+        output_dirpath: &PathBuf,
+        filename_template: &str,
+        apply_mask: bool,
+    ) -> Result<()> {
+        let func_bytes = self
+            .get_bytes(r2p, apply_mask)
+            .map_err(|e| anyhow::anyhow!("Failed to get bytes: {}", e))?;
+        let bytes_filepath = self.get_output_filepath(output_dirpath, filename_template, "bin");
+        let masked_bytes_filepath =
+            self.get_output_filepath(output_dirpath, filename_template, "masked.bin");
 
-        fp_filename = if job_type_suffix == "bytes" || job_type_suffix == "bytes.__part" {
-            fp_filename + "_" + job_type_suffix
-        } else if self.with_annotations {
-            fp_filename + "_" + job_type_suffix + "_annotations" + ".json"
-        } else {
-            fp_filename + "_" + job_type_suffix + ".json"
-        };
-        fp_filename
+        info!("Writing function bytes to file: {:?}", bytes_filepath);
+        std::fs::write(&bytes_filepath, func_bytes.bytes).with_context(|| {
+            format!(
+                "Failed to write function bytes to file: {:?}",
+                bytes_filepath
+            )
+        })?;
+
+        if apply_mask {
+            let bytes_mask = func_bytes
+                .mask
+                .context("Masked bytes missing from get_bytes output")?;
+            info!(
+                "Writing function masked bytes to file: {:?}",
+                masked_bytes_filepath
+            );
+            std::fs::write(&masked_bytes_filepath, bytes_mask).with_context(|| {
+                format!(
+                    "Failed to write function masked bytes to file: {:?}",
+                    masked_bytes_filepath
+                )
+            })?;
+        }
+        Ok(())
     }
 
-    pub fn get_output_filepath(&self, job_type_suffix: &str) -> PathBuf {
-        let fp_filename = self.get_output_filename(job_type_suffix);
+    // Getters
+    fn get_hex_address(&self) -> String {
+        format!("{:x}", self.addr)
+            .trim_start_matches("0x")
+            .to_string()
+    }
+
+    fn get_output_filename(&self, template: &str, ext: &str) -> String {
+        let mut func_filename = match template {
+            "symbol" => self.name.clone(),
+            "address" => self.get_hex_address(),
+            _ => template
+                .replace("{symbol}", &self.name)
+                .replace("{address}", &self.get_hex_address())
+                .replace("{ext}", ext),
+        };
+
+        func_filename = sanitize_filename(&func_filename);
+        if ["symbol", "address"].contains(&template) {
+            // Add an extension only if the user did not specify a custom template
+            func_filename = func_filename + "." + ext;
+        }
+        func_filename
+    }
+
+    pub fn get_output_filepath(
+        &self,
+        output_dirpath: &PathBuf,
+        filename_template: &str,
+        ext: &str,
+    ) -> PathBuf {
+        let output_filename = self.get_output_filename(filename_template, ext);
 
         let mut output_filepath = PathBuf::new();
-        output_filepath.push(self.output_path.clone());
-        output_filepath.push(fp_filename);
+        output_filepath.push(output_dirpath);
+        output_filepath.push(output_filename);
+        output_filepath
+    }
 
-        output_filepath.clone()
+    fn get_bytes(&self, r2p: &mut R2Pipe, apply_mask: bool) -> Result<FuncBytes, Error> {
+        let cmd_str;
+        let function_bytes;
+        let function_mask;
+        let function_bytes_and_mask;
+        let mut masked_bytes: Option<Vec<u8>> = None;
+
+        if apply_mask {
+            cmd_str = format!("p8fm @ {}", self.addr);
+            function_bytes_and_mask = r2p
+                .cmd(cmd_str.as_str())
+                .with_context(|| format!("Failed to execute `{}`", cmd_str))?
+                .trim()
+                .to_string();
+            let parts: Vec<&str> = function_bytes_and_mask.split(":").collect();
+
+            if parts.len() < 2 {
+                return Err(anyhow::anyhow!(
+                    "Invalid output format: expected 'bytes:mask'.\n\
+                    Output from `{}`: '{}'",
+                    cmd_str,
+                    function_bytes_and_mask
+                ));
+            }
+            function_bytes = hex::decode(parts[0])
+                .with_context(|| format!("Failed to decode hex function bytes: '{}'", parts[0]))?;
+            function_mask = hex::decode(parts[1])
+                .with_context(|| format!("Failed to decode hex function mask: '{}'", parts[1]))?;
+
+            // Ensure function_bytes and bytes_mask have the same length
+            if function_bytes.len() != function_mask.len() {
+                return Err(anyhow::anyhow!(
+                    "Function bytes length ({}) and mask length ({}) do not match.\n\
+                    Output from `{}`: '{}'",
+                    function_bytes.len(),
+                    function_mask.len(),
+                    cmd_str,
+                    function_bytes_and_mask
+                ));
+            }
+
+            let mut masked_bytes_tmp = vec![0; function_bytes.len()];
+            for i in 0..function_bytes.len() {
+                masked_bytes_tmp[i] = function_bytes[i] & function_mask[i];
+            }
+            masked_bytes = Some(masked_bytes_tmp);
+        } else {
+            cmd_str = format!("p8f @ {}", self.addr);
+            let function_bytes_str = r2p
+                .cmd(cmd_str.as_str())
+                .with_context(|| format!("Failed to execute `{}`", cmd_str))?
+                .trim()
+                .to_string();
+            function_bytes = hex::decode(function_bytes_str.clone()).with_context(|| {
+                format!(
+                    "Failed to decode hex function bytes: '{}'",
+                    function_bytes_str
+                )
+            })?;
+        }
+
+        Ok(FuncBytes {
+            bytes: function_bytes,
+            mask: masked_bytes,
+        })
+    }
+
+    fn get_basic_block_info(&self, r2p: &mut R2Pipe) -> Result<BasicBlockInfo, Error> {
+        info!(
+            "Getting the basic block information for function @ {}",
+            self.addr
+        );
+        FileToBeProcessed::go_to_address(r2p, self.addr)?;
+
+        let json = r2p.cmd("afbj").context("Command afbj failed")?;
+        // Parse the JSON into a mutable serde_json::Value.
+        let mut value: serde_json::Value = serde_json::from_str(&json)
+            .with_context(|| format!("Unable to convert {:?} to JSON object!", json))?;
+
+        // Iterate over each object and convert "traced" from integer to boolean.
+        if let Some(array) = value.as_array_mut() {
+            for item in array.iter_mut() {
+                if let Some(traced_value) = item.get_mut("traced") {
+                    // If traced is a number, convert it to a bool.
+                    if let Some(num) = traced_value.as_i64() {
+                        *traced_value = serde_json::Value::Bool(num != 0);
+                    }
+                }
+            }
+        }
+
+        // Deserialize JSON into a BasicBlockInfo struct
+        let bb_info: BasicBlockInfo = serde_json::from_value(value.clone()).with_context(|| {
+            format!(
+                "Unable to convert {:?} into a BasicBlockInfo struct!",
+                value
+            )
+        })?;
+        Ok(bb_info)
+    }
+
+    fn get_local_variable_xref_details(
+        &self,
+        r2p: &mut R2Pipe,
+    ) -> Result<LocalVariableXrefs, Error> {
+        info!(
+            "Getting local variable xref details for function @ {}",
+            self.addr
+        );
+        FileToBeProcessed::go_to_address(r2p, self.addr)?;
+        let json = r2p.cmd("axvj").context("Command axvj failed")?;
+
+        let local_variable_xrefs: LocalVariableXrefs =
+            serde_json::from_str(&json).with_context(|| {
+                format!("Unable to convert {:?} to LocalVariableXrefs struct!", json)
+            })?;
+        Ok(local_variable_xrefs)
+    }
+
+    fn get_xref_details(&self, r2p: &mut R2Pipe) -> Result<Vec<FunctionXrefDetails>, Error> {
+        info!("Getting xref details for function @ {}", self.addr);
+        FileToBeProcessed::go_to_address(r2p, self.addr)?;
+        let json = r2p.cmd("axffj").context("Command axffj failed")?;
+        let mut json_obj: Vec<FunctionXrefDetails> =
+            serde_json::from_str(&json).with_context(|| {
+                format!(
+                    "Unable to convert {:?} to FunctionXrefDetails struct!",
+                    json
+                )
+            })?;
+
+        // TODO: There is a minor bug in this where functions without any xrefs are included.
+        // Been left in as may be useful later down the line.
+        if !json_obj.is_empty() {
+            debug!("Replacing all CALL xrefs with actual function name");
+            for element in json_obj.iter_mut() {
+                if element.type_field == "CALL" {
+                    let cmd_str = format!("afi. @ {}", &element.ref_field);
+                    let function_name = r2p.cmd(cmd_str.as_str()).context("Command afi. failed")?;
+                    element.name = function_name.trim().to_string();
+                }
+            }
+        };
+        Ok(json_obj)
+    }
+
+    fn get_ghidra_decomp(
+        &self,
+        r2p: &mut R2Pipe,
+        with_annotations: bool,
+    ) -> Result<DecompJSON, Error> {
+        FileToBeProcessed::go_to_address(r2p, self.addr)?;
+        let json = r2p.cmd("pdgj").context("Command pdgj failed")?;
+
+        if with_annotations {
+            let json_obj: DecompJSON = serde_json::from_str(&json)
+                .with_context(|| format!("Unable to convert {:?} to DecompJSON struct!", json))?;
+            Ok(json_obj)
+        } else {
+            let json_obj: Value = serde_json::from_str(&json)
+                .with_context(|| format!("Unable to convert {:?} to JSON object!", json))?;
+            let parsed_code = json_obj["code"]
+                .as_str()
+                .with_context(|| format!("Unable to get code from {:?}!", json))?
+                .to_string();
+            let parsed_obj = DecompJSON {
+                code: parsed_code,
+                annotations: Vec::new(),
+            };
+            Ok(parsed_obj)
+        }
+    }
+}
+
+impl FileToBeProcessed {
+    /// Returns the name of the input binary file
+    fn get_file_name(&self) -> Result<String> {
+        self.file_path
+            .file_name()
+            .ok_or_else(|| anyhow!("Unable to get file name from {:?}", self.file_path))
+            .map(|os_str| os_str.to_string_lossy().to_string())
+    }
+
+    /// Returns the name of the output file for a given job type
+    fn get_output_filename(&self, job_type_suffix: &str) -> Result<String> {
+        let job_type = ExtractionJob::extraction_job_matcher(job_type_suffix)
+            .context(format!("Incorrect job type suffix: {}", job_type_suffix))?;
+        let ext = ExtractionJob::get_output_extension(&job_type);
+        let ext_str = ext.map_or("".to_string(), |e| format!(".{}", e));
+        let mut output_filename = self.get_file_name()?;
+
+        if job_type == ExtractionJobType::Decompilation && self.with_annotations {
+            output_filename = output_filename + "_" + job_type_suffix + "_annotations" + &ext_str;
+        } else {
+            output_filename = output_filename + "_" + job_type_suffix + &ext_str;
+        };
+
+        Ok(output_filename)
+    }
+
+    fn get_output_filepath(&self, job_type_suffix: &str) -> Result<PathBuf> {
+        let output_filename = self.get_output_filename(job_type_suffix)?;
+        let mut output_filepath = PathBuf::from(self.output_path.clone());
+        output_filepath.push(output_filename);
+        Ok(output_filepath)
+    }
+
+    fn get_tmp_output_filepath(&self, job_type_suffix: &str) -> Result<PathBuf> {
+        let mut filepath_str = self
+            .get_output_filepath(job_type_suffix)?
+            .to_string_lossy()
+            .to_string();
+        filepath_str = filepath_str + ".part";
+        let output_filepath = PathBuf::from(filepath_str.clone());
+        Ok(output_filepath)
     }
 
     pub fn process_mode(&self, r2p: &mut R2Pipe, job_type: &ExtractionJobType) -> Result<()> {
-        let job_type_suffix = self.get_job_type_suffix(job_type);
+        let job_type_suffix = ExtractionJob::get_job_type_suffix(job_type);
+
+        // Prepare final output file path (could also be a directory)
+        let output_path = self.get_output_filepath(&job_type_suffix)?;
         // Use temporary name to keep track of incomplete extraction
-        let tmp_job_type_suffix = format!("{}.__part", job_type_suffix).to_string();
-        let tmp_output_path = self.get_output_filepath(&tmp_job_type_suffix);
+        let tmp_output_path = self.get_tmp_output_filepath(&job_type_suffix)?;
 
         match job_type {
-            ExtractionJobType::BinInfo => self.extract_binary_info(r2p, tmp_job_type_suffix),
+            ExtractionJobType::BinInfo => self.extract_binary_info(r2p, &tmp_output_path),
             ExtractionJobType::RegisterBehaviour => {
-                self.extract_register_behaviour(r2p, tmp_job_type_suffix)
+                self.extract_register_behaviour(r2p, &tmp_output_path)
             }
-            ExtractionJobType::FunctionXrefs => {
-                self.extract_function_xrefs(r2p, tmp_job_type_suffix)
-            }
-            ExtractionJobType::CFG => self.extract_func_cfgs(r2p, tmp_job_type_suffix),
+            ExtractionJobType::FunctionXrefs => self.extract_function_xrefs(r2p, &tmp_output_path),
+            ExtractionJobType::CFG => self.extract_func_cfgs(r2p, &tmp_output_path),
             ExtractionJobType::CallGraphs => {
-                self.extract_function_call_graphs(r2p, tmp_job_type_suffix)
+                self.extract_function_call_graphs(r2p, &tmp_output_path)
             }
-            ExtractionJobType::FuncInfo => self.extract_function_info(r2p, tmp_job_type_suffix),
+            ExtractionJobType::FuncInfo => self.extract_function_info(r2p, &tmp_output_path),
             ExtractionJobType::FunctionVariables => {
-                self.extract_function_variables(r2p, tmp_job_type_suffix)
+                self.extract_function_variables(r2p, &tmp_output_path)
             }
-            ExtractionJobType::Decompilation => {
-                self.extract_decompilation(r2p, tmp_job_type_suffix)
-            }
-            ExtractionJobType::PCodeFunc => self.extract_pcode_function(r2p, tmp_job_type_suffix),
-            ExtractionJobType::PCodeBB => self.extract_pcode_basic_block(r2p, tmp_job_type_suffix),
+            ExtractionJobType::Decompilation => self.extract_decompilation(r2p, &tmp_output_path),
+            ExtractionJobType::PCodeFunc => self.extract_pcode_function(r2p, &tmp_output_path),
+            ExtractionJobType::PCodeBB => self.extract_pcode_basic_block(r2p, &tmp_output_path),
             ExtractionJobType::LocalVariableXrefs => {
-                self.extract_local_variable_xrefs(r2p, tmp_job_type_suffix)
+                self.extract_local_variable_xrefs(r2p, &tmp_output_path)
             }
-            ExtractionJobType::GlobalStrings => {
-                self.extract_global_strings(r2p, tmp_job_type_suffix)
-            }
+            ExtractionJobType::GlobalStrings => self.extract_global_strings(r2p, &tmp_output_path),
             ExtractionJobType::FunctionZignatures => {
-                self.extract_function_zignatures(r2p, tmp_job_type_suffix)
+                self.extract_function_zignatures(r2p, &tmp_output_path)
             }
             ExtractionJobType::FunctionBytes => {
-                self.extract_function_bytes(r2p, tmp_job_type_suffix)
+                self.extract_function_bytes(r2p, &tmp_output_path, false)
+            }
+            ExtractionJobType::FunctionBytesMasked => {
+                self.extract_function_bytes(r2p, &tmp_output_path, true)
             }
         }?;
 
         // Apply final output file name when extraction is done
-        let output_path = self.get_output_filepath(&job_type_suffix);
         std::fs::rename(&tmp_output_path, &output_path).map_err(|e| {
             anyhow::anyhow!(
                 "Failed to rename temporary path {:?}: {}",
@@ -750,12 +1107,26 @@ impl FileToBeProcessed {
             info!("Processing job type: {:?}", job_type);
 
             // Check if the extracted data file already exists
-            let job_type_suffix = self.get_job_type_suffix(job_type);
-            let output_path = self.get_output_filepath(&job_type_suffix);
-            if Path::new(&output_path).exists() {
-                warn!(
+            let job_type_suffix = ExtractionJob::get_job_type_suffix(job_type);
+            let output_path = match self.get_output_filepath(&job_type_suffix) {
+                Ok(path) => path,
+                Err(e) => {
+                    error!("Failed to get output filepath for {:?}: {}", job_type, e);
+                    continue;
+                }
+            };
+            let error_path = output_path.with_extension("error.log");
+
+            if output_path.exists() {
+                debug!(
                     "Skipping {:?} job for {:?}: already processed at {:?}.",
                     job_type_suffix, self.file_path, output_path
+                );
+                continue;
+            } else if error_path.exists() && !self.retry_aborted {
+                debug!(
+                    "Skipping {:?} job for {:?}: already processed and failed. Error log at {:?}.",
+                    job_type_suffix, self.file_path, error_path
                 );
                 continue;
             }
@@ -772,10 +1143,13 @@ impl FileToBeProcessed {
                     "Finished {:?} extraction job for {:?}: processed at {:?}.",
                     job_type_suffix, self.file_path, output_path
                 ),
-                Err(e) => error!(
-                    "Aborted {:?} extraction job for {:?} due to error: {:?}.",
-                    job_type_suffix, self.file_path, e
-                ),
+                Err(e) => {
+                    error!(
+                        "Aborted {:?} extraction job for {:?} due to error:\n{:?}\n\t> (stored in {:?}).",
+                        job_type_suffix, self.file_path, e, error_path
+                    );
+                    std::fs::write(error_path, format!("{}", e)).unwrap();
+                }
             }
         }
 
@@ -786,27 +1160,7 @@ impl FileToBeProcessed {
         }
     }
 
-    pub fn get_job_type_suffix(&self, job_type: &ExtractionJobType) -> String {
-        match job_type {
-            ExtractionJobType::BinInfo => "bininfo",
-            ExtractionJobType::RegisterBehaviour => "reg",
-            ExtractionJobType::FunctionXrefs => "func-xrefs",
-            ExtractionJobType::CFG => "cfg",
-            ExtractionJobType::CallGraphs => "cg",
-            ExtractionJobType::FuncInfo => "finfo",
-            ExtractionJobType::FunctionVariables => "fvars",
-            ExtractionJobType::Decompilation => "decomp",
-            ExtractionJobType::PCodeFunc => "pcode-func",
-            ExtractionJobType::PCodeBB => "pcode-bb",
-            ExtractionJobType::LocalVariableXrefs => "localvar-xrefs",
-            ExtractionJobType::GlobalStrings => "strings",
-            ExtractionJobType::FunctionZignatures => "zigs",
-            ExtractionJobType::FunctionBytes => "bytes",
-        }
-        .to_string()
-    }
-
-    pub fn extract_binary_info(&self, r2p: &mut R2Pipe, job_type_suffix: String) -> Result<()> {
+    pub fn extract_binary_info(&self, r2p: &mut R2Pipe, output_path: &PathBuf) -> Result<()> {
         info!("Starting binary information extraction");
         let bininfo_json = r2p
             .cmd("ij")
@@ -862,14 +1216,14 @@ impl FileToBeProcessed {
 
         info!("Binary information and checksums extracted.");
         info!("Writing extracted data to file");
-        self.write_to_json(&json!(bininfo), job_type_suffix)?;
+        self.write_to_json(&json!(bininfo), output_path)?;
         Ok(())
     }
 
     pub fn extract_register_behaviour(
         &self,
         r2p: &mut R2Pipe,
-        job_type_suffix: String,
+        output_path: &PathBuf,
     ) -> Result<()> {
         let function_details = self.get_function_name_list(r2p)?;
         let mut register_behaviour_vec: HashMap<String, AEAFJRegisterBehaviour> = HashMap::new();
@@ -891,14 +1245,14 @@ impl FileToBeProcessed {
         }
         info!("All functions processed");
         info!("Writing extracted data to file");
-        self.write_to_json(&json!(register_behaviour_vec), job_type_suffix)?;
+        self.write_to_json(&json!(register_behaviour_vec), output_path)?;
         Ok(())
     }
 
     pub fn extract_function_call_graphs(
         &self,
         r2p: &mut R2Pipe,
-        job_type_suffix: String,
+        output_path: &PathBuf,
     ) -> Result<()> {
         info!("Starting function call graph extraction");
         let json = r2p
@@ -908,17 +1262,17 @@ impl FileToBeProcessed {
             .with_context(|| format!("Unable to convert {:?} to JSON object!", json))?;
         info!("Function call graph extracted.");
         info!("Writing extracted data to file");
-        self.write_to_json(&json!(function_call_graphs), job_type_suffix)?;
+        self.write_to_json(&json!(function_call_graphs), output_path)?;
         Ok(())
     }
 
-    pub fn extract_function_info(&self, r2p: &mut R2Pipe, job_type_suffix: String) -> Result<()> {
+    pub fn extract_function_info(&self, r2p: &mut R2Pipe, output_path: &PathBuf) -> Result<()> {
         info!("Starting function metdata extraction");
         let function_details: Vec<AFIJFunctionInfo> = self.get_function_name_list(r2p)?;
 
         info!("Writing extracted data to file");
         let json = json!(function_details);
-        self.write_to_json(&json, job_type_suffix)
+        self.write_to_json(&json, output_path)
             .with_context(|| format!("Unable to convert {:?} to JSON object!", json))?;
         Ok(())
     }
@@ -926,7 +1280,7 @@ impl FileToBeProcessed {
     pub fn extract_function_variables(
         &self,
         r2p: &mut R2Pipe,
-        job_type_suffix: String,
+        output_path: &PathBuf,
     ) -> Result<()> {
         info!("Starting function variables extraction");
         let function_details = self.get_function_name_list(r2p)?;
@@ -947,87 +1301,70 @@ impl FileToBeProcessed {
         }
         info!("All functions processed");
         info!("Writing extracted data to file");
-        self.write_to_json(&json!(func_variables_vec), job_type_suffix)?;
+        self.write_to_json(&json!(func_variables_vec), output_path)?;
         Ok(())
     }
 
-    pub fn extract_func_cfgs(&self, r2p: &mut R2Pipe, job_type_suffix: String) -> Result<()> {
+    pub fn extract_func_cfgs(&self, r2p: &mut R2Pipe, output_path: &PathBuf) -> Result<()> {
         info!("Executing agfj @@f on {:?}", self.file_path);
 
-        let json_raw = r2p.cmd("agfj @@f").with_context(|| {
-            format!(
-                "Failed to extract control flow graph information from {:?}.",
-                self.file_path
-            )
-        })?;
+        let json_raw = r2p
+            .cmd("agfj @@f")
+            .with_context(|| format!("Failed to extract CFGs from {:?}.", self.file_path))?;
 
-        info!("Starting JSON fixup for {:?}", self.file_path);
-        match self.fix_json_object(&json_raw) {
-            Ok(json) => {
-                info!("JSON fixup finished for {:?}", self.file_path);
-                // If the cleaned JSON is an empty array, log an error and skip.
-                if json == serde_json::Value::Array(vec![]) {
-                    return Err(anyhow::anyhow!(
-                        "File empty after JSON fixup - Only contains empty JSON array - {:?}",
-                        self.file_path
-                    ));
-                } else {
-                    self.write_to_json(&json, job_type_suffix)?;
-                }
-            }
-            Err(e) => {
-                return Err(anyhow::anyhow!(
-                    "Unable to parse json for {:?}: {}: {}",
-                    self.file_path,
-                    json_raw,
-                    e
-                ));
-            }
-        }
+        self.stream_write_to_json(&json_raw, output_path)
+            .with_context(|| format!("Failed to write CFGs to {:?}.", self.file_path))?;
         Ok(())
     }
 
-    pub fn extract_function_xrefs(&self, r2p: &mut R2Pipe, job_type_suffix: String) -> Result<()> {
+    pub fn extract_function_xrefs(&self, r2p: &mut R2Pipe, output_path: &PathBuf) -> Result<()> {
         let function_details = self.get_function_name_list(r2p)?;
         let mut function_xrefs: HashMap<String, Vec<FunctionXrefDetails>> = HashMap::new();
+
         info!("Extracting xrefs for each function");
-        for function in function_details.iter() {
-            let ret = self
-                .get_function_xref_details(function.offset, r2p)
-                .with_context(|| {
-                    format!("Unable to get function xrefs from {:?}", self.file_path)
-                })?;
+        for function_info in function_details {
+            let function = FunctionToBeProcessed::from(function_info);
+            let ret = function.get_xref_details(r2p).with_context(|| {
+                format!("Unable to get function xrefs from {:?}", self.file_path)
+            })?;
             function_xrefs.insert(function.name.clone(), ret);
         }
-        info!("All functions processed");
-        info!("Writing extracted data to file");
-        self.write_to_json(&json!(function_xrefs), job_type_suffix)?;
+        info!("All functions processed! Writing extracted data to file");
+        self.write_to_json(&json!(function_xrefs), output_path)?;
         Ok(())
     }
 
-    pub fn extract_decompilation(&self, r2p: &mut R2Pipe, job_type_suffix: String) -> Result<()> {
+    pub fn extract_decompilation(&self, r2p: &mut R2Pipe, output_path: &PathBuf) -> Result<()> {
         info!("Starting decompilation extraction!");
         let function_details = self.get_function_name_list(r2p)?;
         let mut function_decomp: HashMap<String, DecompJSON> = HashMap::new();
 
-        for function in function_details.iter() {
-            let ret = self.get_ghidra_decomp(function.offset, r2p);
-            function_decomp.insert(function.name.clone(), ret.unwrap());
+        for function_info in function_details {
+            let function = FunctionToBeProcessed::from(function_info);
+            let ret = function
+                .get_ghidra_decomp(r2p, self.with_annotations)
+                .with_context(|| {
+                    format!(
+                        "Unable to get decompilation for {:?} @ {:?}",
+                        self.file_path, function.addr
+                    )
+                })?;
+            function_decomp.insert(function.name.clone(), ret);
         }
         info!("Decompilation extracted successfully for all functions.");
 
         info!("Writing extracted data to file");
-        self.write_to_json(&json!(function_decomp), job_type_suffix)?;
+        self.write_to_json(&json!(function_decomp), output_path)?;
         Ok(())
     }
 
-    pub fn extract_pcode_function(&self, r2p: &mut R2Pipe, job_type_suffix: String) -> Result<()> {
+    pub fn extract_pcode_function(&self, r2p: &mut R2Pipe, output_path: &PathBuf) -> Result<()> {
         info!("Starting pcode extraction at a function level");
         let function_details = self.get_function_name_list(r2p)?;
         let mut function_pcode = Vec::new();
 
         for function in function_details.iter() {
-            let ret = self.get_ghidra_pcode_function(function.offset, function.ninstrs, r2p);
+            let ret = self.get_ghidra_pcode(function.offset, function.ninstrs, r2p);
 
             let formatted_obj = PCodeJSONWithFuncName {
                 function_name: function.name.clone(),
@@ -1038,36 +1375,27 @@ impl FileToBeProcessed {
         }
         info!("Pcode extracted successfully for all functions.");
         info!("Writing extracted data to file");
-        self.write_to_json(&json!(function_pcode), job_type_suffix)?;
+        self.write_to_json(&json!(function_pcode), output_path)?;
         Ok(())
     }
 
-    pub fn extract_pcode_basic_block(
-        &self,
-        r2p: &mut R2Pipe,
-        job_type_suffix: String,
-    ) -> Result<()> {
+    pub fn extract_pcode_basic_block(&self, r2p: &mut R2Pipe, output_path: &PathBuf) -> Result<()> {
         info!("Starting pcode extraction for each basic block in each function within the binary");
         let function_details = self.get_function_name_list(r2p)?;
         let mut function_pcode = Vec::new();
 
-        for function in function_details.iter() {
-            let bb_addresses = self
-                .get_basic_block_addresses(function.offset, r2p)
-                .with_context(|| {
-                    format!(
-                        "Unable to get basic block addresses in {:?} at offset {:?}",
-                        self.file_path, function.offset
-                    )
-                })?;
+        for function_info in function_details {
+            let function = FunctionToBeProcessed::from(function_info);
+            let bb_info = function.get_basic_block_info(r2p).with_context(|| {
+                format!(
+                    "Unable to get basic block addresses in {:?} @ {:?}",
+                    self.file_path, function.addr
+                )
+            })?;
             let mut bb_pcode: Vec<PCodeJsonWithBB> = Vec::new();
-            for bb in bb_addresses.iter() {
+            for bb in bb_info.iter() {
                 let ret = self
-                    .get_ghidra_pcode_function(
-                        bb.addr,
-                        bb.ninstr.try_into().unwrap(), // Convert u64 to i64
-                        r2p,
-                    )
+                    .get_ghidra_pcode(bb.addr, bb.ninstr.try_into().unwrap(), r2p)
                     .with_context(|| {
                         format!(
                             "Basic block decompilation failed in {:?} at offset {:?}",
@@ -1090,31 +1418,32 @@ impl FileToBeProcessed {
         }
         info!("Pcode extracted successfully for all functions.");
         info!("Writing extracted data to file");
-        self.write_to_json(&json!(function_pcode), job_type_suffix)?;
+        self.write_to_json(&json!(function_pcode), output_path)?;
         Ok(())
     }
 
     pub fn extract_local_variable_xrefs(
         &self,
         r2p: &mut R2Pipe,
-        job_type_suffix: String,
+        output_path: &PathBuf,
     ) -> Result<()> {
         info!("Starting local variable xref extraction");
         let function_details = self.get_function_name_list(r2p)?;
         let mut function_local_variable_xrefs: HashMap<String, LocalVariableXrefs> = HashMap::new();
 
-        for function in function_details.iter() {
-            let ret = self.get_local_variable_xref_details(function.offset, r2p)?;
+        for function_info in function_details {
+            let function = FunctionToBeProcessed::from(function_info);
+            let ret = function.get_local_variable_xref_details(r2p)?;
             function_local_variable_xrefs.insert(function.name.clone(), ret);
         }
         info!("Local variable xrefs extracted successfully for all functions.");
 
         info!("Writing extracted data to file");
-        self.write_to_json(&json!(function_local_variable_xrefs), job_type_suffix)?;
+        self.write_to_json(&json!(function_local_variable_xrefs), output_path)?;
         Ok(())
     }
 
-    pub fn extract_global_strings(&self, r2p: &mut R2Pipe, job_type_suffix: String) -> Result<()> {
+    pub fn extract_global_strings(&self, r2p: &mut R2Pipe, output_path: &PathBuf) -> Result<()> {
         info!("Starting Global String Extraction");
         let json = r2p
             .cmd("izj")
@@ -1124,14 +1453,14 @@ impl FileToBeProcessed {
         let json_obj: Vec<StringEntry> = serde_json::from_str(&json)
             .with_context(|| format!("Unable to convert {:?} to JSON object!", json))?;
 
-        self.write_to_json(&json!(json_obj), job_type_suffix)?;
+        self.write_to_json(&json!(json_obj), output_path)?;
         Ok(())
     }
 
     pub fn extract_function_zignatures(
         &self,
         r2p: &mut R2Pipe,
-        job_type_suffix: String,
+        output_path: &PathBuf,
     ) -> Result<()> {
         info!("Starting function zignatures extraction");
         let _ = r2p
@@ -1145,37 +1474,72 @@ impl FileToBeProcessed {
             .with_context(|| format!("Unable to convert {:?} to JSON object!", json))?;
         info!("Function zignatures extracted.");
         info!("Writing extracted data to file");
-        self.write_to_json(&json!(function_zignatures), job_type_suffix)?;
+        self.write_to_json(&json!(function_zignatures), output_path)?;
         Ok(())
     }
 
-    pub fn extract_function_bytes(&self, r2p: &mut R2Pipe, job_type_suffix: String) -> Result<()> {
+    pub fn extract_function_bytes(
+        &self,
+        r2p: &mut R2Pipe,
+        output_dirpath: &PathBuf,
+        apply_mask: bool,
+    ) -> Result<()> {
         info!("Starting function bytes extraction");
-        let function_details = self.get_function_name_list(r2p)?;
 
-        for function in function_details.iter() {
-            debug!(
-                "Function Name: {} Offset: {} Size: {}",
-                function.name, function.offset, function.size
-            );
-            let function_bytes = self
-                .get_bytes_function(function.offset, function.size, r2p)
-                .with_context(|| {
-                    format!(
-                        "Bytes extraction failed in {:?} at function {:?}.",
-                        self.file_path, function.name
-                    )
-                })?;
-            Self::write_to_bin(
-                self,
-                &function.name,
-                &function_bytes.bytes,
-                &job_type_suffix,
-            )
-            .expect("Failed to write bytes to bin.");
+        let function_details = self.get_function_name_list(r2p)?;
+        let functions_count = function_details.len();
+        if !output_dirpath.is_dir() {
+            std::fs::create_dir_all(&output_dirpath)
+                .with_context(|| format!("Failed to create directory {:?}", output_dirpath))?;
         }
-        info!("Function bytes successfully extracted");
-        Ok(())
+
+        let mut success_count: u32 = 0;
+        for function_info in function_details {
+            let function = FunctionToBeProcessed::from(function_info);
+            debug!(
+                "Function Name: {} Address: {} Size: {}",
+                function.name, function.addr, function.size
+            );
+            match function.write_to_bin(
+                r2p,
+                &output_dirpath,
+                &self.func_filename_template,
+                apply_mask,
+            ) {
+                Ok(()) => {
+                    debug!(
+                        "Successfully extracted bytes for function {:?} @ {:?}",
+                        function.name, function.addr
+                    );
+                    success_count += 1;
+                }
+                Err(e) => {
+                    let error_path = function.get_output_filepath(
+                        output_dirpath,
+                        &self.func_filename_template,
+                        "error.log",
+                    );
+                    error!(
+                        "Failed to extract bytes for function {:?} @ {:?}: {}",
+                        function.name, function.addr, e
+                    );
+                    if let Err(write_err) = std::fs::write(&error_path, e.to_string()) {
+                        error!("Failed to write error to {:?}: {}", error_path, write_err);
+                    } else {
+                        info!("Error stored in {:?}", error_path);
+                    }
+                    continue;
+                }
+            }
+        }
+
+        let file_name = self.get_file_name()?;
+        if success_count > 0 {
+            info!("Bytes extracted for {}/{} functions in {:?}", success_count, functions_count, file_name);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Failed to extract bytes for any function in {:?}", file_name))
+        }
     }
 
     fn get_checksums(&self) -> Result<ChecksumsEntry, Error> {
@@ -1225,35 +1589,13 @@ impl FileToBeProcessed {
     }
 
     // r2 commands to structs
-    fn get_bytes_function(
+    fn get_ghidra_pcode(
         &self,
-        function_addr: u64,
-        function_size: i128,
+        address: u64,
+        num_instructons: u64,
         r2p: &mut R2Pipe,
-    ) -> Result<FuncBytes, r2pipe::Error> {
-        Self::go_to_address(r2p, function_addr);
-        r2p.cmd(format!("s {}", function_addr).as_str())?;
-        let function_bytes = r2p.cmd(format!("p8 {}", function_size).as_str())?;
-        let function_bytes = function_bytes.trim();
-        let function_bytes = hex::decode(function_bytes).map_err(|e| {
-            r2pipe::Error::Io(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Hex decode error: {}", e),
-            ))
-        })?;
-
-        Ok(FuncBytes {
-            bytes: function_bytes,
-        })
-    }
-
-    fn get_ghidra_pcode_function(
-        &self,
-        function_addr: u64,
-        num_instructons: i64,
-        r2p: &mut R2Pipe,
-    ) -> Result<PCodeJSON, r2pipe::Error> {
-        Self::go_to_address(r2p, function_addr);
+    ) -> Result<PCodeJSON, Error> {
+        Self::go_to_address(r2p, address)?;
         let pcode_ret = r2p.cmd(format!("pdgsd {}", num_instructons).as_str())?;
         let lines = pcode_ret.lines();
         let mut asm_ins = Vec::new();
@@ -1273,33 +1615,6 @@ impl FileToBeProcessed {
         })
     }
 
-    fn get_ghidra_decomp(
-        &self,
-        function_addr: u64,
-        r2p: &mut R2Pipe,
-    ) -> Result<DecompJSON, anyhow::Error> {
-        Self::go_to_address(r2p, function_addr);
-        let json = r2p.cmd("pdgj")?;
-
-        if self.with_annotations {
-            let json_obj: DecompJSON = serde_json::from_str(&json)
-                .with_context(|| format!("Unable to convert {:?} to JSON object!", json))?;
-            Ok(json_obj)
-        } else {
-            let json_obj: Value = serde_json::from_str(&json)
-                .with_context(|| format!("Unable to convert {:?} to JSON object!", json))?;
-            let parsed_code = json_obj["code"]
-                .as_str()
-                .with_context(|| format!("Unable to get code from {:?}!", json))?
-                .to_string();
-            let parsed_obj = DecompJSON {
-                code: parsed_code,
-                annotations: Vec::new(),
-            };
-            Ok(parsed_obj)
-        }
-    }
-
     fn get_function_name_list(
         &self,
         r2p: &mut R2Pipe,
@@ -1314,209 +1629,72 @@ impl FileToBeProcessed {
         Ok(json_obj)
     }
 
-    fn get_basic_block_addresses(
-        &self,
-        function_addr: u64,
-        r2p: &mut R2Pipe,
-    ) -> Result<BasicBlockInfo, anyhow::Error> {
-        info!(
-            "Getting the basic block information for function @ {}",
-            function_addr
-        );
-        Self::go_to_address(r2p, function_addr);
-        // Get basic block information
-        let json = r2p
-            .cmd("afbj")
-            .with_context(|| format!("Command afbj failed in {:?}", self.file_path))?;
+    // Helper Functions
 
-        // Parse the JSON into a mutable serde_json::Value.
-        let mut value: serde_json::Value = serde_json::from_str(&json)
-            .with_context(|| format!("Unable to convert {:?} to JSON object!", json))?;
+    /// Write a JSON object to a file
+    fn write_to_json(&self, json_obj: &Value, output_filepath: &PathBuf) -> Result<()> {
+        info!("Writing JSON to {:?}", output_filepath);
+        let file = File::create(&output_filepath)
+            .with_context(|| format!("Unable to create file {:?}", output_filepath))?;
+        serde_json::to_writer(&file, &json_obj)
+            .with_context(|| format!("Failed to write JSON to {:?}", output_filepath))?;
+        info!("JSON written to {:?}", output_filepath);
+        Ok(())
+    }
 
-        // Iterate over each object and convert "traced" from integer to boolean.
-        if let Some(array) = value.as_array_mut() {
-            for item in array.iter_mut() {
-                if let Some(traced_value) = item.get_mut("traced") {
-                    // If traced is a number, convert it to a bool.
-                    if let Some(num) = traced_value.as_i64() {
-                        *traced_value = serde_json::Value::Bool(num != 0);
+    /// Stream-parse a concatenated JSON string (e.g. from `agfj @@f`)
+    /// and write the combined results into a single JSON array on disk.
+    /// Unlike `write_to_json`, this never builds a full in-memory Vec<Value>.
+    fn stream_write_to_json(&self, json_raw: &str, output_filepath: &PathBuf) -> Result<()> {
+        info!("Stream writing JSON to {:?}", output_filepath);
+        // Stream the concatenated JSON values
+        let iter = Deserializer::from_str(json_raw).into_iter::<Box<RawValue>>();
+
+        // Stream the final JSON array to disk
+        let file = File::create(output_filepath)
+            .with_context(|| format!("Unable to create file {:?}", output_filepath))?;
+        let mut writer = BufWriter::new(file);
+        let mut ser = serde_json::Serializer::new(&mut writer);
+        let mut seq = ser.serialize_seq(None)?; // unknown length
+
+        for item in iter {
+            match item {
+                Ok(raw) => {
+                    // Skip exactly "[]"
+                    if raw.get().trim() != "[]" {
+                        // RawValue writes the raw JSON without re-encoding
+                        debug!("Serializing JSON chunk");
+                        seq.serialize_element(&raw)?;
+                    } else {
+                        debug!("Skipping empty array");
+                    }
+                }
+                Err(e) => {
+                    // Only tolerate a *trailing* truncation
+                    if e.is_eof() {
+                        warn!("Trailing truncation detected. Stopping stream");
+                        break;
+                    } else {
+                        error!("Malformed JSON chunk: {e}");
+                        return Err(e).context("Malformed JSON chunk");
                     }
                 }
             }
         }
 
-        // Deserialize JSON into a BasicBlockInfo struct
-        let bb_addresses: BasicBlockInfo =
-            serde_json::from_value(value.clone()).with_context(|| {
-                format!(
-                    "Unable to convert {:?} into a BasicBlockInfo struct!",
-                    value
-                )
-            })?;
-        Ok(bb_addresses)
-    }
-
-    fn get_local_variable_xref_details(
-        &self,
-        function_addr: u64,
-        r2p: &mut R2Pipe,
-    ) -> Result<LocalVariableXrefs, r2pipe::Error> {
-        info!("Getting local variable xref details");
-        Self::go_to_address(r2p, function_addr);
-        let json = r2p.cmd("axvj");
-
-        // Convert returned JSON into a BasicBlockInfo struct
-        if let Ok(json_str) = json {
-            let local_variable_xrefs: LocalVariableXrefs = serde_json::from_str(json_str.as_ref())
-                .expect("Unable to convert returned object into a BasicBlockInfo struct!");
-            Ok(local_variable_xrefs)
-        } else {
-            Err(json.unwrap_err())
-        }
-    }
-
-    fn get_function_xref_details(
-        &self,
-        function_addr: u64,
-        r2p: &mut R2Pipe,
-    ) -> Result<Vec<FunctionXrefDetails>, anyhow::Error> {
-        info!("Getting function xref details");
-        Self::go_to_address(r2p, function_addr);
-        let json = r2p
-            .cmd("axffj")
-            .with_context(|| format!("Command axffj failed in {:?}", self.file_path))?;
-        let mut json_obj: Vec<FunctionXrefDetails> = serde_json::from_str(&json)
-            .with_context(|| format!("Unable to convert {:?} to JSON object!", json))?;
-        debug!("Replacing all CALL xrefs with actual function name");
-        // TODO: There is a minor bug in this where functions without any xrefs are included.
-        // Been left in as may be useful later down the line.
-        if !json_obj.is_empty() {
-            debug!("Replacing all CALL xrefs with actual function name");
-            for element in json_obj.iter_mut() {
-                if element.type_field == "CALL" {
-                    let cmd_str = format!("afi. @ {}", &element.ref_field);
-                    let function_name = r2p.cmd(cmd_str.as_str()).with_context(|| {
-                        format!("Command {:?} failed in {:?}", cmd_str, self.file_path)
-                    })?;
-                    element.name = function_name.trim().to_string();
-                }
-            }
-        };
-        Ok(json_obj)
-    }
-
-    // Helper Functions
-    fn fix_json_object(&self, json_raw: &str) -> Result<serde_json::Value, serde_json::Error> {
-        // Collect all JSON objects into a vector.
-        let stream = Deserializer::from_str(json_raw).into_iter::<Value>();
-        let json_objects: Result<Vec<Value>, _> = stream
-            .filter_map(|result| {
-                match result {
-                    Ok(Value::Array(ref arr)) if arr.is_empty() => None, // skip empty arrays
-                    other => Some(other),
-                }
-            })
-            .collect();
-        // Map the collected vector into a JSON array.
-        json_objects.map(Value::Array)
-    }
-
-    fn sanitize_function_name(&self, original: &str) -> String {
-        // Replace non-valid characters with '_'
-        // Valid characters: letters, digits, '_', '-', and '.'
-        let re = Regex::new(r"[^\w.-]").unwrap();
-        re.replace_all(original, "_").into_owned()
-    }
-
-    fn get_file_name(&self) -> Result<String> {
-        self.file_path
-            .file_name()
-            .ok_or_else(|| anyhow!("Unable to get file name from {:?}", self.file_path))
-            .map(|os_str| os_str.to_string_lossy().to_string())
-    }
-
-    fn write_to_json(&self, json_obj: &Value, job_type_suffix: String) -> Result<()> {
-        let mut fp_filename = self.get_file_name()?;
-
-        fp_filename = if self.with_annotations {
-            fp_filename + "_" + &job_type_suffix + "_annotations" + ".json"
-        } else {
-            fp_filename + "_" + &job_type_suffix + ".json"
-        };
-
-        let mut output_filepath = PathBuf::new();
-        output_filepath.push(self.output_path.clone());
-        output_filepath.push(fp_filename);
-        debug!("Save filename: {:?}", output_filepath);
-
-        let file = File::create(&output_filepath)
-            .with_context(|| format!("Unable to create file {:?}", output_filepath))?;
-        serde_json::to_writer(&file, &json_obj)
-            .with_context(|| format!("Failed to write JSON to {:?}", output_filepath))?;
-
+        seq.end()?;
+        info!("JSON stream written to {:?}", output_filepath);
         Ok(())
     }
 
-    fn write_to_bin(
-        &self,
-        function_name: &String,
-        func_bytes: &[u8],
-        dirname_suffix: &String,
-    ) -> Result<()> {
-        // Extract the file stem from self.file_path and add context if missing.
-        let file_stem = self.get_file_name()?;
-
-        // Construct the full output directory path.
-        let mut output_dir = self.output_path.clone();
-        // Build the directory name by combining the file stem with the given suffix.
-        let dir_name = format!("{}_{}", file_stem, dirname_suffix);
-        output_dir.push(&dir_name);
-
-        if !output_dir.is_dir() {
-            fs::create_dir_all(&output_dir)
-                .with_context(|| format!("Failed to create directory {:?}", output_dir))?;
-        }
-
-        // Construct the full output file path.
-        let mut output_filepath = output_dir.clone();
-        // Sanitize the function name to create a valid filename.
-        let sanitized_function_name = self.sanitize_function_name(function_name);
-
-        // If sanitized_function_name larger than 100 characters, snip
-        let sanitized_function_name = if sanitized_function_name.len() > 100 {
-            String::from(&sanitized_function_name[0..75])
-        } else {
-            sanitized_function_name
-        };
-
-        let file_name = format!("{}.bin", sanitized_function_name);
-        output_filepath.push(file_name);
-
-        // Check if a file with same name the sanitized name already exists.
-        if output_filepath.exists() {
-            debug!(
-                "Duplicate function binary file detected for '{}' at {:?}. Skipping.",
-                function_name, output_filepath
-            );
-            return Ok(());
-        }
-
-        debug!(
-            "Attempting to write function bytes to {:?}",
-            output_filepath
-        );
-        // Write the file and attach context on error.
-        fs::write(&output_filepath, func_bytes)
-            .with_context(|| format!("Failed to write file {:?}", output_filepath))?;
-
+    /// Seeks to the function address
+    fn go_to_address(r2p: &mut R2Pipe, address: u64) -> Result<(), Error> {
+        r2p.cmd(format!("s {}", address).as_str())
+            .with_context(|| format!("Failed to seek address {:x}", address))?;
         Ok(())
     }
 
-    fn go_to_address(r2p: &mut R2Pipe, function_addr: u64) {
-        r2p.cmd(format!("s {}", function_addr).as_str())
-            .expect("failed to seek addr");
-    }
-
+    /// Downloads the PDB file if available
     fn handle_symbols_pdb(&self, r2p: &mut R2Pipe) -> Result<(), Error> {
         // Download symbols if available
         debug!("Downloading pdb file for {:?}", self.file_path);
