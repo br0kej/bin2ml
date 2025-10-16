@@ -406,6 +406,15 @@ pub struct PCodeJsonWithBBAndFuncName {
 // Structs for afbj - Basic Block JSON output
 pub type BasicBlockInfo = Vec<BasicBlockMetadataEntry>;
 
+// Custom deserializer for converting integer (0 or 1) to boolean
+fn deserialize_bool_from_int<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let num = i64::deserialize(deserializer)?;
+    Ok(num != 0) // 0 is false, anything else is true
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BasicBlockMetadataEntry {
     pub addr: u64,
@@ -417,6 +426,7 @@ pub struct BasicBlockMetadataEntry {
     pub outputs: u64,
     pub ninstr: u64,
     pub instrs: Vec<u64>,
+    #[serde(deserialize_with = "deserialize_bool_from_int")]
     pub traced: bool,
 }
 
@@ -886,9 +896,13 @@ impl FunctionToBeProcessed {
 
         if apply_mask {
             cmd_str = format!("p8fm @ {}", self.addr);
+            debug!(
+                "Getting function bytes and mask for function: `{}`",
+                cmd_str
+            );
             function_bytes_and_mask = r2p
-                .cmd(cmd_str.as_str())
-                .with_context(|| format!("Failed to execute `{}`", cmd_str))?
+                .cmd(&cmd_str)
+                .context("Failed to execute `{}`")?
                 .trim()
                 .to_string();
             let parts: Vec<&str> = function_bytes_and_mask.split(":").collect();
@@ -908,6 +922,7 @@ impl FunctionToBeProcessed {
 
             // Ensure function_bytes and bytes_mask have the same length
             if function_bytes.len() != function_mask.len() {
+                // TODO: Iteratively identify and fix missing bytes in the mask
                 return Err(anyhow::anyhow!(
                     "Function bytes length ({}) and mask length ({}) do not match.\n\
                     Output from `{}`: '{}'",
@@ -925,9 +940,10 @@ impl FunctionToBeProcessed {
             masked_bytes = Some(masked_bytes_tmp);
         } else {
             cmd_str = format!("p8f @ {}", self.addr);
+            debug!("Getting function bytes for function: `{}`", cmd_str);
             let function_bytes_str = r2p
-                .cmd(cmd_str.as_str())
-                .with_context(|| format!("Failed to execute `{}`", cmd_str))?
+                .cmd(&cmd_str)
+                .context("Failed to execute `{}`")?
                 .trim()
                 .to_string();
             function_bytes = hex::decode(function_bytes_str.clone()).with_context(|| {
@@ -945,36 +961,12 @@ impl FunctionToBeProcessed {
     }
 
     fn get_basic_block_info(&self, r2p: &mut R2Pipe) -> Result<BasicBlockInfo, Error> {
-        info!(
-            "Getting the basic block information for function @ {}",
-            self.addr
-        );
-        FileToBeProcessed::go_to_address(r2p, self.addr)?;
+        let cmd_str = format!("afbj @ {}", self.addr);
+        debug!("Getting Basic Block Info for function: `{}`", cmd_str);
+        let value = r2p.cmdj(&cmd_str).context("Command afbj failed")?;
 
-        let json = r2p.cmd("afbj").context("Command afbj failed")?;
-        // Parse the JSON into a mutable serde_json::Value.
-        let mut value: serde_json::Value = serde_json::from_str(&json)
-            .with_context(|| format!("Unable to convert {:?} to JSON object!", json))?;
-
-        // Iterate over each object and convert "traced" from integer to boolean.
-        if let Some(array) = value.as_array_mut() {
-            for item in array.iter_mut() {
-                if let Some(traced_value) = item.get_mut("traced") {
-                    // If traced is a number, convert it to a bool.
-                    if let Some(num) = traced_value.as_i64() {
-                        *traced_value = serde_json::Value::Bool(num != 0);
-                    }
-                }
-            }
-        }
-
-        // Deserialize JSON into a BasicBlockInfo struct
-        let bb_info: BasicBlockInfo = serde_json::from_value(value.clone()).with_context(|| {
-            format!(
-                "Unable to convert {:?} into a BasicBlockInfo struct!",
-                value
-            )
-        })?;
+        let bb_info: BasicBlockInfo =
+            serde_json::from_value(value).context("Unable to convert to BasicBlockInfo struct!")?;
         Ok(bb_info)
     }
 
@@ -986,27 +978,25 @@ impl FunctionToBeProcessed {
             "Getting local variable xref details for function @ {}",
             self.addr
         );
-        FileToBeProcessed::go_to_address(r2p, self.addr)?;
-        let json = r2p.cmd("axvj").context("Command axvj failed")?;
+        let cmd_str = format!("axvj @ {}", self.addr);
+        debug!(
+            "Getting Local Variable Xref details for function: `{}`",
+            cmd_str
+        );
+        let json = r2p.cmdj(&cmd_str).context("Command axvj failed")?;
 
-        let local_variable_xrefs: LocalVariableXrefs =
-            serde_json::from_str(&json).with_context(|| {
-                format!("Unable to convert {:?} to LocalVariableXrefs struct!", json)
-            })?;
+        let local_variable_xrefs: LocalVariableXrefs = serde_json::from_value(json)
+            .context("Unable to convert to LocalVariableXrefs struct!")?;
         Ok(local_variable_xrefs)
     }
 
     fn get_xref_details(&self, r2p: &mut R2Pipe) -> Result<Vec<FunctionXrefDetails>, Error> {
         info!("Getting xref details for function @ {}", self.addr);
-        FileToBeProcessed::go_to_address(r2p, self.addr)?;
-        let json = r2p.cmd("axffj").context("Command axffj failed")?;
-        let mut json_obj: Vec<FunctionXrefDetails> =
-            serde_json::from_str(&json).with_context(|| {
-                format!(
-                    "Unable to convert {:?} to FunctionXrefDetails struct!",
-                    json
-                )
-            })?;
+        let cmd_str = format!("axffj @ {}", self.addr);
+        debug!("Getting Xref details for function: `{}`", cmd_str);
+        let json = r2p.cmdj(&cmd_str).context("Command axffj failed")?;
+        let mut json_obj: Vec<FunctionXrefDetails> = serde_json::from_value(json)
+            .context("Unable to convert to FunctionXrefDetails struct!")?;
 
         // TODO: There is a minor bug in this where functions without any xrefs are included.
         // Been left in as may be useful later down the line.
@@ -1028,19 +1018,20 @@ impl FunctionToBeProcessed {
         r2p: &mut R2Pipe,
         with_annotations: bool,
     ) -> Result<DecompJSON, Error> {
-        FileToBeProcessed::go_to_address(r2p, self.addr)?;
-        let json = r2p.cmd("pdgj").context("Command pdgj failed")?;
+        let cmd_str = format!("pdgj @ {}", self.addr);
+        debug!("Getting Ghidra Decomp for function: `{}`", cmd_str);
+        let json = r2p.cmdj(&cmd_str).context("Command pdgj failed")?;
 
         if with_annotations {
-            let json_obj: DecompJSON = serde_json::from_str(&json)
-                .with_context(|| format!("Unable to convert {:?} to DecompJSON struct!", json))?;
+            let json_obj: DecompJSON =
+                serde_json::from_value(json).context("Unable to convert to DecompJSON struct!")?;
             Ok(json_obj)
         } else {
-            let json_obj: Value = serde_json::from_str(&json)
-                .with_context(|| format!("Unable to convert {:?} to JSON object!", json))?;
+            let json_obj: Value =
+                serde_json::from_value(json).context("Unable to convert to JSON object!")?;
             let parsed_code = json_obj["code"]
                 .as_str()
-                .with_context(|| format!("Unable to get code from {:?}!", json))?
+                .context("Unable to get code from JSON object!")?
                 .to_string();
             let parsed_obj = DecompJSON {
                 code: parsed_code,
@@ -1051,12 +1042,9 @@ impl FunctionToBeProcessed {
     }
 
     fn get_cfg(&self, r2p: &mut R2Pipe) -> Result<AGFJFunc, Error> {
-        FileToBeProcessed::go_to_address(r2p, self.addr)?;
-        debug!("Getting CFG for function @ {}", self.addr);
-        // let json_str = r2p.cmd("agfj").context("Command agfj failed")?;
-        let json = r2p.cmdj("agfj").context("Command agfj failed")?;
-        // let cfg: AGFJFunc = serde_json::from_str(&json_str)
-        //     .with_context(|| format!("Unable to convert {:?} to AGFJFunc struct!", json_str))?;
+        let cmd_str = format!("agfj @ {}", self.addr);
+        debug!("Getting CFG for function: `{}`", cmd_str);
+        let json = r2p.cmdj(&cmd_str).context("Command agfj failed")?;
 
         // AGFJ returns an array of JSON objects, it should only ever be length 1
         let cfg: Vec<AGFJFunc> = serde_json::from_value(json.clone())
@@ -1744,12 +1732,12 @@ impl FileToBeProcessed {
         num_instructons: u64,
         r2p: &mut R2Pipe,
     ) -> Result<PCodeJSON, Error> {
-        Self::go_to_address(r2p, address)?;
-        let pcode_ret = r2p.cmd(format!("pdgsd {}", num_instructons).as_str())?;
+        let cmd_str = format!("pdgsd {} @ {}", num_instructons, address);
+        debug!("Getting Ghidra PCode: `{}`", cmd_str);
+        let pcode_ret = r2p.cmd(&cmd_str).context("Failed to get Ghidra PCode")?;
         let lines = pcode_ret.lines();
         let mut asm_ins = Vec::new();
         let mut pcode_ins = Vec::new();
-
         for line in lines {
             if line.starts_with("0x") {
                 asm_ins.push(line.trim().to_string());
@@ -1785,7 +1773,9 @@ impl FileToBeProcessed {
         info!("Writing JSON to {:?}", output_filepath);
         let file = File::create(&output_filepath)
             .with_context(|| format!("Unable to create file {:?}", output_filepath))?;
-        serde_json::to_writer(&file, &json_obj)
+        // Using a buffered writer to handle potentially huge JSON objects
+        let writer = BufWriter::new(file);
+        serde_json::to_writer(writer, &json_obj)
             .with_context(|| format!("Failed to write JSON to {:?}", output_filepath))?;
         info!("JSON written to {:?}", output_filepath);
         Ok(())
@@ -1833,13 +1823,6 @@ impl FileToBeProcessed {
 
         seq.end()?;
         info!("JSON stream written to {:?}", output_filepath);
-        Ok(())
-    }
-
-    /// Seeks to the function address
-    fn go_to_address(r2p: &mut R2Pipe, address: u64) -> Result<(), Error> {
-        r2p.cmd(format!("s {}", address).as_str())
-            .with_context(|| format!("Failed to seek address {:x}", address))?;
         Ok(())
     }
 
