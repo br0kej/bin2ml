@@ -1215,11 +1215,18 @@ impl FileToBeProcessed {
             }
 
             // Lazily initialize r2p if not already done.
-            let r2p = maybe_r2p.get_or_insert_with(|| {
-                let mut pipe = self.setup_r2_pipe();
-                self.analyse_r2_pipe(&mut pipe);
-                pipe
-            });
+            maybe_r2p = match self.ensure_r2_pipe(maybe_r2p, 5) {
+                Ok(r2p) => Some(r2p),
+                Err(e) => {
+                    error!("Failed to create R2Pipe for {:?}: {e}", self.file_path);
+                    None
+                }
+            };
+            if maybe_r2p.is_none() {
+                // We couldn't create a R2Pipe. We must give up on this file
+                break;
+            }
+            let r2p = maybe_r2p.as_mut().unwrap();
 
             match self.process_mode(r2p, job_type) {
                 Ok(_) => debug!(
@@ -1854,7 +1861,7 @@ impl FileToBeProcessed {
         }
     }
 
-    fn setup_r2_pipe(&self) -> R2Pipe {
+    fn setup_r2_pipe(&self) -> Result<R2Pipe> {
         if self.r2p_config.use_curl_pdb {
             // Docs suggest this is unsafe
             env::set_var("R2_CURL", "1");
@@ -1912,9 +1919,10 @@ impl FileToBeProcessed {
             self.file_path
         );
         let mut r2p = match R2Pipe::in_session() {
-            Some(_) => R2Pipe::open().expect("Unable to open R2Pipe"),
+            Some(_) => R2Pipe::open()
+                .with_context(|| format!("Unable to open R2Pipe for {:?}", self.file_path))?,
             None => R2Pipe::spawn(self.file_path.to_str().unwrap(), Some(opts))
-                .expect("Failed to spawn new R2Pipe"),
+                .with_context(|| format!("Failed to spawn new R2Pipe for {:?}", self.file_path))?,
         };
 
         if self.r2p_config.use_curl_pdb {
@@ -1926,16 +1934,19 @@ impl FileToBeProcessed {
                     let ret = self.handle_symbols_pdb(&mut r2p);
 
                     if ret.is_err() {
-                        error!("Unable to get PDB info")
+                        warn!("Unable to get PDB info for {:?}", self.file_path);
+                        info!("Continuing with analysis...");
+                    } else {
+                        info!("PDB info obtained successfully for {:?}", self.file_path);
                     }
                 }
             }
         }
 
-        r2p
+        Ok(r2p)
     }
 
-    fn analyse_r2_pipe(&self, r2p: &mut R2Pipe) {
+    fn analyse_r2_pipe(&self, r2p: &mut R2Pipe) -> Result<()> {
         let analysis_mode = self.r2p_config.analysis_mode.as_str();
         debug!(
             "Executing '{}' r2 command for {}",
@@ -1943,11 +1954,58 @@ impl FileToBeProcessed {
             self.file_path.display()
         );
         r2p.cmd(analysis_mode)
-            .expect(&format!("Unable to complete analysis! ({analysis_mode})"));
+            .with_context(|| format!("Unable to complete analysis! ({analysis_mode})"))?;
         debug!(
             "'{}' r2 command complete for {}",
             analysis_mode,
             self.file_path.display()
+        );
+        Ok(())
+    }
+
+    fn is_r2_pipe_alive(&self, r2p: &mut R2Pipe) -> bool {
+        // Check if we can get the version
+        match r2p.cmd("?V") {
+            Ok(_) => true,   // The R2Pipe is alive
+            Err(_) => false, // The R2Pipe is dead
+        }
+    }
+
+    fn ensure_r2_pipe(&self, maybe_r2p: Option<R2Pipe>, max_attempts: u16) -> Result<R2Pipe> {
+        match maybe_r2p {
+            Some(r2p) => {
+                let mut mutable_r2p = r2p;
+                if self.is_r2_pipe_alive(&mut mutable_r2p) {
+                    return Ok(mutable_r2p);
+                } else {
+                    return self.ensure_r2_pipe(None, max_attempts);
+                }
+            }
+            None => {
+                let mut n_attempts: u16 = 1;
+                while n_attempts <= max_attempts {
+                    info!("Creating R2Pipe (attempt {n_attempts}/{max_attempts})...");
+                    match self.setup_r2_pipe() {
+                        Ok(r2p) => {
+                            let mut mutable_r2p = r2p;
+                            self.analyse_r2_pipe(&mut mutable_r2p)?;
+                            if self.is_r2_pipe_alive(&mut mutable_r2p) {
+                                return Ok(mutable_r2p);
+                            }
+                        }
+                        Err(e) => {
+                            warn!("Failed to create R2Pipe: {e}");
+                            n_attempts += 1;
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
+
+        bail!(
+            "Failed to create R2Pipe after {} attempts. Giving up.",
+            max_attempts
         );
     }
 }
