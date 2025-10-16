@@ -31,6 +31,7 @@ use std::io::{BufReader, BufWriter, Read};
 use std::path::PathBuf;
 use std::string::String;
 use std::sync::LazyLock;
+use once_cell::sync::OnceCell;
 use walkdir::WalkDir;
 
 #[derive(PartialEq, Debug)]
@@ -100,14 +101,16 @@ pub struct FileToBeProcessed {
     pub with_annotations: bool,
     pub retry_aborted: bool,
     pub func_filename_template: String,
+    pub function_list: OnceCell<Vec<FunctionToBeProcessed>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FunctionToBeProcessed {
     pub name: String,
     pub addr: u64,
     pub size: u64,
     pub ninstrs: u64,
+    pub nblocks: u64,
 }
 
 #[derive(Debug)]
@@ -143,6 +146,7 @@ impl std::fmt::Display for ExtractionJob {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AFLJFuncDetails {
+    #[serde(alias = "addr")]
     pub offset: u64,
     pub name: String,
     pub size: u64,
@@ -150,6 +154,8 @@ pub struct AFLJFuncDetails {
     pub is_pure: String,
     pub realsz: u64,
     pub noreturn: bool,
+    #[serde(default)]
+    pub recursive: bool,
     pub stackframe: u64,
     pub calltype: String,
     pub cost: u64,
@@ -158,14 +164,25 @@ pub struct AFLJFuncDetails {
     #[serde(rename = "type")]
     pub type_field: String,
     pub nbbs: u64,
+    #[serde(default)]
+    pub tracecov: u64,
     #[serde(rename = "is-lineal")]
     pub is_lineal: bool,
     pub ninstrs: u64,
     pub edges: u64,
     pub ebbs: u64,
+    #[serde(default)]
     pub signature: String,
+    #[serde(alias = "minaddr")]
     pub minbound: i64,
+    #[serde(alias = "maxaddr")]
     pub maxbound: u64,
+    #[serde(default)]
+    pub maxbbins: Option<u64>,
+    #[serde(default)]
+    pub midbbins: Option<f64>,
+    #[serde(default)]
+    pub ratbbins: Option<f64>,
     #[serde(default)]
     pub callrefs: Vec<Callref>,
     #[serde(default)]
@@ -309,17 +326,19 @@ impl
             with_annotations: orig.4,
             retry_aborted: orig.5,
             func_filename_template: orig.6,
+            function_list: OnceCell::new(),
         }
     }
 }
 
-impl From<(String, u64, u64, u64)> for FunctionToBeProcessed {
-    fn from(orig: (String, u64, u64, u64)) -> Self {
+impl From<(String, u64, u64, u64, u64)> for FunctionToBeProcessed {
+    fn from(orig: (String, u64, u64, u64, u64)) -> Self {
         FunctionToBeProcessed {
             name: orig.0,
             addr: orig.1,
             size: orig.2,
             ninstrs: orig.3,
+            nblocks: orig.4,
         }
     }
 }
@@ -330,7 +349,8 @@ impl From<AFIJFunctionInfo> for FunctionToBeProcessed {
             name: func_info.name,
             addr: func_info.offset,
             size: func_info.size,
-            ninstrs: func_info.ninstrs as u64,
+            ninstrs: func_info.ninstrs,
+            nblocks: func_info.nbbs,
         }
     }
 }
@@ -342,6 +362,7 @@ impl From<AFLJFuncDetails> for FunctionToBeProcessed {
             addr: func_details.offset,
             size: func_details.size,
             ninstrs: func_details.ninstrs,
+            nblocks: func_details.nbbs,
         }
     }
 }
@@ -353,6 +374,7 @@ impl From<AGFJFunc> for FunctionToBeProcessed {
             addr: func.offset,
             size: func.size,
             ninstrs: func.ninstr,
+            nblocks: func.blocks.len() as u64,
         }
     }
 }
@@ -645,6 +667,7 @@ impl ExtractionJob {
                     with_annotations: *with_annotations,
                     retry_aborted: *retry_aborted,
                     func_filename_template: func_filename_template.to_string(),
+                    function_list: OnceCell::new(),
                 };
 
                 Ok(ExtractionJob {
@@ -677,6 +700,7 @@ impl ExtractionJob {
                         with_annotations: *with_annotations,
                         retry_aborted: *retry_aborted,
                         func_filename_template: func_filename_template.to_string(),
+                        function_list: OnceCell::new(),
                     })
                     .collect();
 
@@ -1157,6 +1181,34 @@ impl FileToBeProcessed {
         Ok(())
     }
 
+    pub fn write_function_index(&self, functions: &Vec<FunctionToBeProcessed>, output_dirpath: &PathBuf, ext: &str) -> Result<()> {
+        let file = File::create(output_dirpath.join(".func-index.csv"))?;
+        let mut writer = csv::Writer::from_writer(file);
+        // Write header
+        writer.write_record(&["name", "address", "size", "ninstrs", "nblocks", "output_path"])?;
+        
+        // Write function records
+        for function in functions {
+            let output_path = function.get_output_filepath(output_dirpath, &self.func_filename_template, ext);
+            writer.write_record(&[
+                &function.name,
+                &function.addr.to_string(),
+                &function.size.to_string(),
+                &function.ninstrs.to_string(),
+                &function.nblocks.to_string(),
+                &output_path.to_string_lossy().to_string(),
+            ])?;
+        }
+        writer.flush()?;
+        Ok(())
+    }
+
+    pub fn get_function_list(&self, r2p: &mut R2Pipe) -> Result<&[FunctionToBeProcessed]> {
+        self.function_list
+            .get_or_try_init(|| self.setup_function_list(r2p))
+            .map(|v| v.as_slice())
+    }
+
     pub fn process_all_modes(&self) {
         info!(
             "Starting extraction for {} job types on {:?}",
@@ -1303,7 +1355,7 @@ impl FileToBeProcessed {
         r2p: &mut R2Pipe,
         output_path: &PathBuf,
     ) -> Result<()> {
-        let function_details = self.get_function_name_list(r2p)?;
+        let function_details = self.get_function_list(r2p)?;
         let mut register_behaviour_vec: HashMap<String, AEAFJRegisterBehaviour> = HashMap::new();
         info!("Executing aeafj for each function");
         for function in function_details.iter() {
@@ -1346,10 +1398,7 @@ impl FileToBeProcessed {
 
     pub fn extract_function_info(&self, r2p: &mut R2Pipe, output_path: &PathBuf) -> Result<()> {
         info!("Starting function metdata extraction");
-        let function_details: Vec<AFIJFunctionInfo> = self.get_function_name_list(r2p)?;
-
-        info!("Writing extracted data to file");
-        let json = json!(function_details);
+        let json = r2p.cmdj("aflj").with_context(|| format!("Failed executing aflj on {:?}", self.file_path))?;
         self.write_to_json(&json, output_path)
             .with_context(|| format!("Unable to convert {:?} to JSON object!", json))?;
         Ok(())
@@ -1361,7 +1410,7 @@ impl FileToBeProcessed {
         output_path: &PathBuf,
     ) -> Result<()> {
         info!("Starting function variables extraction");
-        let function_details = self.get_function_name_list(r2p)?;
+        let function_details = self.get_function_list(r2p)?;
         let mut func_variables_vec: HashMap<String, AFVJFuncDetails> = HashMap::new();
         info!("Executing aeafj for each function");
         for function in function_details.iter() {
@@ -1411,8 +1460,7 @@ impl FileToBeProcessed {
             }
 
             // Extract the CFGs for each function
-            for function in self.get_function_name_list(r2p)? {
-                let function = FunctionToBeProcessed::from(function);
+            for function in self.get_function_list(r2p)? {
                 debug!(
                     "Extracting CFG for function {:?} @ {:?}",
                     function.name, function.addr
@@ -1449,12 +1497,11 @@ impl FileToBeProcessed {
     }
 
     pub fn extract_function_xrefs(&self, r2p: &mut R2Pipe, output_path: &PathBuf) -> Result<()> {
-        let function_details = self.get_function_name_list(r2p)?;
+        let function_details = self.get_function_list(r2p)?;
         let mut function_xrefs: HashMap<String, Vec<FunctionXrefDetails>> = HashMap::new();
 
         info!("Extracting xrefs for each function");
-        for function_info in function_details {
-            let function = FunctionToBeProcessed::from(function_info);
+        for function in function_details {
             let ret = function.get_xref_details(r2p).with_context(|| {
                 format!("Unable to get function xrefs from {:?}", self.file_path)
             })?;
@@ -1467,11 +1514,10 @@ impl FileToBeProcessed {
 
     pub fn extract_decompilation(&self, r2p: &mut R2Pipe, output_path: &PathBuf) -> Result<()> {
         info!("Starting decompilation extraction!");
-        let function_details = self.get_function_name_list(r2p)?;
+        let function_details = self.get_function_list(r2p)?;
         let mut function_decomp: HashMap<String, DecompJSON> = HashMap::new();
 
-        for function_info in function_details {
-            let function = FunctionToBeProcessed::from(function_info);
+        for function in function_details {
             let ret = function
                 .get_ghidra_decomp(r2p, self.with_annotations)
                 .with_context(|| {
@@ -1491,11 +1537,11 @@ impl FileToBeProcessed {
 
     pub fn extract_pcode_function(&self, r2p: &mut R2Pipe, output_path: &PathBuf) -> Result<()> {
         info!("Starting pcode extraction at a function level");
-        let function_details = self.get_function_name_list(r2p)?;
+        let function_details = self.get_function_list(r2p)?;
         let mut function_pcode = Vec::new();
 
-        for function in function_details.iter() {
-            let ret = self.get_ghidra_pcode(function.offset, function.ninstrs, r2p);
+        for function in function_details {
+            let ret = self.get_ghidra_pcode(function.addr, function.ninstrs, r2p);
 
             let formatted_obj = PCodeJSONWithFuncName {
                 function_name: function.name.clone(),
@@ -1512,11 +1558,10 @@ impl FileToBeProcessed {
 
     pub fn extract_pcode_basic_block(&self, r2p: &mut R2Pipe, output_path: &PathBuf) -> Result<()> {
         info!("Starting pcode extraction for each basic block in each function within the binary");
-        let function_details = self.get_function_name_list(r2p)?;
+        let function_details = self.get_function_list(r2p)?;
         let mut function_pcode = Vec::new();
 
-        for function_info in function_details {
-            let function = FunctionToBeProcessed::from(function_info);
+        for function in function_details {
             let bb_info = function.get_basic_block_info(r2p).with_context(|| {
                 format!(
                     "Unable to get basic block addresses in {:?} @ {:?}",
@@ -1559,11 +1604,10 @@ impl FileToBeProcessed {
         output_path: &PathBuf,
     ) -> Result<()> {
         info!("Starting local variable xref extraction");
-        let function_details = self.get_function_name_list(r2p)?;
+        let function_details = self.get_function_list(r2p)?;
         let mut function_local_variable_xrefs: HashMap<String, LocalVariableXrefs> = HashMap::new();
 
-        for function_info in function_details {
-            let function = FunctionToBeProcessed::from(function_info);
+        for function in function_details {
             let ret = function.get_local_variable_xref_details(r2p)?;
             function_local_variable_xrefs.insert(function.name.clone(), ret);
         }
@@ -1617,7 +1661,7 @@ impl FileToBeProcessed {
     ) -> Result<()> {
         info!("Starting function bytes extraction");
 
-        let function_details = self.get_function_name_list(r2p)?;
+        let function_details = self.get_function_list(r2p)?;
         let functions_count = function_details.len();
         if !output_dirpath.is_dir() {
             std::fs::create_dir_all(&output_dirpath)
@@ -1625,8 +1669,7 @@ impl FileToBeProcessed {
         }
 
         let mut success_count: u32 = 0;
-        for function_info in function_details {
-            let function = FunctionToBeProcessed::from(function_info);
+        for function in function_details {
             debug!(
                 "Function Name: {} Address: {} Size: {}",
                 function.name, function.addr, function.size
@@ -1752,18 +1795,31 @@ impl FileToBeProcessed {
         })
     }
 
-    fn get_function_name_list(
+    fn setup_function_list(
         &self,
         r2p: &mut R2Pipe,
-    ) -> Result<Vec<AFIJFunctionInfo>, anyhow::Error> {
-        info!("Getting function information from binary");
+    ) -> Result<Vec<FunctionToBeProcessed>> {
+        info!("Setting up function list for {:?} ...", self.get_file_name());
         let json = r2p
-            .cmd("aflj")
+            .cmdj("aflj")
             .with_context(|| format!("Failed executing aflj on {:?}", self.file_path))?;
-
-        let json_obj: Vec<AFIJFunctionInfo> = serde_json::from_str(json.as_ref())
-            .with_context(|| format!("Unable to convert {:?} to JSON object!", json))?;
-        Ok(json_obj)
+        
+        let array = match json {
+            serde_json::Value::Array(arr) => arr,
+            _ => return Err(anyhow::anyhow!("aflj output is not an array for {:?}", self.file_path)),
+        };
+        
+        let functions_to_be_processed: Vec<FunctionToBeProcessed> = array
+            .into_iter()
+            .map(|func_json| {
+                serde_json::from_value::<AFLJFuncDetails>(func_json)
+                    .map(FunctionToBeProcessed::from)
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .with_context(|| format!("Failed to parse aflj function details for {:?}", self.file_path))?;
+        
+        debug!("Done getting function list for {:?}", self.get_file_name());
+        Ok(functions_to_be_processed)
     }
 
     // Helper Functions
