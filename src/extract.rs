@@ -99,6 +99,7 @@ pub struct FileToBeProcessed {
     pub job_types: Vec<ExtractionJobType>,
     pub r2p_config: R2PipeConfig,
     pub with_annotations: bool,
+    pub keep_raw_bytes: bool,
     pub retry_aborted: bool,
     pub func_filename_template: String,
     pub function_list: OnceCell<Vec<FunctionToBeProcessed>>,
@@ -305,6 +306,7 @@ impl
         R2PipeConfig,
         bool,
         bool,
+        bool,
         String,
         Option<u16>,
     )> for FileToBeProcessed
@@ -317,6 +319,7 @@ impl
             R2PipeConfig,
             bool,
             bool,
+            bool,
             String,
             Option<u16>,
         ),
@@ -327,10 +330,11 @@ impl
             job_types: orig.2,
             r2p_config: orig.3,
             with_annotations: orig.4,
-            retry_aborted: orig.5,
-            func_filename_template: orig.6,
+            keep_raw_bytes: orig.5,
+            retry_aborted: orig.6,
+            func_filename_template: orig.7,
             function_list: OnceCell::new(),
-            min_basic_blocks: orig.7,
+            min_basic_blocks: orig.8,
         }
     }
 }
@@ -630,6 +634,7 @@ impl ExtractionJob {
         func_filename_template: &str,
         timeout: &Option<u64>,
         with_annotations: &bool,
+        keep_raw_bytes: &bool,
         retry_aborted: &bool,
         min_basic_blocks: &Option<u16>,
     ) -> Result<ExtractionJob, Error> {
@@ -640,13 +645,16 @@ impl ExtractionJob {
             let job_type = Self::extraction_job_matcher(mode)?;
             job_types.push((job_type, mode.clone()));
             extraction_job_types.push(job_type); // Store just the job type
+        }
 
-            if job_type != ExtractionJobType::Decompilation && *with_annotations {
-                warn!(
-                    "Annotations are only supported for decompilation extraction (mode: {})",
-                    mode
-                );
-            }
+        // Warn the user if mode-specific flags are turned on for no reason
+        if !extraction_job_types.contains(&ExtractionJobType::Decompilation) && *with_annotations {
+            let mode = ExtractionJob::get_job_type_suffix(&ExtractionJobType::Decompilation);
+            warn!("Annotations are only supported for decompilation extraction (mode: {})", mode);
+        }
+        if !extraction_job_types.contains(&ExtractionJobType::FunctionBytesMasked) && *keep_raw_bytes {
+            let mode = ExtractionJob::get_job_type_suffix(&ExtractionJobType::FunctionBytesMasked);
+            warn!("Keep raw bytes is only supported for masked bytes extraction (mode: {})", mode);
         }
 
         let r2_handle_config = R2PipeConfig {
@@ -670,6 +678,7 @@ impl ExtractionJob {
                     job_types: extraction_job_types, // Use the vector of just ExtractionJobType
                     r2p_config: r2_handle_config,
                     with_annotations: *with_annotations,
+                    keep_raw_bytes: *keep_raw_bytes,
                     retry_aborted: *retry_aborted,
                     func_filename_template: func_filename_template.to_string(),
                     function_list: OnceCell::new(),
@@ -704,6 +713,7 @@ impl ExtractionJob {
                         job_types: extraction_job_types.clone(),
                         r2p_config: r2_handle_config.clone(),
                         with_annotations: *with_annotations,
+                        keep_raw_bytes: *keep_raw_bytes,
                         retry_aborted: *retry_aborted,
                         func_filename_template: func_filename_template.to_string(),
                         function_list: OnceCell::new(),
@@ -809,27 +819,38 @@ impl FunctionToBeProcessed {
         output_dirpath: &PathBuf,
         filename_template: &str,
         apply_mask: bool,
+        keep_raw_bytes: bool,
     ) -> Result<()> {
         let func_bytes = self
             .get_bytes(r2p, apply_mask)
             .map_err(|e| anyhow::anyhow!("Failed to get bytes: {}", e))?;
-        let bytes_filepath = self.get_output_filepath(output_dirpath, filename_template, "bin");
-        let masked_bytes_filepath =
-            self.get_output_filepath(output_dirpath, filename_template, "masked.bin");
 
-        debug!("Writing function bytes to file: {:?}", bytes_filepath);
-        std::fs::write(&bytes_filepath, func_bytes.bytes).with_context(|| {
-            format!(
-                "Failed to write function bytes to file: {:?}",
-                bytes_filepath
-            )
-        })?;
+        // Store the bytes if the user specified to keep the raw bytes
+        // or if the byte mask is not applied
+        if keep_raw_bytes || !apply_mask {
+            // Setup output filepaths for function bytes
+            let bytes_ext = FunctionToBeProcessed::get_function_file_ext(&ExtractionJobType::FunctionBytes);
+            let bytes_filepath = self.get_output_filepath(output_dirpath, filename_template, bytes_ext);
+
+            debug!("Writing function bytes to file: {:?}", bytes_filepath);
+            std::fs::write(&bytes_filepath, func_bytes.bytes).with_context(|| {
+                format!(
+                    "Failed to write function bytes to file: {:?}",
+                    bytes_filepath
+                )
+            })?;
+        }
 
         if apply_mask {
             let bytes_mask = func_bytes
                 .mask
                 .context("Masked bytes missing from get_bytes output")?;
-            info!(
+
+            // Setup output filepaths for masked bytes
+            let masked_bytes_ext = FunctionToBeProcessed::get_function_file_ext(&ExtractionJobType::FunctionBytesMasked);
+            let masked_bytes_filepath = self.get_output_filepath(output_dirpath, filename_template, masked_bytes_ext);
+
+            debug!(
                 "Writing function masked bytes to file: {:?}",
                 masked_bytes_filepath
             );
@@ -883,7 +904,7 @@ impl FunctionToBeProcessed {
     pub fn get_function_file_ext(job_type: &ExtractionJobType) -> &str {
         // Based on the job type, return the file extension for the output function file
         match job_type {
-            ExtractionJobType::FunctionBytes => "bin",
+            ExtractionJobType::FunctionBytes => "raw.bin",
             ExtractionJobType::FunctionBytesMasked => "masked.bin",
             ExtractionJobType::FunctionCFG => "json",
             _ => "",
@@ -965,21 +986,22 @@ impl FunctionToBeProcessed {
             // Ensure function_bytes and bytes_mask have the same length
             if function_bytes.len() != function_mask.len() {
                 // TODO: Iteratively identify and fix missing bytes in the mask
-                return Err(anyhow::anyhow!(
+                error!(
                     "Function bytes length ({}) and mask length ({}) do not match.\n\
                     Output from `{}`: '{}'",
                     function_bytes.len(),
                     function_mask.len(),
                     cmd_str,
                     function_bytes_and_mask
-                ));
+                );
+                masked_bytes = None;
+            } else {
+                let mut masked_bytes_tmp = vec![0; function_bytes.len()];
+                for i in 0..function_bytes.len() {
+                    masked_bytes_tmp[i] = function_bytes[i] & function_mask[i];
+                }
+                masked_bytes = Some(masked_bytes_tmp);
             }
-
-            let mut masked_bytes_tmp = vec![0; function_bytes.len()];
-            for i in 0..function_bytes.len() {
-                masked_bytes_tmp[i] = function_bytes[i] & function_mask[i];
-            }
-            masked_bytes = Some(masked_bytes_tmp);
         } else {
             cmd_str = format!("p8f @ {}", self.addr);
             debug!("Getting function bytes for function: `{}`", cmd_str);
@@ -1713,12 +1735,14 @@ impl FileToBeProcessed {
                 .with_context(|| format!("Failed to create directory {:?}", output_dirpath))?;
         }
 
-        // Write index for the raw bytes
-        self.write_function_index(
-            &functions.to_vec(),
-            &output_dirpath,
-            ExtractionJobType::FunctionBytes,
-        )?;
+        if !apply_mask || self.keep_raw_bytes {
+            // Write index for the raw bytes
+            self.write_function_index(
+                &functions.to_vec(),
+                &output_dirpath,
+                ExtractionJobType::FunctionBytes,
+            )?;
+        }
         if apply_mask {
             // Write index for the masked bytes
             self.write_function_index(
@@ -1739,6 +1763,7 @@ impl FileToBeProcessed {
                 &output_dirpath,
                 &self.func_filename_template,
                 apply_mask,
+                self.keep_raw_bytes,
             ) {
                 Ok(()) => {
                     debug!(
