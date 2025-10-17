@@ -17,6 +17,7 @@ use serde_json;
 
 use glob::glob;
 use md5;
+use once_cell::sync::OnceCell;
 use serde::ser::{SerializeSeq, Serializer};
 use serde_json::{json, value::RawValue, Deserializer, Value};
 use sha1;
@@ -31,7 +32,6 @@ use std::io::{BufReader, BufWriter, Read};
 use std::path::PathBuf;
 use std::string::String;
 use std::sync::LazyLock;
-use once_cell::sync::OnceCell;
 use walkdir::WalkDir;
 
 #[derive(PartialEq, Debug)]
@@ -102,6 +102,7 @@ pub struct FileToBeProcessed {
     pub retry_aborted: bool,
     pub func_filename_template: String,
     pub function_list: OnceCell<Vec<FunctionToBeProcessed>>,
+    pub min_basic_blocks: Option<u16>,
 }
 
 #[derive(Debug, Clone)]
@@ -305,6 +306,7 @@ impl
         bool,
         bool,
         String,
+        Option<u16>,
     )> for FileToBeProcessed
 {
     fn from(
@@ -316,6 +318,7 @@ impl
             bool,
             bool,
             String,
+            Option<u16>,
         ),
     ) -> FileToBeProcessed {
         FileToBeProcessed {
@@ -327,6 +330,7 @@ impl
             retry_aborted: orig.5,
             func_filename_template: orig.6,
             function_list: OnceCell::new(),
+            min_basic_blocks: orig.7,
         }
     }
 }
@@ -627,6 +631,7 @@ impl ExtractionJob {
         timeout: &Option<u64>,
         with_annotations: &bool,
         retry_aborted: &bool,
+        min_basic_blocks: &Option<u16>,
     ) -> Result<ExtractionJob, Error> {
         let mut job_types = vec![];
         let mut extraction_job_types = vec![];
@@ -668,6 +673,7 @@ impl ExtractionJob {
                     retry_aborted: *retry_aborted,
                     func_filename_template: func_filename_template.to_string(),
                     function_list: OnceCell::new(),
+                    min_basic_blocks: *min_basic_blocks,
                 };
 
                 Ok(ExtractionJob {
@@ -701,6 +707,7 @@ impl ExtractionJob {
                         retry_aborted: *retry_aborted,
                         func_filename_template: func_filename_template.to_string(),
                         function_list: OnceCell::new(),
+                        min_basic_blocks: *min_basic_blocks,
                     })
                     .collect();
 
@@ -1192,7 +1199,12 @@ impl FileToBeProcessed {
         Ok(())
     }
 
-    pub fn write_function_index(&self, functions: &Vec<FunctionToBeProcessed>, output_dirpath: &PathBuf, job_type: ExtractionJobType) -> Result<()> {
+    pub fn write_function_index(
+        &self,
+        functions: &Vec<FunctionToBeProcessed>,
+        output_dirpath: &PathBuf,
+        job_type: ExtractionJobType,
+    ) -> Result<()> {
         let job_type_suffix = ExtractionJob::get_job_type_suffix(&job_type);
         let ext = FunctionToBeProcessed::get_function_file_ext(&job_type);
         let index_path = output_dirpath.join(format!("00-func-index_{}.csv", job_type_suffix));
@@ -1200,11 +1212,19 @@ impl FileToBeProcessed {
         let file = File::create(index_path)?;
         let mut writer = csv::Writer::from_writer(file);
         // Write header
-        writer.write_record(&["name", "address", "size", "ninstrs", "nblocks", "output_path"])?;
-        
+        writer.write_record(&[
+            "name",
+            "address",
+            "size",
+            "ninstrs",
+            "nblocks",
+            "output_path",
+        ])?;
+
         // Write function records
         for function in functions {
-            let output_path = function.get_output_filepath(output_dirpath, &self.func_filename_template, ext);
+            let output_path =
+                function.get_output_filepath(output_dirpath, &self.func_filename_template, ext);
             writer.write_record(&[
                 &function.name,
                 &function.addr.to_string(),
@@ -1413,7 +1433,9 @@ impl FileToBeProcessed {
 
     pub fn extract_function_info(&self, r2p: &mut R2Pipe, output_path: &PathBuf) -> Result<()> {
         info!("Starting function metdata extraction");
-        let json = r2p.cmdj("aflj").with_context(|| format!("Failed executing aflj on {:?}", self.file_path))?;
+        let json = r2p
+            .cmdj("aflj")
+            .with_context(|| format!("Failed executing aflj on {:?}", self.file_path))?;
         self.write_to_json(&json, output_path)
             .with_context(|| format!("Unable to convert {:?} to JSON object!", json))?;
         Ok(())
@@ -1476,7 +1498,11 @@ impl FileToBeProcessed {
 
             let function_list = self.get_function_list(r2p)?.to_vec();
             // Write index for the CFGs
-            self.write_function_index(&function_list, &output_dirpath, ExtractionJobType::FunctionCFG)?;
+            self.write_function_index(
+                &function_list,
+                &output_dirpath,
+                ExtractionJobType::FunctionCFG,
+            )?;
 
             // Extract the CFGs for each function
             for function in function_list {
@@ -1688,10 +1714,18 @@ impl FileToBeProcessed {
         }
 
         // Write index for the raw bytes
-        self.write_function_index(&functions.to_vec(), &output_dirpath, ExtractionJobType::FunctionBytes)?;
+        self.write_function_index(
+            &functions.to_vec(),
+            &output_dirpath,
+            ExtractionJobType::FunctionBytes,
+        )?;
         if apply_mask {
             // Write index for the masked bytes
-            self.write_function_index(&functions.to_vec(), &output_dirpath, ExtractionJobType::FunctionBytesMasked)?;
+            self.write_function_index(
+                &functions.to_vec(),
+                &output_dirpath,
+                ExtractionJobType::FunctionBytesMasked,
+            )?;
         }
 
         let mut success_count: u32 = 0;
@@ -1821,30 +1855,57 @@ impl FileToBeProcessed {
         })
     }
 
-    fn setup_function_list(
-        &self,
-        r2p: &mut R2Pipe,
-    ) -> Result<Vec<FunctionToBeProcessed>> {
-        info!("Setting up function list for {:?} ...", self.get_file_name());
+    fn setup_function_list(&self, r2p: &mut R2Pipe) -> Result<Vec<FunctionToBeProcessed>> {
+        info!(
+            "Setting up function list for {:?} ...",
+            self.get_file_name()
+        );
         let json = r2p
             .cmdj("aflj")
             .with_context(|| format!("Failed executing aflj on {:?}", self.file_path))?;
-        
+
         let array = match json {
             serde_json::Value::Array(arr) => arr,
-            _ => return Err(anyhow::anyhow!("aflj output is not an array for {:?}", self.file_path)),
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "aflj output is not an array for {:?}",
+                    self.file_path
+                ))
+            }
         };
-        
+
+        if let Some(min_blocks) = self.min_basic_blocks {
+            info!(
+                "Filtering functions with less than {} basic blocks",
+                min_blocks
+            );
+        } else {
+            info!("No basic blocks filter applied");
+        }
+
         let functions_to_be_processed: Vec<FunctionToBeProcessed> = array
             .into_iter()
             .map(|func_json| {
                 serde_json::from_value::<AFLJFuncDetails>(func_json)
                     .map(FunctionToBeProcessed::from)
             })
+            .filter(|result| {
+                match result {
+                    Ok(func) => self
+                        .min_basic_blocks
+                        .map_or(true, |min_blocks| func.nblocks >= min_blocks as u64),
+                    Err(_) => true, // Keep errors so they propagate through collect()
+                }
+            })
             .collect::<Result<Vec<_>, _>>()
-            .with_context(|| format!("Failed to parse aflj function details for {:?}", self.file_path))?;
-        
+            .with_context(|| {
+                format!(
+                    "Failed to parse aflj function details for {:?}",
+                    self.file_path
+                )
+            })?;
         debug!("Done getting function list for {:?}", self.get_file_name());
+
         Ok(functions_to_be_processed)
     }
 
