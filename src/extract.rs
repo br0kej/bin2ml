@@ -873,6 +873,16 @@ impl FunctionToBeProcessed {
     }
 
     // Getters
+    pub fn get_function_file_ext(job_type: &ExtractionJobType) -> &str {
+        // Based on the job type, return the file extension for the output function file
+        match job_type {
+            ExtractionJobType::FunctionBytes => "bin",
+            ExtractionJobType::FunctionBytesMasked => "masked.bin",
+            ExtractionJobType::FunctionCFG => "json",
+            _ => "",
+        }
+    }
+
     fn get_hex_address(&self) -> String {
         format!("{:x}", self.addr)
             .trim_start_matches("0x")
@@ -890,8 +900,9 @@ impl FunctionToBeProcessed {
         };
 
         func_filename = sanitize_filename(&func_filename);
-        if ["symbol", "address"].contains(&template) {
+        if ["symbol", "address"].contains(&template) && ext != "" {
             // Add an extension only if the user did not specify a custom template
+            // and the ext string is not empty
             func_filename = func_filename + "." + ext;
         }
         func_filename
@@ -1181,8 +1192,12 @@ impl FileToBeProcessed {
         Ok(())
     }
 
-    pub fn write_function_index(&self, functions: &Vec<FunctionToBeProcessed>, output_dirpath: &PathBuf, ext: &str) -> Result<()> {
-        let file = File::create(output_dirpath.join(".func-index.csv"))?;
+    pub fn write_function_index(&self, functions: &Vec<FunctionToBeProcessed>, output_dirpath: &PathBuf, job_type: ExtractionJobType) -> Result<()> {
+        let job_type_suffix = ExtractionJob::get_job_type_suffix(&job_type);
+        let ext = FunctionToBeProcessed::get_function_file_ext(&job_type);
+        let index_path = output_dirpath.join(format!("00-func-index_{}.csv", job_type_suffix));
+        info!("Writing function index to {:?}", index_path);
+        let file = File::create(index_path)?;
         let mut writer = csv::Writer::from_writer(file);
         // Write header
         writer.write_record(&["name", "address", "size", "ninstrs", "nblocks", "output_path"])?;
@@ -1459,8 +1474,12 @@ impl FileToBeProcessed {
                     .with_context(|| format!("Failed to create directory {:?}", output_dirpath))?;
             }
 
+            let function_list = self.get_function_list(r2p)?.to_vec();
+            // Write index for the CFGs
+            self.write_function_index(&function_list, &output_dirpath, ExtractionJobType::FunctionCFG)?;
+
             // Extract the CFGs for each function
-            for function in self.get_function_list(r2p)? {
+            for function in function_list {
                 debug!(
                     "Extracting CFG for function {:?} @ {:?}",
                     function.name, function.addr
@@ -1661,15 +1680,22 @@ impl FileToBeProcessed {
     ) -> Result<()> {
         info!("Starting function bytes extraction");
 
-        let function_details = self.get_function_list(r2p)?;
-        let functions_count = function_details.len();
+        let functions = self.get_function_list(r2p)?;
+        let functions_count = functions.len();
         if !output_dirpath.is_dir() {
             std::fs::create_dir_all(&output_dirpath)
                 .with_context(|| format!("Failed to create directory {:?}", output_dirpath))?;
         }
 
+        // Write index for the raw bytes
+        self.write_function_index(&functions.to_vec(), &output_dirpath, ExtractionJobType::FunctionBytes)?;
+        if apply_mask {
+            // Write index for the masked bytes
+            self.write_function_index(&functions.to_vec(), &output_dirpath, ExtractionJobType::FunctionBytesMasked)?;
+        }
+
         let mut success_count: u32 = 0;
-        for function in function_details {
+        for function in functions {
             debug!(
                 "Function Name: {} Address: {} Size: {}",
                 function.name, function.addr, function.size
