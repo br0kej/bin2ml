@@ -2,6 +2,7 @@ use crate::consts::*;
 #[cfg(feature = "inference")]
 use crate::inference::InferenceJob;
 use crate::normalisation::{normalise_disasm_simple, normalise_esil_simple};
+use crate::utils::get_default_addr;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 use serde_json::Value;
@@ -58,8 +59,9 @@ pub enum InstructionMode {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct SwitchOpCase {
-    pub jump: i64,
-    pub offset: i64,
+    pub jump: u64,
+    #[serde(alias = "addr")]
+    pub offset: u64,
     #[serde(deserialize_with = "deserialize_string_from_number")]
     // This will make it challenging to use downstream but has been
     // added because sometimes it is a VERY large int (bigger than i64).
@@ -74,6 +76,7 @@ pub struct SwitchOp {
     pub defval: u16,
     pub maxval: u16,
     pub minval: u16,
+    #[serde(alias = "addr")]
     pub offset: u64,
 }
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -86,6 +89,7 @@ pub struct Op {
     pub fcn_addr: Option<u64>,
     pub fcn_last: Option<u64>,
     pub flags: Option<Vec<String>>,
+    #[serde(alias = "addr")]
     pub offset: u64,
     pub opcode: Option<String>,
     pub ptr: Option<u128>,
@@ -100,26 +104,21 @@ pub struct Op {
     pub val: Option<u64>,
 }
 
-// Function to set offset, jump and fail to default values
-fn return_minus_one() -> i64 {
-    -1
-}
-
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ACFJBlock {
-    #[serde(default = "return_minus_one")]
-    pub offset: i64,
-    #[serde(default = "return_minus_one")]
+    #[serde(default = "get_default_addr", alias = "addr")]
+    pub offset: u64,
+    #[serde(default = "get_default_addr")]
     #[serde_as(deserialize_as = "DefaultOnError")]
     // This has been added to eliminate an error where
     // the jump address from x86-64 binaries is larger than
     // an i64.
-    pub jump: i64,
-    #[serde(default = "return_minus_one")]
-    pub fail: i64,
+    pub jump: u64,
+    #[serde(default = "get_default_addr")]
+    pub fail: u64,
     pub ops: Vec<Op>,
-    pub size: Option<i64>,
+    pub size: Option<u64>,
     pub switchop: Option<SwitchOp>,
 }
 
@@ -457,18 +456,18 @@ impl ACFJBlock {
         }
         num_offspring
     }
-    pub fn get_block_edges(&self, bb_start_addrs: &[i64], edge_list: &mut Vec<(u32, u32, u32)>) {
+    pub fn get_block_edges(&self, bb_start_addrs: &[u64], edge_list: &mut Vec<(u32, u32, u32)>) {
         let offset_idx = bb_start_addrs.iter().position(|&p| p == self.offset);
 
         if let Some(offset_idx) = offset_idx {
-            if self.jump != -1 {
+            if self.jump != get_default_addr() {
                 let jump_idx = bb_start_addrs.iter().position(|&p| p == self.jump);
                 if let Some(jump_idx) = jump_idx {
                     edge_list.push((offset_idx as u32, jump_idx as u32, 1));
                 }
             }
 
-            if self.fail != -1 {
+            if self.fail != get_default_addr() {
                 let fail_idx = bb_start_addrs.iter().position(|&p| p == self.fail);
                 if let Some(fail_idx) = fail_idx {
                     edge_list.push((offset_idx as u32, fail_idx as u32, 1));

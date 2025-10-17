@@ -1,3 +1,4 @@
+use regex::Regex;
 use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -74,6 +75,40 @@ pub fn get_save_file_path(
     }
 }
 
+/// Validate the function filename template
+///
+/// This function validates the function filename template to ensure it is a valid template.
+/// The template must be a string containing `{symbol}` or `{address}`.
+pub fn validate_func_filename(s: &str) -> Result<String, String> {
+    if s == "symbol" || s == "address" {
+        Ok(s.to_string())
+    } else if s.contains("{symbol}") || s.contains("{address}") {
+        Ok(s.to_string())
+    } else {
+        Err(
+            "must be `symbol`, `address`, or a pattern containing `{symbol}`/`{address}`"
+                .to_string(),
+        )
+    }
+}
+
+/// Sanitize name for an output file
+///
+/// This function sanitizes a file name by replacing non-valid characters with '_'.
+pub fn sanitize_filename(name: &str) -> String {
+    // Replace non-valid characters with '_'
+    // Valid characters: letters, digits, '_', '-', and '.'
+    let re = Regex::new(r"[^\w.-]").unwrap();
+    let sanitized_name = re.replace_all(name, "_").into_owned();
+
+    // This is a pretty dirty fix and may break things
+    if sanitized_name.len() > 100 {
+        sanitized_name[..50].to_string() + &sanitized_name[sanitized_name.len() - 50..]
+    } else {
+        sanitized_name
+    }
+}
+
 /// Get the JSON paths from a directory
 ///
 /// This function takes a path to a directory and traverses all
@@ -127,6 +162,15 @@ pub fn parse_hex_escapes(s: String) -> Vec<u8> {
         }
     }
     bytes
+}
+
+/// Function to return a default address value
+///
+/// This function returns a default address of u64::MAX
+/// This means that the address is not set as it is an impossible address to
+/// reach, unless the binary is millions of terabytes.
+pub fn get_default_addr() -> u64 {
+    u64::MAX
 }
 
 #[cfg(test)]
