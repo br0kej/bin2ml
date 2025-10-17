@@ -650,11 +650,19 @@ impl ExtractionJob {
         // Warn the user if mode-specific flags are turned on for no reason
         if !extraction_job_types.contains(&ExtractionJobType::Decompilation) && *with_annotations {
             let mode = ExtractionJob::get_job_type_suffix(&ExtractionJobType::Decompilation);
-            warn!("Annotations are only supported for decompilation extraction (mode: {})", mode);
+            warn!(
+                "Annotations are only supported for decompilation extraction (mode: {})",
+                mode
+            );
         }
-        if !extraction_job_types.contains(&ExtractionJobType::FunctionBytesMasked) && *keep_raw_bytes {
+        if !extraction_job_types.contains(&ExtractionJobType::FunctionBytesMasked)
+            && *keep_raw_bytes
+        {
             let mode = ExtractionJob::get_job_type_suffix(&ExtractionJobType::FunctionBytesMasked);
-            warn!("Keep raw bytes is only supported for masked bytes extraction (mode: {})", mode);
+            warn!(
+                "Keep raw bytes is only supported for masked bytes extraction (mode: {})",
+                mode
+            );
         }
 
         let r2_handle_config = R2PipeConfig {
@@ -829,8 +837,10 @@ impl FunctionToBeProcessed {
         // or if the byte mask is not applied
         if keep_raw_bytes || !apply_mask {
             // Setup output filepaths for function bytes
-            let bytes_ext = FunctionToBeProcessed::get_function_file_ext(&ExtractionJobType::FunctionBytes);
-            let bytes_filepath = self.get_output_filepath(output_dirpath, filename_template, bytes_ext);
+            let bytes_ext =
+                FunctionToBeProcessed::get_function_file_ext(&ExtractionJobType::FunctionBytes);
+            let bytes_filepath =
+                self.get_output_filepath(output_dirpath, filename_template, bytes_ext);
 
             debug!("Writing function bytes to file: {:?}", bytes_filepath);
             std::fs::write(&bytes_filepath, func_bytes.bytes).with_context(|| {
@@ -847,8 +857,11 @@ impl FunctionToBeProcessed {
                 .context("Masked bytes missing from get_bytes output")?;
 
             // Setup output filepaths for masked bytes
-            let masked_bytes_ext = FunctionToBeProcessed::get_function_file_ext(&ExtractionJobType::FunctionBytesMasked);
-            let masked_bytes_filepath = self.get_output_filepath(output_dirpath, filename_template, masked_bytes_ext);
+            let masked_bytes_ext = FunctionToBeProcessed::get_function_file_ext(
+                &ExtractionJobType::FunctionBytesMasked,
+            );
+            let masked_bytes_filepath =
+                self.get_output_filepath(output_dirpath, filename_template, masked_bytes_ext);
 
             debug!(
                 "Writing function masked bytes to file: {:?}",
@@ -950,10 +963,125 @@ impl FunctionToBeProcessed {
         output_filepath
     }
 
+    /// Build a length-aligned mask for the function containing `func_addr`.
+    ///
+    /// Uses func_bytes_len (from p8fm) as ground truth since that's what's saved to disk.
+    /// Strategy: Try abmj per-BB, fall back to batch aoj for speed.
+    fn rebuild_mask_with_bb_and_instr(
+        &self,
+        r2p: &mut R2Pipe,
+        func_addr: u64,
+        func_bytes_len: usize,
+    ) -> Result<Vec<u8>, Error> {
+        // Get function start for BB enumeration
+        let afij = r2p.cmdj(&format!("afij @ {}", func_addr))?;
+        let fobj = afij
+            .as_array()
+            .and_then(|a| a.get(0))
+            .ok_or_else(|| anyhow::anyhow!("`afij` returned no function at 0x{:x}", func_addr))?;
+
+        let func_base = fobj
+            .get("offset")
+            .or_else(|| fobj.get("addr"))
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| anyhow::anyhow!("Missing function offset/addr in `afij`"))?;
+
+        // Pre-size mask to match p8fm output (ground truth)
+        let mut mask = vec![0u8; func_bytes_len];
+
+        // Enumerate basic blocks
+        let afbj = r2p.cmdj(&format!("afbj @ {}", func_base))?;
+        let blocks = afbj
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("`afbj` did not return a JSON array"))?;
+
+        for bb in blocks {
+            let bb_addr = bb
+                .get("addr")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| anyhow::anyhow!("BB missing `addr` in `afbj`"))?;
+            let bb_size = bb
+                .get("size")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| anyhow::anyhow!("BB missing `size` in `afbj`"))?;
+
+            // Skip empty BBs or BBs outside our range
+            if bb_size == 0 || bb_addr < func_base {
+                continue;
+            }
+
+            let off = (bb_addr - func_base) as usize;
+            let blen = bb_size as usize;
+
+            if off >= mask.len() {
+                continue;
+            }
+
+            let cap = off.saturating_add(blen).min(mask.len());
+            let slice_len = cap - off;
+
+            // Tier 1: abmj (BB bytes+mask) — fastest when available
+            if let Ok(v) = r2p.cmdj(&format!("abmj @ {}", bb_addr)) {
+                if let (Some(bh), Some(mh)) = (
+                    v.get("bytes").and_then(|x| x.as_str()),
+                    v.get("mask").and_then(|x| x.as_str()),
+                ) {
+                    // Check hex string lengths before decoding (2 chars per byte)
+                    if bh.len() == mh.len() && bh.len() / 2 == blen {
+                        if let Ok(bb_mask) = hex::decode(mh) {
+                            if bb_mask.len() >= slice_len {
+                                mask[off..cap].copy_from_slice(&bb_mask[..slice_len]);
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Tier 2: batch aoj (fast and works reliably)
+            let max_instrs = blen;
+            if let Ok(aoj_result) = r2p.cmdj(&format!("aoj {} @ {}", max_instrs, bb_addr)) {
+                if let Some(instrs) = aoj_result.as_array() {
+                    let mut p = 0usize;
+                    for instr in instrs {
+                        if p >= blen || (off + p) >= mask.len() {
+                            break;
+                        }
+                        let sz = instr.get("size").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                        if sz == 0 {
+                            mask[off + p] = 0x00;
+                            p += 1;
+                        } else {
+                            let endp = (p + sz).min(blen);
+                            for i in p..endp {
+                                if (off + i) < mask.len() {
+                                    mask[off + i] = 0xFF;
+                                }
+                            }
+                            p = endp;
+                        }
+                    }
+                    while p < blen && (off + p) < mask.len() {
+                        mask[off + p] = 0x00;
+                        p += 1;
+                    }
+                    continue;
+                }
+            }
+
+            // Tier 3: last resort - wildcard entire BB
+            for i in 0..slice_len {
+                mask[off + i] = 0x00;
+            }
+        }
+
+        Ok(mask)
+    }
+
     fn get_bytes(&self, r2p: &mut R2Pipe, apply_mask: bool) -> Result<FuncBytes, Error> {
         let cmd_str;
         let function_bytes;
-        let function_mask;
+        let mut function_mask;
         let function_bytes_and_mask;
         let mut masked_bytes: Option<Vec<u8>> = None;
 
@@ -985,13 +1113,18 @@ impl FunctionToBeProcessed {
 
             // Ensure function_bytes and bytes_mask have the same length
             if function_bytes.len() != function_mask.len() {
-                // TODO: Iteratively identify and fix missing bytes in the mask
+                warn!("Function bytes length ({}) and mask length ({}) do not match. Rebuilding mask.", function_bytes.len(), function_mask.len());
+                // Fix-up: rebuild a length-aligned mask from BBs and (if needed) per-instruction
+                function_mask =
+                    self.rebuild_mask_with_bb_and_instr(r2p, self.addr, function_bytes.len())?;
+            }
+
+            // Try again with the fixed mask
+            if function_mask.len() != function_bytes.len() {
                 error!(
-                    "Function bytes length ({}) and mask length ({}) do not match.\n\
-                    Output from `{}`: '{}'",
+                    "After fix-up, lengths still differ: bytes={} mask={}. Original p8fm was '{}'",
                     function_bytes.len(),
                     function_mask.len(),
-                    cmd_str,
                     function_bytes_and_mask
                 );
                 masked_bytes = None;
