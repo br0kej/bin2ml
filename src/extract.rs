@@ -1285,6 +1285,28 @@ impl FileToBeProcessed {
         Ok(output_filename)
     }
 
+    /// Returns the path where an error message for a given job type should be stored
+    fn get_error_filepath(&self, job_type_suffix: &str) -> Result<PathBuf> {
+        // Maintain the original name with suffix, but replace the extension with .error.log
+        // NOTE: The method .with_extension() won't work if the filename has no extension and contains a `.`
+        let mut output_filename = self.get_output_filename(job_type_suffix)?;
+        let job_type = ExtractionJob::extraction_job_matcher(job_type_suffix)?;
+        let suffix = if job_type != ExtractionJobType::Decompilation {
+            job_type_suffix.to_owned()
+        } else {
+            job_type_suffix.to_owned() + "_annotations"
+        };
+        let suffix_with_ext = suffix.clone() + ".error.log";
+        // Remove everything after the suffix in the output filename
+        output_filename = output_filename.split(&suffix).next().unwrap().to_string();
+        output_filename = output_filename + &suffix_with_ext;
+        let mut error_filepath = PathBuf::from(self.output_path.clone());
+        error_filepath.push(output_filename);
+
+        Ok(error_filepath)
+    }
+
+    /// Returns the path where the output data for a given job type should be stored
     fn get_output_filepath(&self, job_type_suffix: &str) -> Result<PathBuf> {
         let output_filename = self.get_output_filename(job_type_suffix)?;
         let mut output_filepath = PathBuf::from(self.output_path.clone());
@@ -1428,7 +1450,13 @@ impl FileToBeProcessed {
                     continue;
                 }
             };
-            let error_path = output_path.with_extension("error.log");
+            let error_path = match self.get_error_filepath(&job_type_suffix) {
+                Ok(path) => path,
+                Err(e) => {
+                    error!("Failed to get error filepath for {:?}: {}", job_type, e);
+                    continue;
+                }
+            };
 
             if output_path.exists() {
                 info!(
