@@ -1587,12 +1587,15 @@ impl FileToBeProcessed {
     }
 
     pub fn extract_function_info(&self, r2p: &mut R2Pipe, output_path: &PathBuf) -> Result<()> {
-        info!("Starting function metdata extraction");
-        let json = r2p
-            .cmdj("aflj")
+        info!("Starting function info extraction");
+        let json_raw = r2p
+            .cmd("aflj")
             .with_context(|| format!("Failed executing aflj on {:?}", self.file_path))?;
-        self.write_to_json(&json, output_path)
-            .with_context(|| format!("Unable to convert {:?} to JSON object!", json))?;
+
+        info!("Writing function info to {:?}", output_path);
+        std::fs::write(output_path, json_raw)
+            .with_context(|| format!("Failed to write JSON to {:?}", output_path))?;
+        info!("Function info written to {:?}", output_path);
         Ok(())
     }
 
