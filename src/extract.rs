@@ -1655,13 +1655,22 @@ impl FileToBeProcessed {
             }
 
             let function_list = self.get_function_list(r2p)?.to_vec();
+            let functions_count = function_list.len();
             // Write index for the CFGs
             self.write_function_index(
                 &function_list,
                 &output_dirpath,
                 ExtractionJobType::FunctionCFG,
             )?;
+            if functions_count == 0 {
+                warn!(
+                    "No functions to be processed in {:?}. Skipping CFG extraction.",
+                    self.file_path
+                );
+                return Ok(());
+            }
 
+            let mut success_count: u32 = 0;
             // Extract the CFGs for each function
             for function in function_list {
                 debug!(
@@ -1675,6 +1684,7 @@ impl FileToBeProcessed {
                             "Successfully extracted CFG for function {:?} @ {:?}",
                             function.name, function.addr
                         );
+                        success_count += 1;
                     }
                     Err(e) => {
                         let error_path = function.get_output_filepath(
@@ -1694,6 +1704,18 @@ impl FileToBeProcessed {
                         continue;
                     }
                 }
+            }
+
+            if success_count > 0 {
+                info!(
+                    "CFGs extracted for {}/{} functions in {:?}",
+                    success_count, functions_count, self.file_path
+                );
+            } else {
+                return Err(anyhow::anyhow!(
+                    "Failed to extract CFGs for all functions in {:?}",
+                    self.file_path
+                ));
             }
         }
         Ok(())
@@ -1864,6 +1886,7 @@ impl FileToBeProcessed {
     ) -> Result<()> {
         info!("Starting function bytes extraction");
 
+        let file_name = self.get_file_name()?;
         let functions = self.get_function_list(r2p)?;
         let functions_count = functions.len();
         if !output_dirpath.is_dir() {
@@ -1886,6 +1909,14 @@ impl FileToBeProcessed {
                 &output_dirpath,
                 ExtractionJobType::FunctionBytesMasked,
             )?;
+        }
+
+        if functions.len() == 0 {
+            warn!(
+                "No functions to be processed in {:?}. Skipping bytes extraction.",
+                file_name
+            );
+            return Ok(());
         }
 
         let mut success_count: u32 = 0;
@@ -1928,7 +1959,6 @@ impl FileToBeProcessed {
             }
         }
 
-        let file_name = self.get_file_name()?;
         if success_count > 0 {
             info!(
                 "Bytes extracted for {}/{} functions in {:?}",
@@ -1937,7 +1967,7 @@ impl FileToBeProcessed {
             Ok(())
         } else {
             Err(anyhow::anyhow!(
-                "Failed to extract bytes for any function in {:?}",
+                "Failed to extract bytes for all functions in {:?}",
                 file_name
             ))
         }
