@@ -176,7 +176,7 @@ pub struct AFLJFuncDetails {
     #[serde(default)]
     pub signature: String,
     #[serde(alias = "minaddr")]
-    pub minbound: i64,
+    pub minbound: u64,
     #[serde(alias = "maxaddr")]
     pub maxbound: u64,
     #[serde(default)]
