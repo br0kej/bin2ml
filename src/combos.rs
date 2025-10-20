@@ -133,11 +133,11 @@ impl ComboJob {
 #[derive(Default, Hash, PartialEq, Clone, Debug, Deserialize, Serialize)]
 pub struct FinfoTiknib {
     pub name: String,
-    pub edges: i64,
-    pub indegree: i64,
-    pub outdegree: i64,
-    pub nlocals: i64,
-    pub nargs: i64,
+    pub edges: u64,
+    pub indegree: u64,
+    pub outdegree: u64,
+    pub nlocals: u64,
+    pub nargs: u64,
     pub avg_arithshift: OrderedFloat<f32>,
     pub avg_compare: OrderedFloat<f32>,
     pub avg_ctransfer: OrderedFloat<f32>,
