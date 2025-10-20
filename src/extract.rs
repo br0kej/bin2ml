@@ -643,8 +643,15 @@ impl ExtractionJob {
 
         for mode in modes {
             let job_type = Self::extraction_job_matcher(mode)?;
-            job_types.push((job_type, mode.clone()));
-            extraction_job_types.push(job_type); // Store just the job type
+            
+            // FuncInfo should always be processed first
+            if job_type == ExtractionJobType::FuncInfo && !job_types.is_empty() {
+                job_types.insert(0, (job_type, mode.clone()));
+                extraction_job_types.insert(0, job_type);
+            } else {
+                job_types.push((job_type, mode.clone()));
+                extraction_job_types.push(job_type);
+            }
         }
 
         // Warn the user if mode-specific flags are turned on for no reason
