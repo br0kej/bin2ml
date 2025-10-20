@@ -104,6 +104,7 @@ pub struct FileToBeProcessed {
     pub func_filename_template: String,
     pub function_list: OnceCell<Vec<FunctionToBeProcessed>>,
     pub min_basic_blocks: Option<u16>,
+    needs_func_list: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -309,6 +310,7 @@ impl
         bool,
         String,
         Option<u16>,
+        bool,
     )> for FileToBeProcessed
 {
     fn from(
@@ -322,6 +324,7 @@ impl
             bool,
             String,
             Option<u16>,
+            bool,
         ),
     ) -> FileToBeProcessed {
         FileToBeProcessed {
@@ -335,6 +338,7 @@ impl
             func_filename_template: orig.7,
             function_list: OnceCell::new(),
             min_basic_blocks: orig.8,
+            needs_func_list: orig.9,
         }
     }
 }
@@ -681,8 +685,12 @@ impl ExtractionJob {
             timeout: *timeout,
         };
 
-        let p_type = Self::get_path_type(input_path);
+        // Check if any of the job types requires the function list
+        let needs_func_list = extraction_job_types
+            .iter()
+            .any(|jt| Self::job_type_needs_function_list(jt));
 
+        let p_type = Self::get_path_type(input_path);
         match p_type {
             PathType::File => {
                 // For a single file, create one FileToBeProcessed object
@@ -698,6 +706,7 @@ impl ExtractionJob {
                     func_filename_template: func_filename_template.to_string(),
                     function_list: OnceCell::new(),
                     min_basic_blocks: *min_basic_blocks,
+                    needs_func_list,
                 };
 
                 Ok(ExtractionJob {
@@ -733,6 +742,7 @@ impl ExtractionJob {
                         func_filename_template: func_filename_template.to_string(),
                         function_list: OnceCell::new(),
                         min_basic_blocks: *min_basic_blocks,
+                        needs_func_list,
                     })
                     .collect();
 
@@ -790,6 +800,23 @@ impl ExtractionJob {
             ExtractionJobType::FunctionCFG => None,
             _ => Some("json"),
         }
+    }
+
+    /// Check if a job type requires the function list to be populated
+    fn job_type_needs_function_list(job_type: &ExtractionJobType) -> bool {
+        matches!(
+            job_type,
+            ExtractionJobType::RegisterBehaviour
+                | ExtractionJobType::FunctionXrefs
+                | ExtractionJobType::FunctionCFG
+                | ExtractionJobType::FunctionVariables
+                | ExtractionJobType::Decompilation
+                | ExtractionJobType::PCodeFunc
+                | ExtractionJobType::PCodeBB
+                | ExtractionJobType::LocalVariableXrefs
+                | ExtractionJobType::FunctionBytes
+                | ExtractionJobType::FunctionBytesMasked
+        )
     }
 
     /// Get all file paths in the input_path directory
@@ -1422,6 +1449,9 @@ impl FileToBeProcessed {
         Ok(())
     }
 
+    /// Returns the function list for the current file
+    /// Uses a cached list if available, otherwise calls setup_function_list
+    /// NOTE: Add ExtractionJobType to job_type_needs_function_list so FuncInfo data can be added as cache
     pub fn get_function_list(&self, r2p: &mut R2Pipe) -> Result<&[FunctionToBeProcessed]> {
         self.function_list
             .get_or_try_init(|| self.setup_function_list(r2p, None))
@@ -1632,15 +1662,18 @@ impl FileToBeProcessed {
             .with_context(|| format!("Failed to write JSON to {:?}", output_path))?;
         info!("Function info written to {:?}", output_path);
 
-        // Parse the JSON and populate function_list cache for other extraction modes
-        // This avoids running aflj again later
-        let json: serde_json::Value = serde_json::from_str(&json_raw)
-            .with_context(|| format!("Failed to parse aflj output for {:?}", self.file_path))?;
+        // Only populate function_list cache if other extraction modes need it
+        if self.needs_func_list {
+            // Parse the JSON and populate function_list cache for other extraction modes
+            // This avoids running aflj again later
+            let json: serde_json::Value = serde_json::from_str(&json_raw)
+                .with_context(|| format!("Failed to parse aflj output for {:?}", self.file_path))?;
 
-        // Populate the function list cache using the existing logic in setup_function_list
-        if let Ok(func_list) = self.setup_function_list(r2p, Some(json)) {
-            // Ignore the result - if it's already set, that's fine
-            let _ = self.function_list.set(func_list);
+            // Populate the function list cache using the existing logic in setup_function_list
+            if let Ok(func_list) = self.setup_function_list(r2p, Some(json)) {
+                // Ignore the result - if it's already set, that's fine
+                let _ = self.function_list.set(func_list);
+            }
         }
 
         Ok(())
@@ -2040,7 +2073,6 @@ impl FileToBeProcessed {
             .cmd("izj")
             .with_context(|| format!("Command izj failed in {:?}.", self.file_path))?;
 
-        debug!("{}", json);
         let json_obj: Vec<StringEntry> = serde_json::from_str(&json)
             .with_context(|| format!("Unable to convert {:?} to JSON object!", json))?;
 
@@ -2283,7 +2315,7 @@ impl FileToBeProcessed {
                     self.file_path
                 )
             })?;
-        debug!("Done getting function list for {:?}", self.get_file_name()?);
+        debug!("Done setting up function list for {:?}", self.get_file_name()?);
 
         Ok(functions_to_be_processed)
     }
