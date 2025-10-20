@@ -507,7 +507,7 @@ pub struct StringEntry {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FuncBytes {
     pub bytes: Vec<u8>,
-    pub mask: Option<Vec<u8>>,
+    pub masked_bytes: Option<Vec<u8>>,
 }
 
 // Structs for zj - Function signatures (called "zignatures" in r2)
@@ -863,7 +863,11 @@ impl FunctionToBeProcessed {
         apply_mask: bool,
         keep_raw_bytes: bool,
     ) -> Result<()> {
-        let func_bytes = self
+        // Destructure immediately to allow early dropping of bytes
+        let FuncBytes {
+            bytes,
+            masked_bytes,
+        } = self
             .get_bytes(r2p, apply_mask)
             .map_err(|e| anyhow::anyhow!("Failed to get bytes: {}", e))?;
 
@@ -877,7 +881,7 @@ impl FunctionToBeProcessed {
                 self.get_output_filepath(output_dirpath, filename_template, bytes_ext);
 
             debug!("Writing function bytes to file: {:?}", bytes_filepath);
-            std::fs::write(&bytes_filepath, func_bytes.bytes).with_context(|| {
+            std::fs::write(&bytes_filepath, &bytes).with_context(|| {
                 format!(
                     "Failed to write function bytes to file: {:?}",
                     bytes_filepath
@@ -886,9 +890,7 @@ impl FunctionToBeProcessed {
         }
 
         if apply_mask {
-            let bytes_mask = func_bytes
-                .mask
-                .context("Masked bytes missing from get_bytes output")?;
+            let bytes_mask = masked_bytes.context("Masked bytes missing from get_bytes output")?;
 
             // Setup output filepaths for masked bytes
             let masked_bytes_ext = FunctionToBeProcessed::get_function_file_ext(
@@ -1113,37 +1115,37 @@ impl FunctionToBeProcessed {
     }
 
     fn get_bytes(&self, r2p: &mut R2Pipe, apply_mask: bool) -> Result<FuncBytes, Error> {
-        let cmd_str;
-        let function_bytes;
-        let mut function_mask;
-        let function_bytes_and_mask;
-        let mut masked_bytes: Option<Vec<u8>> = None;
-
         if apply_mask {
-            cmd_str = format!("p8fm @ {}", self.addr);
+            let cmd_str = format!("p8fm @ {}", self.addr);
             debug!(
                 "Getting function bytes and mask for function: `{}`",
                 cmd_str
             );
-            function_bytes_and_mask = r2p
-                .cmd(&cmd_str)
-                .context("Failed to execute `{}`")?
-                .trim()
-                .to_string();
-            let parts: Vec<&str> = function_bytes_and_mask.split(":").collect();
+
+            // Get and immediately parse the hex string to avoid keeping it in memory
+            let raw_output = r2p.cmd(&cmd_str).context("Failed to execute `{}`")?;
+
+            let parts: Vec<&str> = raw_output.trim().split(":").collect();
 
             if parts.len() < 2 {
                 return Err(anyhow::anyhow!(
-                    "Invalid output format: expected 'bytes:mask'.\n\
-                    Output from `{}`: '{}'",
+                    "Invalid output format from `{}`: expected 'bytes:mask",
                     cmd_str,
-                    function_bytes_and_mask
                 ));
             }
-            function_bytes = hex::decode(parts[0])
-                .with_context(|| format!("Failed to decode hex function bytes: '{}'", parts[0]))?;
-            function_mask = hex::decode(parts[1])
-                .with_context(|| format!("Failed to decode hex function mask: '{}'", parts[1]))?;
+
+            let function_bytes = hex::decode(parts[0]).with_context(|| {
+                format!(
+                    "Failed to decode hex function bytes (length: {})",
+                    parts[0].len()
+                )
+            })?;
+            let mut function_mask = hex::decode(parts[1]).with_context(|| {
+                format!(
+                    "Failed to decode hex function mask (length: {})",
+                    parts[1].len()
+                )
+            })?;
 
             // Ensure function_bytes and bytes_mask have the same length
             if function_bytes.len() != function_mask.len() {
@@ -1153,42 +1155,47 @@ impl FunctionToBeProcessed {
                     self.rebuild_mask_with_bb_and_instr(r2p, self.addr, function_bytes.len())?;
             }
 
-            // Try again with the fixed mask
-            if function_mask.len() != function_bytes.len() {
+            // Compute masked bytes if lengths match
+            let masked_bytes = if function_mask.len() != function_bytes.len() {
                 error!(
-                    "After fix-up, lengths still differ: bytes={} mask={}. Original p8fm was '{}'",
+                    "After fix-up, lengths still differ: bytes={} mask={}",
                     function_bytes.len(),
-                    function_mask.len(),
-                    function_bytes_and_mask
+                    function_mask.len()
                 );
-                masked_bytes = None;
+                None
             } else {
-                let mut masked_bytes_tmp = vec![0; function_bytes.len()];
-                for i in 0..function_bytes.len() {
-                    masked_bytes_tmp[i] = function_bytes[i] & function_mask[i];
-                }
-                masked_bytes = Some(masked_bytes_tmp);
-            }
+                // Use iterators to avoid indexing overhead and be more idiomatic
+                Some(
+                    function_bytes
+                        .iter()
+                        .zip(function_mask.iter())
+                        .map(|(&b, &m)| b & m)
+                        .collect(),
+                )
+            };
+
+            Ok(FuncBytes {
+                bytes: function_bytes,
+                masked_bytes: masked_bytes,
+            })
         } else {
-            cmd_str = format!("p8f @ {}", self.addr);
+            let cmd_str = format!("p8f @ {}", self.addr);
             debug!("Getting function bytes for function: `{}`", cmd_str);
-            let function_bytes_str = r2p
-                .cmd(&cmd_str)
-                .context("Failed to execute `{}`")?
-                .trim()
-                .to_string();
-            function_bytes = hex::decode(function_bytes_str.clone()).with_context(|| {
+
+            let raw_output = r2p.cmd(&cmd_str).context("Failed to execute `{}`")?;
+
+            let function_bytes = hex::decode(raw_output.trim()).with_context(|| {
                 format!(
-                    "Failed to decode hex function bytes: '{}'",
-                    function_bytes_str
+                    "Failed to decode hex function bytes (length: {})",
+                    raw_output.len()
                 )
             })?;
-        }
 
-        Ok(FuncBytes {
-            bytes: function_bytes,
-            mask: masked_bytes,
-        })
+            Ok(FuncBytes {
+                bytes: function_bytes,
+                masked_bytes: None,
+            })
+        }
     }
 
     fn get_basic_block_info(&self, r2p: &mut R2Pipe) -> Result<BasicBlockInfo, Error> {
