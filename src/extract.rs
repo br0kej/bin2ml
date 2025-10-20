@@ -1655,6 +1655,176 @@ impl FileToBeProcessed {
         Ok(())
     }
 
+    /// Centralized function for extracting function-level data with resume capability.
+    /// Handles file scanning, skip logic, error logging, and aggregate statistics.
+    fn extract_functions_with_resume<F>(
+        &self,
+        r2p: &mut R2Pipe,
+        output_dirpath: &PathBuf,
+        job_types: &[ExtractionJobType],
+        extraction_fn: F,
+    ) -> Result<()>
+    where
+        F: Fn(&FunctionToBeProcessed, &mut R2Pipe, usize) -> Result<()>,
+    {
+        let function_list = self.get_function_list(r2p)?.to_vec();
+        let functions_count = function_list.len();
+
+        if functions_count == 0 {
+            warn!("No functions to process in {:?}", self.file_path);
+            return Ok(());
+        }
+
+        // Phase 1: Scan for existing files to enable resume functionality
+        struct FileStatus {
+            required_files_exist: Vec<bool>, // One per job_type
+            error_exists: bool,
+        }
+
+        // Get extensions for all job types
+        let extensions: Vec<&str> = job_types
+            .iter()
+            .map(|jt| FunctionToBeProcessed::get_function_file_ext(jt))
+            .collect();
+
+        let mut file_statuses: Vec<FileStatus> = Vec::with_capacity(functions_count);
+        let mut last_file_index: Option<usize> = None;
+        let mut existing_complete_count = 0;
+        let mut skipped_error_count = 0;
+
+        for (index, function) in function_list.iter().enumerate() {
+            let mut required_files_exist = Vec::with_capacity(job_types.len());
+
+            // Check if each required file exists
+            for ext in &extensions {
+                let file_path =
+                    function.get_output_filepath(output_dirpath, &self.func_filename_template, ext);
+                required_files_exist.push(file_path.exists());
+            }
+
+            let error_path = function.get_output_filepath(
+                output_dirpath,
+                &self.func_filename_template,
+                "error.log",
+            );
+            let error_exists = error_path.exists();
+
+            // Check if this function is "complete" (all required files exist)
+            let is_complete = required_files_exist.iter().all(|&exists| exists);
+
+            if is_complete {
+                existing_complete_count += 1;
+            }
+            if error_exists && !self.retry_aborted {
+                skipped_error_count += 1;
+            }
+
+            file_statuses.push(FileStatus {
+                required_files_exist,
+                error_exists,
+            });
+
+            if is_complete || error_exists {
+                last_file_index = Some(index);
+            }
+        }
+
+        // Log resume information
+        if let Some(last_idx) = last_file_index {
+            info!(
+                "Found {} existing complete files. Resuming from function {} (regenerating last file). {} functions need processing.",
+                existing_complete_count,
+                last_idx,
+                functions_count - existing_complete_count + 1 - skipped_error_count
+            );
+            if skipped_error_count > 0 {
+                info!(
+                    "Skipping {} previously failed functions (retry_aborted=false)",
+                    skipped_error_count
+                );
+            }
+        } else {
+            info!(
+                "No existing files found, processing all {} functions",
+                functions_count
+            );
+        }
+
+        // Phase 2: Extract data for each function
+        let mut n_success: u32 = 0;
+        let mut n_skipped: u32 = 0;
+        let mut n_error: u32 = 0;
+
+        for (index, function) in function_list.iter().enumerate() {
+            let status = &file_statuses[index];
+
+            // Skip logic: skip files before the last_file_index if they're already done or failed
+            if let Some(last_idx) = last_file_index {
+                if index < last_idx {
+                    let is_complete = status.required_files_exist.iter().all(|&exists| exists);
+
+                    if is_complete {
+                        debug!(
+                            "Skipping function {:?} @ {:#x}: already extracted",
+                            function.name, function.addr
+                        );
+                        n_success += 1;
+                        n_skipped += 1;
+                        continue;
+                    }
+                    if status.error_exists && !self.retry_aborted {
+                        debug!(
+                            "Skipping function {:?} @ {:#x}: previously failed, retry_aborted=false",
+                            function.name, function.addr
+                        );
+                        n_skipped += 1;
+                        continue;
+                    }
+                }
+            }
+
+            // Call the extraction function
+            match extraction_fn(function, r2p, index) {
+                Ok(()) => {
+                    n_success += 1;
+                }
+                Err(e) => {
+                    let error_path = function.get_output_filepath(
+                        output_dirpath,
+                        &self.func_filename_template,
+                        "error.log",
+                    );
+                    error!(
+                        "Failed to extract data for function {:?} @ {:#x}: {}",
+                        function.name, function.addr, e
+                    );
+                    if let Err(write_err) = std::fs::write(&error_path, e.to_string()) {
+                        error!("Failed to write error to {:?}: {}", error_path, write_err);
+                    } else {
+                        debug!("Error stored at {:?}", error_path);
+                    }
+                    n_error += 1;
+                }
+            }
+        }
+
+        // Final aggregate logging
+        info!(
+            "Extraction complete: {} successful, {} skipped, {} errors (out of {} functions)",
+            n_success, n_skipped, n_error, functions_count
+        );
+
+        // Return error if nothing succeeded
+        if n_success == 0 && n_skipped == 0 {
+            return Err(anyhow::anyhow!(
+                "Failed to extract data for all functions in {:?}",
+                self.file_path
+            ));
+        }
+
+        Ok(())
+    }
+
     pub fn extract_func_cfgs(
         &self,
         r2p: &mut R2Pipe,
@@ -1682,69 +1852,43 @@ impl FileToBeProcessed {
                     .with_context(|| format!("Failed to create directory {:?}", output_dirpath))?;
             }
 
+            // Write index for the CFGs (need to get function_list first)
             let function_list = self.get_function_list(r2p)?.to_vec();
-            let functions_count = function_list.len();
-            // Write index for the CFGs
             self.write_function_index(
                 &function_list,
                 &output_dirpath,
                 ExtractionJobType::FunctionCFG,
             )?;
-            if functions_count == 0 {
-                warn!(
-                    "No functions to be processed in {:?}. Skipping CFG extraction.",
-                    self.file_path
-                );
-                return Ok(());
-            }
 
-            let mut success_count: u32 = 0;
-            // Extract the CFGs for each function
-            for function in function_list {
-                debug!(
-                    "Extracting CFG for function {:?} @ {:?}",
-                    function.name, function.addr
-                );
-                match function.write_cfg_to_json(r2p, &output_dirpath, &self.func_filename_template)
-                {
-                    Ok(()) => {
+            // Use centralized extraction with resume capability
+            self.extract_functions_with_resume(
+                r2p,
+                &output_dirpath,
+                &[ExtractionJobType::FunctionCFG],
+                |function, r2p, _index| {
+                    debug!(
+                        "Extracting CFG for function {:?} @ {:#x}",
+                        function.name, function.addr
+                    );
+                    let result = function.write_cfg_to_json(
+                        r2p,
+                        &output_dirpath,
+                        &self.func_filename_template,
+                    );
+                    if result.is_ok() {
                         debug!(
-                            "Successfully extracted CFG for function {:?} @ {:?}",
+                            "Successfully extracted CFG for function {:?} @ {:#x}",
                             function.name, function.addr
                         );
-                        success_count += 1;
                     }
-                    Err(e) => {
-                        let error_path = function.get_output_filepath(
-                            &output_dirpath,
-                            &self.func_filename_template,
-                            "error.log",
-                        );
-                        error!(
-                            "Failed to extract CFG for function {:?} @ {:?}: {}",
-                            function.name, function.addr, e
-                        );
-                        if let Err(write_err) = std::fs::write(&error_path, e.to_string()) {
-                            error!("Failed to write error to {:?}: {}", error_path, write_err);
-                        } else {
-                            info!("Error stored at {:?}", error_path);
-                        }
-                        continue;
-                    }
-                }
-            }
+                    result
+                },
+            )?;
 
-            if success_count > 0 {
-                info!(
-                    "CFGs extracted for {}/{} functions in {:?}",
-                    success_count, functions_count, self.file_path
-                );
-            } else {
-                return Err(anyhow::anyhow!(
-                    "Failed to extract CFGs for all functions in {:?}",
-                    self.file_path
-                ));
-            }
+            info!(
+                "Finished extracting CFGs for each function of {:?}",
+                self.file_path
+            );
         }
         Ok(())
     }
@@ -1916,7 +2060,6 @@ impl FileToBeProcessed {
 
         let file_name = self.get_file_name()?;
         let functions = self.get_function_list(r2p)?;
-        let functions_count = functions.len();
         if !output_dirpath.is_dir() {
             std::fs::create_dir_all(&output_dirpath)
                 .with_context(|| format!("Failed to create directory {:?}", output_dirpath))?;
@@ -1939,66 +2082,56 @@ impl FileToBeProcessed {
             )?;
         }
 
-        if functions.len() == 0 {
-            warn!(
-                "No functions to be processed in {:?}. Skipping bytes extraction.",
-                file_name
-            );
-            return Ok(());
-        }
+        // Determine which job types need to be extracted
+        let write_raw = !apply_mask || self.keep_raw_bytes;
+        let write_masked = apply_mask;
 
-        let mut success_count: u32 = 0;
-        for function in functions {
-            debug!(
-                "Function Name: {} Address: {} Size: {}",
-                function.name, function.addr, function.size
-            );
-            match function.write_to_bin(
-                r2p,
-                &output_dirpath,
-                &self.func_filename_template,
-                apply_mask,
-                self.keep_raw_bytes,
-            ) {
-                Ok(()) => {
+        let job_types: Vec<ExtractionJobType> = match (write_raw, write_masked) {
+            (true, true) => vec![
+                ExtractionJobType::FunctionBytes,
+                ExtractionJobType::FunctionBytesMasked,
+            ],
+            (true, false) => vec![ExtractionJobType::FunctionBytes],
+            (false, true) => vec![ExtractionJobType::FunctionBytesMasked],
+            (false, false) => {
+                // This should never happen
+                warn!("Neither raw nor masked bytes requested for {:?}", file_name);
+                return Ok(());
+            }
+        };
+
+        // Use centralized extraction with resume capability
+        self.extract_functions_with_resume(
+            r2p,
+            output_dirpath,
+            &job_types,
+            |function, r2p, _index| {
+                debug!(
+                    "Extracting bytes for function {:?} @ {:?}, size: {}",
+                    function.name, function.addr, function.size
+                );
+                let result = function.write_to_bin(
+                    r2p,
+                    output_dirpath,
+                    &self.func_filename_template,
+                    apply_mask,
+                    self.keep_raw_bytes,
+                );
+                if result.is_ok() {
                     debug!(
                         "Successfully extracted bytes for function {:?} @ {:?}",
                         function.name, function.addr
                     );
-                    success_count += 1;
                 }
-                Err(e) => {
-                    let error_path = function.get_output_filepath(
-                        output_dirpath,
-                        &self.func_filename_template,
-                        "error.log",
-                    );
-                    error!(
-                        "Failed to extract bytes for function {:?} @ {:?}: {}",
-                        function.name, function.addr, e
-                    );
-                    if let Err(write_err) = std::fs::write(&error_path, e.to_string()) {
-                        error!("Failed to write error to {:?}: {}", error_path, write_err);
-                    } else {
-                        info!("Error stored in {:?}", error_path);
-                    }
-                    continue;
-                }
-            }
-        }
+                result
+            },
+        )?;
 
-        if success_count > 0 {
-            info!(
-                "Bytes extracted for {}/{} functions in {:?}",
-                success_count, functions_count, file_name
-            );
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!(
-                "Failed to extract bytes for all functions in {:?}",
-                file_name
-            ))
-        }
+        info!(
+            "Finished extracting bytes for each function of {:?}",
+            file_name
+        );
+        Ok(())
     }
 
     fn get_checksums(&self) -> Result<ChecksumsEntry, Error> {
@@ -2077,7 +2210,7 @@ impl FileToBeProcessed {
     fn setup_function_list(&self, r2p: &mut R2Pipe) -> Result<Vec<FunctionToBeProcessed>> {
         info!(
             "Setting up function list for {:?} ...",
-            self.get_file_name()
+            self.get_file_name()?
         );
         let json = r2p
             .cmdj("aflj")
@@ -2123,7 +2256,7 @@ impl FileToBeProcessed {
                     self.file_path
                 )
             })?;
-        debug!("Done getting function list for {:?}", self.get_file_name());
+        debug!("Done getting function list for {:?}", self.get_file_name()?);
 
         Ok(functions_to_be_processed)
     }
