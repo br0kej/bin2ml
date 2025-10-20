@@ -2268,11 +2268,34 @@ impl FileToBeProcessed {
             self.get_file_name()?
         );
 
+        // Determine the source of function list data
         let json = match aflj_json {
+            // If JSON was provided, use it directly
             Some(value) => value,
-            None => r2p
-                .cmdj("aflj")
-                .with_context(|| format!("Failed executing aflj on {:?}", self.file_path))?,
+
+            // Otherwise, try to load from existing finfo file or run aflj
+            None => {
+                let finfo_suffix = ExtractionJob::get_job_type_suffix(&ExtractionJobType::FuncInfo);
+                let finfo_path = self.get_output_filepath(&finfo_suffix).ok();
+
+                // Check if finfo file exists and use it
+                if let Some(path) = finfo_path.filter(|p| p.exists()) {
+                    info!(
+                        "Populating function list from existing finfo file at {:?}",
+                        path
+                    );
+                    let file = File::open(&path)
+                        .with_context(|| format!("Failed to open finfo file: {:?}", path))?;
+                    serde_json::from_reader(file).with_context(|| {
+                        format!("Failed to parse finfo file as JSON: {:?}", path)
+                    })?
+                } else {
+                    // No existing finfo file, run aflj
+                    info!("Populating function list from aflj");
+                    r2p.cmdj("aflj")
+                        .with_context(|| format!("Failed executing aflj on {:?}", self.file_path))?
+                }
+            }
         };
 
         let array = match json {
@@ -2315,7 +2338,10 @@ impl FileToBeProcessed {
                     self.file_path
                 )
             })?;
-        debug!("Done setting up function list for {:?}", self.get_file_name()?);
+        debug!(
+            "Done setting up function list for {:?}",
+            self.get_file_name()?
+        );
 
         Ok(functions_to_be_processed)
     }
