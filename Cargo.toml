@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 r2pipe = "0.6.0"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.60"
+serde_json = { version = "1.0.60", features = ["raw_value"] }
 clap = { version = "4.0.29", features = ["derive"] }
 goblin = { version = "0.6.0", optional = true }
 walkdir = "2"
@@ -19,7 +19,8 @@ tokenizers = "0.13.2"
 rust_search = "2.1.0"
 tch = {version = "0.10.3", optional = true}
 mimalloc = { version = "*", default-features = false }
-indicatif = { version = "0.17.3", features = ["rayon"]}
+indicatif = { version = "0.18.0", features = ["rayon"]}
+indicatif-log-bridge = "0.2.3"
 itertools = "0.10.5"
 prettytable = "0.10.0"
 serde-aux = "4.2.0"
@@ -32,6 +33,8 @@ hex = { version = "0.4", features = ["alloc"] }
 md5 = "0.7.0"
 sha1 = "0.10.6"
 sha2 = "0.10.8"
+csv = "1.3"
+once_cell = "1.19"
 
 [dependencies.petgraph]
 version = "0.6.2"
