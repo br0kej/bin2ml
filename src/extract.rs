@@ -643,7 +643,7 @@ impl ExtractionJob {
 
         for mode in modes {
             let job_type = Self::extraction_job_matcher(mode)?;
-            
+
             // FuncInfo should always be processed first
             if job_type == ExtractionJobType::FuncInfo && !job_types.is_empty() {
                 job_types.insert(0, (job_type, mode.clone()));
@@ -1424,7 +1424,7 @@ impl FileToBeProcessed {
 
     pub fn get_function_list(&self, r2p: &mut R2Pipe) -> Result<&[FunctionToBeProcessed]> {
         self.function_list
-            .get_or_try_init(|| self.setup_function_list(r2p))
+            .get_or_try_init(|| self.setup_function_list(r2p, None))
             .map(|v| v.as_slice())
     }
 
@@ -1628,9 +1628,21 @@ impl FileToBeProcessed {
             .with_context(|| format!("Failed executing aflj on {:?}", self.file_path))?;
 
         info!("Writing function info to {:?}", output_path);
-        std::fs::write(output_path, json_raw)
+        std::fs::write(output_path, &json_raw)
             .with_context(|| format!("Failed to write JSON to {:?}", output_path))?;
         info!("Function info written to {:?}", output_path);
+
+        // Parse the JSON and populate function_list cache for other extraction modes
+        // This avoids running aflj again later
+        let json: serde_json::Value = serde_json::from_str(&json_raw)
+            .with_context(|| format!("Failed to parse aflj output for {:?}", self.file_path))?;
+
+        // Populate the function list cache using the existing logic in setup_function_list
+        if let Ok(func_list) = self.setup_function_list(r2p, Some(json)) {
+            // Ignore the result - if it's already set, that's fine
+            let _ = self.function_list.set(func_list);
+        }
+
         Ok(())
     }
 
@@ -2214,14 +2226,22 @@ impl FileToBeProcessed {
         })
     }
 
-    fn setup_function_list(&self, r2p: &mut R2Pipe) -> Result<Vec<FunctionToBeProcessed>> {
+    fn setup_function_list(
+        &self,
+        r2p: &mut R2Pipe,
+        aflj_json: Option<serde_json::Value>,
+    ) -> Result<Vec<FunctionToBeProcessed>> {
         info!(
             "Setting up function list for {:?} ...",
             self.get_file_name()?
         );
-        let json = r2p
-            .cmdj("aflj")
-            .with_context(|| format!("Failed executing aflj on {:?}", self.file_path))?;
+
+        let json = match aflj_json {
+            Some(value) => value,
+            None => r2p
+                .cmdj("aflj")
+                .with_context(|| format!("Failed executing aflj on {:?}", self.file_path))?,
+        };
 
         let array = match json {
             serde_json::Value::Array(arr) => arr,
